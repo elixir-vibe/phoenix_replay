@@ -174,6 +174,17 @@ PhoenixReplay.Store.cleanup()
 - Configurable sampling (record N% of sessions)
 - Session search and filtering
 
+## Part of Elixir Vibe
+
+PhoenixReplay records LiveView sessions as assigns timelines, making every session replayable and every bug reproducible.
+
+It is one building block of a larger stack — tools that make AI-generated
+software checkable: structural search, dependence analysis, duplication and
+slop detection, session replay, and ecosystem-wide code search. See the
+[Elixir Vibe](https://github.com/elixir-vibe) organization for the rest, and
+[Building Blocks for the Future Web](https://github.com/elixir-vibe/building-blocks)
+for the thesis, architecture, and roadmap that tie them together.
+
 ## License
 
 MIT
