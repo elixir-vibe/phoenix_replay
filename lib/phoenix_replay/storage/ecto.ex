@@ -58,7 +58,7 @@ if Code.ensure_loaded?(Ecto) do
               view: inspect(recording.view),
               connected_at: recording.connected_at,
               event_count: length(recording.events),
-              data: :zlib.gzip(data),
+              data: data,
               inserted_at: now,
               updated_at: now
             }
@@ -77,7 +77,7 @@ if Code.ensure_loaded?(Ecto) do
 
       case repo(opts).one(query) do
         nil -> :error
-        data -> Serializer.decode(decompress(data), format(opts))
+        data -> Serializer.decode(data, format(opts))
       end
     end
 
@@ -87,7 +87,7 @@ if Code.ensure_loaded?(Ecto) do
 
       repo(opts).all(query)
       |> Enum.flat_map(fn data ->
-        case Serializer.decode(decompress(data), format(opts)) do
+        case Serializer.decode(data, format(opts)) do
           {:ok, recording} -> [recording]
           {:error, _reason} -> []
         end
@@ -140,8 +140,5 @@ if Code.ensure_loaded?(Ecto) do
     rescue
       _ in [ArgumentError] -> name
     end
-
-    defp decompress(<<0x1F, 0x8B, _rest::binary>> = data), do: :zlib.gunzip(data)
-    defp decompress(data), do: data
   end
 end

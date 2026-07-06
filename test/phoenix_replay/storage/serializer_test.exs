@@ -62,6 +62,7 @@ defmodule PhoenixReplay.Storage.SerializerTest do
     assert decoded.view == rec.view
     assert decoded.connected_at == rec.connected_at
     assert decoded.events == rec.events
+    assert <<131, 80, _rest::binary>> = encoded
   end
 
   test "JSON roundtrip preserves essential data" do
@@ -93,11 +94,11 @@ defmodule PhoenixReplay.Storage.SerializerTest do
     assert {:ok, _} = Jason.decode(encoded)
   end
 
-  test "ETF extension includes .gz" do
-    assert Serializer.extension(:etf) == ".etf.gz"
+  test "ETF extension is .etf" do
+    assert Serializer.extension(:etf) == ".etf"
   end
 
-  test "JSON extension includes .gz" do
-    assert Serializer.extension(:json) == ".json.gz"
+  test "JSON extension is .json" do
+    assert Serializer.extension(:json) == ".json"
   end
 end

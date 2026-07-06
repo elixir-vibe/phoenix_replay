@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+
+- Store ETF recordings as Erlang's built-in compressed ETF (`:erlang.term_to_binary(term, compressed: 6)`) instead of gzip-wrapping serializer output.
+- File storage now writes `.etf` and `.json` files instead of `.etf.gz` and `.json.gz`; existing gzip-wrapped recordings are not supported by this version.
+- Ecto storage now stores serializer output directly without a gzip wrapper; existing gzip-wrapped database rows must be migrated or discarded.
+
 ## 0.2.0
 
 ### Improvements

@@ -107,16 +107,14 @@ defmodule PhoenixReplay.Storage.FileTest do
         assert FileStorage.list(opts) == []
       end
 
-      test "files are gzip compressed on disk", context do
+      test "files use the serializer extension on disk", context do
         dir = tmp_dir(context)
         opts = [path: dir, format: @format]
         FileStorage.init(opts)
         FileStorage.save(sample_recording(), opts)
 
         [file] = File.ls!(dir)
-        assert String.ends_with?(file, ".gz")
-        raw = File.read!(Path.join(dir, file))
-        assert <<0x1F, 0x8B, _rest::binary>> = raw
+        assert String.ends_with?(file, PhoenixReplay.Storage.Serializer.extension(@format))
       end
     end
   end

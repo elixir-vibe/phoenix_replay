@@ -4,7 +4,7 @@ Session recording and replay for Phoenix LiveView.
 
 ![PhoenixReplay dashboard replaying a form session](screenshot.jpg)
 
-LiveView templates are pure functions: same assigns produce the same HTML. PhoenixReplay captures assigns at each state transition and replays them by re-rendering the original view — no client-side recording, no DOM snapshots, no JavaScript changes. A 30-second session with active form input is ~400 events and ~8 KB on disk (ETF + gzip).
+LiveView templates are pure functions: same assigns produce the same HTML. PhoenixReplay captures assigns at each state transition and replays them by re-rendering the original view — no client-side recording, no DOM snapshots, no JavaScript changes. A 30-second session with active form input is ~400 events and ~8 KB on disk (compressed ETF).
 
 ## Quick start
 

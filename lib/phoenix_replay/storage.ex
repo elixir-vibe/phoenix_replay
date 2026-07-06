@@ -22,8 +22,8 @@ defmodule PhoenixReplay.Storage do
 
   ## Serialization formats
 
-    * `:etf` — Erlang External Term Format (`:erlang.term_to_binary/1`). Fast,
-      compact, preserves all Elixir types. Default.
+    * `:etf` — Erlang External Term Format (`:erlang.term_to_binary/2` with
+      built-in compression). Fast, compact, preserves all Elixir types. Default.
     * `:json` — JSON via `Jason`. Portable, human-readable, but lossy for atoms,
       tuples, and structs.
   """

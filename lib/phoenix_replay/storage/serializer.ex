@@ -6,7 +6,7 @@ defmodule PhoenixReplay.Storage.Serializer do
   @doc "Encode a recording to binary in the given format."
   @spec encode(Recording.t(), :etf | :json) :: {:ok, binary()} | {:error, term()}
   def encode(recording, :etf) do
-    {:ok, :erlang.term_to_binary(to_map(recording))}
+    {:ok, :erlang.term_to_binary(to_map(recording), compressed: 6)}
   end
 
   def encode(recording, :json) do
@@ -28,10 +28,10 @@ defmodule PhoenixReplay.Storage.Serializer do
     end
   end
 
-  @doc "File extension for the format (gzip-compressed)."
+  @doc "File extension for the format."
   @spec extension(:etf | :json) :: String.t()
-  def extension(:etf), do: ".etf.gz"
-  def extension(:json), do: ".json.gz"
+  def extension(:etf), do: ".etf"
+  def extension(:json), do: ".json"
 
   defp to_map(%Recording{} = rec) do
     %{
