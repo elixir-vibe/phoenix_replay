@@ -11,6 +11,7 @@ defmodule PhoenixReplay.Application do
   @impl true
   def start(_type, _args) do
     :ok = PhoenixReplay.Recorder.Buffer.create_table()
+    :ok = PhoenixReplay.Recorder.Components.attach()
 
     children = [
       {Phoenix.PubSub, name: PhoenixReplay.PubSub},

@@ -31,6 +31,9 @@ defmodule PhoenixReplay.Web.ComponentsTest do
            }) ==
              "validate: name=Dan"
 
+    assert event.(:event, %{name: "add", params: %{}, target: {MyApp.Item, "pear"}}) ==
+             "add → MyApp.Item#pear"
+
     assert event.(:params, %{params: %{}, uri: "/a"}) == "navigate → /a"
     assert event.(:info, %{tag: :tick}) == "handle_info :tick"
     assert event.(:info, %{tag: nil}) == "handle_info"

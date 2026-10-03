@@ -3,17 +3,21 @@ defmodule PhoenixReplay.Recorder.Buffer do
   ETS buffer for in-progress recordings.
 
   The recorded LiveView process writes its own events straight into the
-  table, so recording never waits on another process. The table is created
-  by `PhoenixReplay.Application` and outlives every worker, which lets
-  `PhoenixReplay.Recorder.Monitor` recover sessions after a restart.
+  table, so recording never waits on another process. Events from the view
+  and from its LiveComponents share one counter, so they stay in order. The
+  table is created by `PhoenixReplay.Application` and outlives every worker,
+  which lets `PhoenixReplay.Recorder.Monitor` recover sessions after a restart.
 
   Rows:
 
     * `{{id, :meta}, pid, config, recording}` — one per session
+    * `{{id, :seq}, count}` — events written so far, including dropped ones
+    * `{{:process, pid}, id, started_at, config}` — finds the session of the
+      calling process
     * `{{id, seq}, event}` — one per event, `seq` counting up from `0`
 
   Integer keys sort before atoms, so each session's events precede its
-  metadata row in the ordered set.
+  metadata rows in the ordered set.
   """
 
   alias PhoenixReplay.Config
@@ -29,11 +33,51 @@ defmodule PhoenixReplay.Recorder.Buffer do
     :ok
   end
 
-  @doc "Registers a new session recorded by `pid`. The recording's events are not stored."
+  @doc """
+  Registers a new session recorded by `pid`. The recording's events are not stored.
+
+  Event offsets are measured from this call.
+  """
   @spec open(Recording.t(), pid(), Config.t()) :: :ok
-  def open(%Recording{} = recording, pid, %Config{} = config) do
-    :ets.insert(@table, {{recording.id, :meta}, pid, config, %{recording | events: []}})
+  def open(%Recording{id: id} = recording, pid, %Config{} = config) do
+    :ets.insert(@table, [
+      {{id, :meta}, pid, config, %{recording | events: []}},
+      {{id, :seq}, 0},
+      {{:process, pid}, id, System.monotonic_time(:millisecond), config}
+    ])
+
     :ok
+  end
+
+  @doc "Returns the id and configuration of the session `pid` records, if any."
+  @spec session(pid()) :: {:ok, Recording.id(), Config.t()} | :error
+  def session(pid) do
+    case :ets.lookup(@table, {:process, pid}) do
+      [{_key, id, _started_at, config}] -> {:ok, id, config}
+      [] -> :error
+    end
+  end
+
+  @doc """
+  Appends an event to the session recorded by `pid`.
+
+  Returns `:full` once the session reached its `:max_events`, and `:error`
+  when `pid` records no session.
+  """
+  @spec record(pid(), Event.type(), map()) :: :ok | :full | :error
+  def record(pid, type, data) do
+    case :ets.lookup(@table, {:process, pid}) do
+      [{_key, id, started_at, config}] ->
+        seq = :ets.update_counter(@table, {id, :seq}, 1) - 1
+        at = System.monotonic_time(:millisecond) - started_at
+
+        if seq < config.max_events,
+          do: append(id, seq, %Event{at: at, type: type, data: data}),
+          else: :full
+
+      [] ->
+        :error
+    end
   end
 
   @doc "Sets the session's URL. Only the recording process writes its metadata row."
@@ -50,7 +94,7 @@ defmodule PhoenixReplay.Recorder.Buffer do
     :ok
   end
 
-  @doc "Appends the event with sequence number `seq`."
+  @doc "Stores the event with sequence number `seq`, as `record/3` does."
   @spec append(Recording.id(), non_neg_integer(), Event.t()) :: :ok
   def append(id, seq, %Event{} = event) do
     :ets.insert(@table, {{id, seq}, event})
@@ -100,6 +144,8 @@ defmodule PhoenixReplay.Recorder.Buffer do
   @doc "Removes the session and all of its events."
   @spec close(Recording.id()) :: :ok
   def close(id) do
+    :ets.match_delete(@table, {{:process, :_}, id, :_, :_})
+    :ets.delete(@table, {id, :seq})
     :ets.delete(@table, {id, :meta})
     :ets.select_delete(@table, [{{{id, :"$1"}, :_}, [{:is_integer, :"$1"}], [true]}])
     :ok

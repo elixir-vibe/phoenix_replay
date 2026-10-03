@@ -30,7 +30,6 @@ defmodule PhoenixReplay.Recorder do
 
   alias PhoenixReplay.{Config, Recording}
   alias PhoenixReplay.Recorder.{Buffer, Monitor}
-  alias PhoenixReplay.Recording.Event
 
   @private :phoenix_replay
   @session_options [:sample_rate, :max_events, :sanitizer]
@@ -65,9 +64,15 @@ defmodule PhoenixReplay.Recorder do
       else: {:cont, socket}
   end
 
-  defp sampled?(rate) when rate >= 1.0, do: true
-  defp sampled?(rate) when rate <= 0.0, do: false
-  defp sampled?(rate), do: :rand.uniform() <= rate
+  @doc """
+  Decides whether a session is recorded at `rate`, given a uniform `draw`
+  in `0.0..1.0`. Rates of `0.0` and `1.0` never consult the draw.
+  """
+  @spec sampled?(float(), float()) :: boolean()
+  def sampled?(rate, draw \\ :rand.uniform())
+  def sampled?(rate, _draw) when rate >= 1.0, do: true
+  def sampled?(rate, _draw) when rate <= 0.0, do: false
+  def sampled?(rate, draw), do: draw <= rate
 
   defp start(socket, params, session, config) do
     sanitizer = config.sanitizer
@@ -83,14 +88,7 @@ defmodule PhoenixReplay.Recorder do
     :ok = Buffer.open(recording, self(), config)
     Monitor.watch(self(), recording.id)
 
-    state = %{
-      id: recording.id,
-      started_at: System.monotonic_time(:millisecond),
-      seq: 0,
-      url?: false,
-      max_events: config.max_events,
-      sanitizer: sanitizer
-    }
+    state = %{id: recording.id, url?: false, sanitizer: sanitizer}
 
     socket
     |> put_private(@private, state)
@@ -138,15 +136,8 @@ defmodule PhoenixReplay.Recorder do
   defp after_render(socket), do: socket
 
   defp record(socket, type, data) do
-    case socket.private[@private] do
-      %{seq: seq, max_events: max} = state when seq < max ->
-        at = System.monotonic_time(:millisecond) - state.started_at
-        :ok = Buffer.append(state.id, seq, %Event{at: at, type: type, data: data})
-        put_private(socket, @private, %{state | seq: seq + 1})
-
-      _full ->
-        socket
-    end
+    Buffer.record(self(), type, data)
+    socket
   end
 
   defp tag(message) when is_atom(message), do: message

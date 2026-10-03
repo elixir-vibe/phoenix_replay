@@ -8,19 +8,17 @@ defmodule PhoenixReplay.Web.Live.Frame do
   `socket.private`, except for the single `:phoenix_replay_frame` assign that
   the layout and the fallback template need.
 
-  HEEx evaluates assigns lazily, while LiveView computes the diff. A
-  template that fails with the recorded assigns would crash the frame, so
-  each position is rendered once up front and a placeholder is shown instead
-  when that fails.
+  LiveComponents in the template render through
+  `PhoenixReplay.Web.Live.ReplayComponent` with their recorded assigns; see
+  `PhoenixReplay.Web.Replay`. A template that fails with the recorded
+  assigns shows a placeholder instead of crashing the frame.
   """
 
   use Phoenix.LiveView
 
-  require Logger
-
   alias PhoenixReplay.Recording.Timeline
-  alias PhoenixReplay.Web.{Context, Layouts, Playback}
-  alias Phoenix.LiveView.{Comprehension, Rendered}
+  alias PhoenixReplay.Web.{Context, Layouts, Playback, Replay}
+  alias PhoenixReplay.Web.Live.ReplayComponent
 
   @private :phoenix_replay_frame
   @unassignable [:flash, :uploads, :streams, :socket, :myself]
@@ -37,6 +35,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
     frame = %{
       view: recording.view,
       assets: Layouts.frame_assets(Context.fetch(socket), socket.endpoint),
+      components: %{},
       error: nil
     }
 
@@ -56,7 +55,8 @@ defmodule PhoenixReplay.Web.Live.Frame do
   def handle_info({Playback, _message}, socket), do: {:noreply, socket}
 
   @impl true
-  def render(%{@private => %{error: nil, view: view}} = assigns), do: view.render(assigns)
+  def render(%{@private => %{error: nil, view: view, components: states}} = assigns),
+    do: assigns |> view.render() |> Replay.rewrite(states)
 
   def render(assigns) do
     ~H"""
@@ -69,7 +69,9 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   defp show(socket, index) do
     %{recording: recording, keys: previous_keys} = socket.private[@private]
-    recorded = Timeline.assigns_at(recording, Timeline.clamp(recording, index))
+    index = Timeline.clamp(recording, index)
+    recorded = Timeline.assigns_at(recording, index)
+    states = Timeline.components_at(recording, index)
     {flash, recorded} = Map.pop(recorded, :flash, %{})
     recorded = Map.drop(recorded, @unassignable)
     keys = Map.keys(recorded)
@@ -78,6 +80,8 @@ defmodule PhoenixReplay.Web.Live.Frame do
     |> assign(Map.new(previous_keys -- keys, &{&1, nil}))
     |> assign(recorded)
     |> replace_flash(flash)
+    |> update(@private, &%{&1 | components: states})
+    |> refresh_components(states)
     |> put_private(@private, %{recording: recording, keys: keys})
     |> check_render()
   end
@@ -88,32 +92,19 @@ defmodule PhoenixReplay.Web.Live.Frame do
     end)
   end
 
+  # Components whose parent template did not change are not re-rendered, so
+  # they get their recorded assigns directly.
+  defp refresh_components(socket, states) do
+    if connected?(socket) do
+      for {module, id} <- Map.keys(states),
+          do: send_update(ReplayComponent, id: {module, id}, __replay_states__: states)
+    end
+
+    socket
+  end
+
   defp check_render(socket) do
     frame = socket.assigns[@private]
-    assign(socket, @private, %{frame | error: render_error(frame.view, socket.assigns)})
+    assign(socket, @private, %{frame | error: Replay.render_error(frame.view, socket.assigns)})
   end
-
-  # credo:disable-for-next-line ExSlop.Check.Warning.BlanketRescue
-  defp render_error(view, assigns) do
-    assigns |> view.render() |> evaluate()
-    nil
-  rescue
-    # reach:disable-next-line bare_rescue -- recorded templates are foreign code rendered with partial assigns
-    exception ->
-      Logger.debug(
-        "PhoenixReplay: #{inspect(view)} failed to render: #{Exception.message(exception)}"
-      )
-
-      Exception.message(exception)
-  end
-
-  defp evaluate(%Rendered{dynamic: dynamic}), do: Enum.each(dynamic.(false), &evaluate/1)
-
-  defp evaluate(%Comprehension{entries: entries}) do
-    Enum.each(entries, fn {_key, _vars, render} ->
-      Enum.each(render.(%{}, false), &evaluate/1)
-    end)
-  end
-
-  defp evaluate(_dynamic), do: :ok
 end

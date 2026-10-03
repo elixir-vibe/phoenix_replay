@@ -9,7 +9,7 @@ defmodule PhoenixReplay.Recorder.Persister do
 
   require Logger
 
-  alias PhoenixReplay.{Config, Recording, Storage, Telemetry}
+  alias PhoenixReplay.{Config, Recording, Storage}
 
   @doc "Saves `recording`, retrying until it succeeds or attempts run out."
   @spec persist(Recording.t(), Config.t()) :: :ok | {:error, term()}
@@ -18,7 +18,6 @@ defmodule PhoenixReplay.Recorder.Persister do
   defp attempt(recording, config, attempt) do
     case Storage.save(config.storage, recording) do
       :ok ->
-        Telemetry.persisted(recording)
         :ok
 
       {:error, _reason} when attempt < config.persist.attempts ->
@@ -27,7 +26,6 @@ defmodule PhoenixReplay.Recorder.Persister do
 
       {:error, reason} ->
         Logger.error("PhoenixReplay: dropping recording #{recording.id}: #{inspect(reason)}")
-        Telemetry.failed(recording.id, reason)
         {:error, reason}
     end
   end

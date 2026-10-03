@@ -6,13 +6,14 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
 
   alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Storage
-  alias PhoenixReplay.Test.Fixtures
+  alias PhoenixReplay.Test.{Fixtures, Sessions}
   alias PhoenixReplay.Web.Playback
 
   @endpoint PhoenixReplay.Test.Endpoint
 
-  setup do
+  setup context do
     on_exit(fn -> Storage.clear(Fixtures.storage()) end)
+    Sessions.setup_sessions(context)
   end
 
   defp save(recording) do
@@ -87,6 +88,49 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
 
     seek("c3", 0)
     assert render(view) =~ "Hello OK"
+  end
+
+  test "replays LiveComponent state", %{sessions: sessions} do
+    {:ok, cart, _html, id} = Sessions.live(sessions, build_conn(), "/cart")
+    for _ <- 1..3, do: cart |> element("#item-pear button") |> render_click()
+    assert Sessions.stop(sessions, cart) == :persisted
+    {:ok, recording} = Storage.fetch(Fixtures.storage(), id)
+
+    quantities = fn html ->
+      for item <- ~w(apple pear), into: %{} do
+        [quantity] =
+          html
+          |> LazyHTML.from_fragment()
+          |> LazyHTML.query("#item-#{item} .quantity")
+          |> LazyHTML.text()
+          |> List.wrap()
+
+        {item, quantity}
+      end
+    end
+
+    last = length(recording.events) - 1
+    {:ok, view, _html} = live(build_conn(), "/replay/#{id}/frame?channel=c4")
+    # The frame refreshes components with send_update/3, which it processes
+    # after the seek; reading its state waits for that.
+    replay_at = fn index ->
+      seek("c4", index)
+      :sys.get_state(view.pid)
+      quantities.(render(view))
+    end
+
+    assert replay_at.(last) == %{"apple" => "0", "pear" => "3"}
+
+    after_one_click =
+      Enum.find_index(
+        recording.events,
+        &match?(%{type: :component, data: %{assigns: %{quantity: 1}}}, &1)
+      )
+
+    assert replay_at.(after_one_click) == %{"apple" => "0", "pear" => "1"}
+
+    assert view |> element("#item-pear button") |> render_click() =~ "pear"
+    assert quantities.(render(view)) == %{"apple" => "0", "pear" => "1"}
   end
 
   test "responds 404 for unauthorized recordings" do

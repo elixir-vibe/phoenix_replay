@@ -104,6 +104,7 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Application,
           PhoenixReplay.Config,
           PhoenixReplay.Recorder.Buffer,
+          PhoenixReplay.Recorder.Components,
           PhoenixReplay.Recorder.Monitor,
           PhoenixReplay.Recorder.Persister,
           PhoenixReplay.Recordings,
@@ -117,8 +118,10 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Web.Live.Frame,
           PhoenixReplay.Web.Live.Index,
           PhoenixReplay.Web.Live.Show,
+          PhoenixReplay.Web.Live.ReplayComponent,
           PhoenixReplay.Web.NotFoundError,
-          PhoenixReplay.Web.Playback
+          PhoenixReplay.Web.Playback,
+          PhoenixReplay.Web.Replay
         ]
       ]
     ]

@@ -64,7 +64,7 @@ Each event carries a millisecond offset from the start of the session.
 
 ### Current limitations
 
-Replay reconstructs root LiveView assigns. It does not fully reconstruct LiveComponents, streams, uploads, client-only JavaScript state, or pushed JS events. Templates that fail to render with the recorded assigns show a placeholder at that position.
+Replay reconstructs root LiveView and LiveComponent assigns. It does not reconstruct streams, uploads, component state changed by `handle_async/3`, client-only JavaScript state, or pushed JS events. Templates that fail to render with the recorded assigns show a placeholder at that position.
 
 ## Dashboard
 

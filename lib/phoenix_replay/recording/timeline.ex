@@ -46,6 +46,26 @@ defmodule PhoenixReplay.Recording.Timeline do
   end
 
   @doc """
+  Accumulates LiveComponent assigns visible after the event at `index`,
+  keyed by `{module, id}`.
+  """
+  @spec components_at(Recording.t(), non_neg_integer()) :: %{{module(), term()} => map()}
+  def components_at(%Recording{events: events}, index) do
+    events
+    |> Enum.take(index + 1)
+    |> Enum.reduce(%{}, fn
+      %Event{type: :component, data: %{module: module, id: id, assigns: assigns}}, acc ->
+        Map.update(acc, {module, id}, assigns, &Map.merge(&1, assigns))
+
+      %Event{type: :component_destroyed, data: %{module: module, id: id}}, acc ->
+        Map.delete(acc, {module, id})
+
+      %Event{}, acc ->
+        acc
+    end)
+  end
+
+  @doc """
   Returns true when the recording contains user interaction worth keeping.
 
   A session with no events and at most the initial `handle_params/3` is a

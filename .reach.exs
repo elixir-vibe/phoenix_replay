@@ -40,6 +40,7 @@ logic = [
 infrastructure = [
   "PhoenixReplay.Application",
   "PhoenixReplay.Recorder.Buffer",
+  "PhoenixReplay.Recorder.Components",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",
   "PhoenixReplay.Storage.File",
