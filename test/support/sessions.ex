@@ -54,6 +54,14 @@ defmodule PhoenixReplay.Test.Sessions do
     {:ok, view, html, id}
   end
 
+  @doc "Tracks the session of a view mounted another way, such as `live_isolated/3`."
+  @spec track(pid(), struct()) :: PhoenixReplay.Recording.id()
+  def track(tracker, view) do
+    id = :sys.get_state(view.pid).socket.private.phoenix_replay.id
+    :ok = GenServer.call(tracker, {:track, id, view.pid})
+    id
+  end
+
   @doc "Stops a tracked view and returns how its session was finalized."
   @spec stop(pid(), struct()) :: :persisted | :discarded | :failed
   def stop(tracker, view) do

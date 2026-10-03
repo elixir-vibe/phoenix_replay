@@ -103,6 +103,16 @@ defmodule PhoenixReplay.RecorderTest do
     refute Map.has_key?(:sys.get_state(view.pid).socket.private, :phoenix_replay)
   end
 
+  test "records LiveViews not mounted at the router", %{sessions: sessions} do
+    {:ok, view, _html} = live_isolated(build_conn(), PhoenixReplay.Test.Live.Embedded)
+    id = Sessions.track(sessions, view)
+    render_click(view, "inc")
+
+    assert {:ok, %{url: nil, events: events}} = Buffer.fetch(id)
+    assert Enum.any?(events, &(&1.type == :event))
+    refute Enum.any?(events, &(&1.type == :params))
+  end
+
   test "samples sessions from a uniform draw" do
     assert Recorder.sampled?(1.0, 0.99)
     refute Recorder.sampled?(0.0, 0.0)
