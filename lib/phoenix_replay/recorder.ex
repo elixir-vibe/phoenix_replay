@@ -8,16 +8,17 @@ defmodule PhoenixReplay.Recorder do
 
   Options given as `{PhoenixReplay.Recorder, opts}` override the
   `PhoenixReplay.Config` values for that live session. `:sample_rate`,
-  `:max_events` and `:sanitizer` are accepted:
+  `:keep`, `:max_events`, `:sanitizer` and `:redact` are accepted:
 
       live_session :checkout,
-        on_mount: [{PhoenixReplay.Recorder, sample_rate: 0.1, max_events: 2_000}] do
+        on_mount: [{PhoenixReplay.Recorder, keep: [rate: 0.1, errors: true]}] do
         live "/checkout", CheckoutLive
       end
 
   Recording starts on the connected mount. Lifecycle hooks capture events,
   params changes, `handle_info/2` message tags, and the assigns changed by
   each render, all passed through the configured `PhoenixReplay.Sanitizer`.
+  While `:max_memory` is exceeded, new sessions are not recorded.
   Events are written by the LiveView process itself into
   `PhoenixReplay.Recorder.Buffer`; `PhoenixReplay.Recorder.Monitor` saves the
   recording once the process exits.
@@ -32,7 +33,7 @@ defmodule PhoenixReplay.Recorder do
   alias PhoenixReplay.Recorder.{Buffer, Monitor}
 
   @private :phoenix_replay
-  @session_options [:sample_rate, :max_events, :sanitizer]
+  @session_options [:sample_rate, :keep, :max_events, :sanitizer, :redact]
 
   @doc """
   Starts recording on the connected mount, for the sampled share of sessions.
@@ -59,7 +60,7 @@ defmodule PhoenixReplay.Recorder do
 
     config = Config.load(opts)
 
-    if connected?(socket) and sampled?(config.sample_rate),
+    if connected?(socket) and sampled?(config.sample_rate) and memory?(config.max_memory),
       do: {:cont, start(socket, params, session, config)},
       else: {:cont, socket}
   end
@@ -73,6 +74,9 @@ defmodule PhoenixReplay.Recorder do
   def sampled?(rate, _draw) when rate >= 1.0, do: true
   def sampled?(rate, _draw) when rate <= 0.0, do: false
   def sampled?(rate, draw), do: draw <= rate
+
+  defp memory?(nil), do: true
+  defp memory?(max_memory), do: Buffer.memory() < max_memory
 
   defp start(socket, params, session, config) do
     sanitizer = config.sanitizer

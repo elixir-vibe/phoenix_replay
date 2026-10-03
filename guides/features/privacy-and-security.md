@@ -52,6 +52,16 @@ config :phoenix_replay, sanitizer: MyApp.ReplaySanitizer
 
 A sanitizer can also be set per live session with `on_mount: [{PhoenixReplay.Recorder, sanitizer: MyApp.CheckoutSanitizer}]`. Keep sanitizers free of exceptions: they run inside your LiveViews.
 
+## Collected text
+
+[Telemetry and log collection](telemetry-and-logs.md) records free text: SQL, log messages and exit reasons. Their metadata goes through `sanitize_params/1`, but text has no keys to filter, so mask sensitive values with `:redact` patterns:
+
+```elixir
+config :phoenix_replay, redact: [~r/\b\d{13,19}\b/, ~r/[\w.+-]+@[\w-]+\.[\w.]+/]
+```
+
+Matches are replaced with `"[REDACTED]"` by `PhoenixReplay.Sanitizer.redact/2`. Ecto query parameters and URL query strings are left out unless you enable them.
+
 ## What is never recorded
 
 - `handle_info/2` message contents; only the message tag is kept,

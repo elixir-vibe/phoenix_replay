@@ -1,6 +1,8 @@
 defmodule ExampleWeb.TaskLive.Index do
   use ExampleWeb, :live_view
 
+  require Logger
+
   alias Example.Tasks
 
   @impl true
@@ -64,7 +66,11 @@ defmodule ExampleWeb.TaskLive.Index do
   def handle_event("save", %{"title" => _} = params, socket) do
     case socket.assigns.live_action do
       :new ->
-        Tasks.create_task(params)
+        case Tasks.create_task(params) do
+          {:ok, task} -> Logger.info("Created task #{task.id}")
+          {:error, _changeset} -> Logger.warning("Could not create a task")
+        end
+
         {:noreply, push_patch(socket, to: ~p"/")}
 
       :edit ->

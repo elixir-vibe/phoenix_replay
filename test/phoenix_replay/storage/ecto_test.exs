@@ -21,6 +21,7 @@ defmodule PhoenixReplay.Storage.EctoTest do
       connected_at INTEGER NOT NULL,
       event_count INTEGER NOT NULL,
       duration_ms INTEGER NOT NULL,
+      error_count INTEGER NOT NULL DEFAULT 0,
       event_names BLOB NOT NULL,
       data BLOB NOT NULL
     )

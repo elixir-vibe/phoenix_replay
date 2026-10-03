@@ -88,6 +88,7 @@ defmodule PhoenixReplay.MixProject do
         "guides/introduction/how-it-works.md",
         "guides/features/recording.md",
         "guides/features/live-components.md",
+        "guides/features/telemetry-and-logs.md",
         "guides/features/dashboard.md",
         "guides/features/storage.md",
         "guides/features/privacy-and-security.md",
@@ -105,9 +106,17 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Recorder,
           PhoenixReplay.Recording,
           PhoenixReplay.Recording.Event,
+          PhoenixReplay.Recording.Keep,
           PhoenixReplay.Recording.Summary,
           PhoenixReplay.Recording.Timeline,
           PhoenixReplay.Recordings.Filter
+        ],
+        Collectors: [
+          PhoenixReplay.Collector,
+          PhoenixReplay.Collector.Captured,
+          PhoenixReplay.Collector.Ecto,
+          PhoenixReplay.Collector.Finch,
+          PhoenixReplay.Collector.Telemetry
         ],
         Extension: [
           PhoenixReplay.Authorization,
@@ -124,7 +133,9 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Config,
           PhoenixReplay.Recorder.AsyncComponents,
           PhoenixReplay.Recorder.Buffer,
+          PhoenixReplay.Recorder.Collectors,
           PhoenixReplay.Recorder.Components,
+          PhoenixReplay.Recorder.Logs,
           PhoenixReplay.Recorder.Monitor,
           PhoenixReplay.Recorder.Persister,
           PhoenixReplay.Recordings,

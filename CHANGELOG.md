@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Added
+
+- Telemetry collection. `:collect` lists `PhoenixReplay.Collector`s, whose events are recorded in the session of the process that emitted them, or of the LiveView that started it as a task, and listed in the player under the event that caused them. `PhoenixReplay.Collector.Ecto` records queries, `PhoenixReplay.Collector.Finch` records HTTP requests made with Finch or Req, and any event name records that event through `PhoenixReplay.Collector.Telemetry`.
+- Log collection with `:logs`, which records Logger messages in the same way.
+- Tail sampling with `:keep`: `rate` saves a share of sessions when they end, and `errors: true` and `slower_than: ms` always save sessions with an error or a slow collected event. LiveViews that exit abnormally record an `:exit` event.
+- `:max_memory` stops recording new sessions while the buffer is larger.
+- `:redact` patterns mask matches in collected SQL, log messages and exit reasons, through `PhoenixReplay.Sanitizer.redact/2`.
+- `[:phoenix_replay, :collector, :exception]` reports collectors that raised.
+- `PhoenixReplay.Recording.Summary` counts `error_count`, the dashboard marks errors and filters sessions with `?errors=1`, and the player hides events by kind.
+- `on_mount: {PhoenixReplay.Recorder, opts}` accepts `:keep` and `:redact`.
+
+### Changed
+
+- `[:phoenix_replay, :recording, :discarded]` metadata carries a `reason`: `:not_interactive` or `:not_sampled`.
+- `PhoenixReplay.Storage.Ecto` stores `error_count`. Add the column to existing tables:
+
+  ```elixir
+  alter table(:phoenix_replay_recordings) do
+    add :error_count, :integer, null: false, default: 0
+  end
+  ```
+
 ### Fixed
 
 - LiveComponent state applied by `start_async`, `assign_async` and `stream_async` results is recorded. LiveView emits no telemetry for it yet, so `PhoenixReplay.Recorder.AsyncComponents` snapshots the component after such renders; see [phoenix_live_view#4463](https://github.com/phoenixframework/phoenix_live_view/pull/4463).

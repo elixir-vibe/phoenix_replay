@@ -38,5 +38,24 @@ defmodule PhoenixReplay.Web.ComponentsTest do
     assert event.(:info, %{tag: :tick}) == "handle_info :tick"
     assert event.(:info, %{tag: nil}) == "handle_info"
     assert event.(:render, %{assigns: %{b: 1, a: 2}}) == "assigns a, b"
+
+    query = %{event: [:repo, :query], summary: "SELECT 1", measurements: %{}, metadata: %{}}
+    assert event.(:telemetry, Map.put(query, :error, nil)) == "SELECT 1"
+    assert event.(:telemetry, %{query | summary: nil} |> Map.put(:error, nil)) == "repo.query"
+    assert event.(:telemetry, Map.put(query, :error, "timeout")) == "SELECT 1 — timeout"
+    assert event.(:log, %{level: :warning, message: "slow", metadata: %{}}) == "[warning] slow"
+
+    assert event.(:exit, %{reason: "** (RuntimeError) boom\n    stack"}) ==
+             "exited: ** (RuntimeError) boom"
+  end
+
+  test "marks errors and formats durations" do
+    error = %Event{at: 0, type: :log, data: %{level: :error, message: "", metadata: %{}}}
+    assert Components.marker_class(error) =~ "bg-red-600"
+    assert Components.marker_class(%Event{at: 0, type: :mount}) =~ "bg-indigo-600"
+
+    assert Components.milliseconds(0.4213) == "0.42 ms"
+    assert Components.milliseconds(42.6) == "43 ms"
+    assert Components.milliseconds(1_540) == "1.5 s"
   end
 end

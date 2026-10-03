@@ -16,12 +16,48 @@ defmodule PhoenixReplay.Recording.Event do
       assigns of a LiveComponent changed by an update or event
     * `:component_destroyed` — `%{module: module, id: term}`, a
       LiveComponent removed from the page
+    * `:telemetry` — `%{event: [atom], summary: String.t() | nil,
+      measurements: map, metadata: map, error: String.t() | nil}`, a
+      telemetry event captured by a `PhoenixReplay.Collector`
+    * `:log` — `%{level: Logger.level(), message: String.t(), metadata: map}`,
+      a log message, see `PhoenixReplay.Recorder.Logs`
+    * `:exit` — `%{reason: String.t()}`, the LiveView process exited
+      abnormally
+
+  `:telemetry`, `:log` and `:exit` events describe what happened around
+  the view; they do not change the replayed state.
   """
 
-  @type type :: :mount | :event | :params | :info | :render | :component | :component_destroyed
+  @type type ::
+          :mount
+          | :event
+          | :params
+          | :info
+          | :render
+          | :component
+          | :component_destroyed
+          | :telemetry
+          | :log
+          | :exit
 
   @type t :: %__MODULE__{at: non_neg_integer(), type: type(), data: map()}
 
   @enforce_keys [:at, :type]
   defstruct [:at, :type, data: %{}]
+
+  @error_levels [:error, :critical, :alert, :emergency]
+
+  @doc "Returns true for an exit, an error log, or a telemetry event that captured an error."
+  @spec error?(t()) :: boolean()
+  def error?(%__MODULE__{type: :exit}), do: true
+  def error?(%__MODULE__{type: :log, data: %{level: level}}), do: level in @error_levels
+  def error?(%__MODULE__{type: :telemetry, data: %{error: error}}), do: error != nil
+  def error?(%__MODULE__{}), do: false
+
+  @doc "Duration in milliseconds of a telemetry event, if it has one."
+  @spec duration(t()) :: number() | nil
+  def duration(%__MODULE__{type: :telemetry, data: %{measurements: %{duration: duration}}}),
+    do: duration
+
+  def duration(%__MODULE__{}), do: nil
 end

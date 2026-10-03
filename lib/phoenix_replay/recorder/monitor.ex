@@ -2,9 +2,10 @@ defmodule PhoenixReplay.Recorder.Monitor do
   @moduledoc """
   Finalizes buffered sessions when their LiveView process exits.
 
-  Each recorded process is monitored. On exit the buffered recording is
-  either discarded (no user interaction) or handed to
-  `PhoenixReplay.Recorder.Persister` in a supervised task. The buffer is
+  Each recorded process is monitored. When it exits abnormally, its exit
+  reason is recorded as an `:exit` event. The buffered recording is then
+  either discarded or handed to `PhoenixReplay.Recorder.Persister` in a
+  supervised task, as `PhoenixReplay.Recording.Keep` decides. The buffer is
   closed once the task finishes, whether it saved the recording or gave up.
 
   Each outcome emits its `PhoenixReplay.Telemetry` event after the buffer is
@@ -19,8 +20,10 @@ defmodule PhoenixReplay.Recorder.Monitor do
   require Logger
 
   alias PhoenixReplay.Recorder.{Buffer, Persister}
-  alias PhoenixReplay.Recording.Timeline
-  alias PhoenixReplay.{Recordings, Telemetry}
+  alias PhoenixReplay.Recording.Keep
+  alias PhoenixReplay.{Recordings, Sanitizer, Telemetry}
+
+  @max_reason 4_000
 
   @doc "Starts the monitor registered under its module name."
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -46,9 +49,9 @@ defmodule PhoenixReplay.Recorder.Monitor do
   end
 
   @impl true
-  def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
     case state do
-      %{sessions: %{^ref => id}} -> {:noreply, finalize(state, ref, id)}
+      %{sessions: %{^ref => id}} -> {:noreply, finalize(state, ref, id, pid, reason)}
       %{saves: %{^ref => recording}} -> {:noreply, save_crashed(state, ref, recording, reason)}
       %{} -> {:noreply, state}
     end
@@ -75,12 +78,13 @@ defmodule PhoenixReplay.Recorder.Monitor do
     end
   end
 
-  defp finalize(state, ref, id) do
+  defp finalize(state, ref, id, pid, reason) do
     state = %{state | sessions: Map.delete(state.sessions, ref)}
+    record_exit(pid, reason)
 
     with {:ok, recording} <- Buffer.fetch(id),
          {:ok, config} <- Buffer.config(id),
-         true <- Timeline.interactive?(recording) do
+         :keep <- Keep.decide(recording, config.keep) do
       task =
         Task.Supervisor.async_nolink(PhoenixReplay.TaskSupervisor, Persister, :persist, [
           recording,
@@ -89,13 +93,23 @@ defmodule PhoenixReplay.Recorder.Monitor do
 
       %{state | saves: Map.put(state.saves, task.ref, recording)}
     else
-      false ->
+      {:discard, reason} ->
         close(id)
-        Telemetry.discarded(id)
+        Telemetry.discarded(id, reason)
         state
 
       :error ->
         state
+    end
+  end
+
+  defp record_exit(_pid, reason) when reason in [:normal, :shutdown, :noproc], do: :ok
+  defp record_exit(_pid, {:shutdown, _reason}), do: :ok
+
+  defp record_exit(pid, reason) do
+    with {:ok, session, config} <- Buffer.attribute([pid]) do
+      text = reason |> Exception.format_exit() |> String.slice(0, @max_reason)
+      Buffer.collect(session, :exit, %{reason: Sanitizer.redact(text, config.redact)}, "exit", 1)
     end
   end
 

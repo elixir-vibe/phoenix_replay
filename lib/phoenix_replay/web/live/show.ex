@@ -12,7 +12,7 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   import PhoenixReplay.Web.Components
 
-  alias PhoenixReplay.Recording.Timeline
+  alias PhoenixReplay.Recording.{Event, Timeline}
   alias PhoenixReplay.Recordings
   alias PhoenixReplay.Web.{Context, Layouts, Playback}
 
@@ -36,7 +36,11 @@ defmodule PhoenixReplay.Web.Live.Show do
        duration_ms: Timeline.duration_ms(recording),
        speed: 1,
        playing: nil,
-       speeds: @speeds
+       speeds: @speeds,
+       kinds: kinds(recording),
+       hidden: MapSet.new(),
+       error_count: Enum.count(recording.events, &Event.error?/1),
+       dropped: Enum.sum_by(recording.dropped, fn {_name, count} -> count end)
      )
      |> seek(Timeline.first_render_index(recording))}
   end
@@ -65,6 +69,17 @@ defmodule PhoenixReplay.Web.Live.Show do
     speed = if speed in @speeds, do: speed, else: 1
     socket = assign(socket, :speed, speed)
     {:noreply, if(socket.assigns.playing, do: socket |> pause() |> play(), else: socket)}
+  end
+
+  def handle_event("toggle_kind", %{"kind" => kind}, socket) do
+    hidden = socket.assigns.hidden
+
+    hidden =
+      if MapSet.member?(hidden, kind),
+        do: MapSet.delete(hidden, kind),
+        else: MapSet.put(hidden, kind)
+
+    {:noreply, assign(socket, :hidden, hidden)}
   end
 
   def handle_event("delete", _params, socket) do
@@ -105,6 +120,7 @@ defmodule PhoenixReplay.Web.Live.Show do
 
     assign(socket,
       index: index,
+      event: Timeline.event_at(recording, index),
       at: event_at(recording, index),
       next_at: event_at(recording, min(index + 1, Timeline.last_index(recording))),
       assigns_preview: recording |> Timeline.assigns_at(index) |> inspect(pretty: true, limit: 50)
@@ -140,6 +156,20 @@ defmodule PhoenixReplay.Web.Live.Show do
     end
   end
 
+  # Kinds present in the recording, shown as filters when there is more than one.
+  defp kinds(recording) do
+    recording.events
+    |> Enum.map(&event_kind(&1.type))
+    |> Enum.uniq()
+    |> Enum.sort_by(&(&1 != "liveview"))
+  end
+
+  defp collected?(%Event{type: type}), do: type in [:telemetry, :log]
+
+  defp kind_label("liveview"), do: "LiveView"
+  defp kind_label("telemetry"), do: "Telemetry"
+  defp kind_label("logs"), do: "Logs"
+
   defp position(_at, 0), do: 0
   defp position(at, duration_ms), do: Float.round(at / duration_ms * 100, 3)
 
@@ -164,6 +194,12 @@ defmodule PhoenixReplay.Web.Live.Show do
         <p class="text-sm text-neutral-500 tabular-nums">
           Session <code class="font-mono text-neutral-600">{String.slice(@recording.id, 0, 12)}</code>
           · {length(@recording.events)} events · {clock(@duration_ms)}
+          <span :if={@error_count > 0} class="text-red-700">
+            · {@error_count} {if @error_count == 1, do: "error", else: "errors"}
+          </span>
+          <span :if={@dropped > 0} title={inspect(@recording.dropped)}>
+            · {@dropped} collected events over the limit dropped
+          </span>
         </p>
       </header>
 
@@ -222,7 +258,7 @@ defmodule PhoenixReplay.Web.Live.Show do
               :for={event <- @recording.events}
               class={[
                 "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full",
-                marker_class(event.type)
+                marker_class(event)
               ]}
               style={"left: #{position(event.at, @duration_ms)}%"}
               title={event_label(event)}
@@ -247,15 +283,34 @@ defmodule PhoenixReplay.Web.Live.Show do
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section class="flex min-w-0 flex-col rounded-lg border border-neutral-200 bg-white">
-          <h2 class="flex items-center justify-between border-b border-neutral-100 px-4 py-2.5 text-xs font-medium tracking-wide text-neutral-500 uppercase">
-            Events <span class="tabular-nums text-neutral-400">{length(@recording.events)}</span>
+          <h2 class="flex items-center justify-between gap-2 border-b border-neutral-100 px-4 py-2.5 text-xs font-medium tracking-wide text-neutral-500 uppercase">
+            Events <span class="flex-1"></span>
+            <button
+              :for={kind <- @kinds}
+              :if={length(@kinds) > 1}
+              type="button"
+              phx-click="toggle_kind"
+              phx-value-kind={kind}
+              aria-pressed={to_string(not MapSet.member?(@hidden, kind))}
+              class={[
+                "rounded-full border px-2 py-0.5 normal-case tracking-normal",
+                MapSet.member?(@hidden, kind) && "border-neutral-200 text-neutral-400 line-through",
+                not MapSet.member?(@hidden, kind) && "border-neutral-300 text-neutral-700"
+              ]}
+            >
+              {kind_label(kind)}
+            </button>
+            <span class="tabular-nums text-neutral-400">{length(@recording.events)}</span>
           </h2>
           <ol
             id="replay-events"
             phx-hook="EventList"
             class="relative max-h-[clamp(300px,40vh,600px)] overflow-y-auto overscroll-contain p-1.5"
           >
-            <li :for={{event, index} <- Enum.with_index(@recording.events)}>
+            <li
+              :for={{event, index} <- Enum.with_index(@recording.events)}
+              :if={not MapSet.member?(@hidden, event_kind(event.type))}
+            >
               <button
                 type="button"
                 phx-click="seek"
@@ -263,13 +318,21 @@ defmodule PhoenixReplay.Web.Live.Show do
                 aria-current={index == @index && "step"}
                 class={[
                   "flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px]",
+                  collected?(event) && "pl-7 text-xs",
                   index == @index && "bg-neutral-900 text-white",
                   index != @index && "hover:bg-neutral-50",
-                  index > @index && "text-neutral-400"
+                  index > @index && "text-neutral-400",
+                  index < @index && Event.error?(event) && "text-red-700"
                 ]}
               >
                 <span class="shrink-0">{event_icon(event.type)}</span>
                 <span class="min-w-0 flex-1 truncate">{event_label(event)}</span>
+                <span
+                  :if={duration = Event.duration(event)}
+                  class="shrink-0 font-mono text-[11px] tabular-nums opacity-60"
+                >
+                  {milliseconds(duration)}
+                </span>
                 <span class="shrink-0 font-mono text-[11px] tabular-nums opacity-60">{clock(event.at)}</span>
               </button>
             </li>
@@ -277,6 +340,15 @@ defmodule PhoenixReplay.Web.Live.Show do
         </section>
 
         <section class="flex min-w-0 flex-col rounded-lg border border-neutral-200 bg-white">
+          <div
+            :if={@event && @event.type in [:telemetry, :log, :exit]}
+            class="border-b border-neutral-100"
+          >
+            <h2 class="border-b border-neutral-100 px-4 py-2.5 text-xs font-medium tracking-wide text-neutral-500 uppercase">
+              Details
+            </h2>
+            <pre class="max-h-60 overflow-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-neutral-700">{inspect(@event.data, pretty: true, limit: 50)}</pre>
+          </div>
           <h2 class="border-b border-neutral-100 px-4 py-2.5 text-xs font-medium tracking-wide text-neutral-500 uppercase">
             Assigns
           </h2>

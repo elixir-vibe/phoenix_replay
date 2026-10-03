@@ -35,6 +35,7 @@ defmodule MyApp.Repo.Migrations.CreatePhoenixReplayRecordings do
       add :connected_at, :bigint, null: false
       add :event_count, :integer, null: false
       add :duration_ms, :integer, null: false
+      add :error_count, :integer, null: false, default: 0
       add :event_names, :binary, null: false
       add :data, :binary, null: false
     end

@@ -1,7 +1,7 @@
 defmodule PhoenixReplay.Recording.SummaryTest do
   use ExUnit.Case, async: true
 
-  alias PhoenixReplay.Recording.Summary
+  alias PhoenixReplay.Recording.{Event, Summary}
   alias PhoenixReplay.Test.Fixtures
 
   test "summarizes a recording" do
@@ -19,6 +19,13 @@ defmodule PhoenixReplay.Recording.SummaryTest do
            }
 
     assert Summary.new(recording, live?: true).live?
+  end
+
+  test "counts errors" do
+    recording = Fixtures.counter_recording()
+    exit = %Event{at: 9_000, type: :exit, data: %{reason: "boom"}}
+
+    assert Summary.new(%{recording | events: [exit | recording.events]}).error_count == 1
   end
 
   test "lists distinct event names, sorted" do

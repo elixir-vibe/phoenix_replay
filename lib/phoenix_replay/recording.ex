@@ -4,6 +4,9 @@ defmodule PhoenixReplay.Recording do
 
   Holds the session metadata and an ordered list of `PhoenixReplay.Recording.Event`s.
   Use `PhoenixReplay.Recording.Timeline` to reconstruct state at a point in time.
+
+  `dropped` counts collected events left out once a collector reached its
+  `:limit`, keyed by collector name, such as `"my_app.repo.query"` or `"log"`.
   """
 
   alias PhoenixReplay.Recording.Event
@@ -17,11 +20,12 @@ defmodule PhoenixReplay.Recording do
           params: map(),
           session: map(),
           connected_at: integer(),
-          events: [Event.t()]
+          events: [Event.t()],
+          dropped: %{String.t() => pos_integer()}
         }
 
   @enforce_keys [:id, :view, :connected_at]
-  defstruct [:id, :view, :url, :connected_at, params: %{}, session: %{}, events: []]
+  defstruct [:id, :view, :url, :connected_at, params: %{}, session: %{}, events: [], dropped: %{}]
 
   @doc "Generates a URL-safe random recording id."
   @spec generate_id() :: id()

@@ -26,6 +26,7 @@ model = [
   "PhoenixReplay.Config",
   "PhoenixReplay.Recording",
   "PhoenixReplay.Recording.Event",
+  "PhoenixReplay.Recording.Keep",
   "PhoenixReplay.Recording.Summary",
   "PhoenixReplay.Recording.Timeline",
   "PhoenixReplay.Recordings.Filter"
@@ -33,6 +34,11 @@ model = [
 
 logic = [
   "PhoenixReplay.Authorization",
+  "PhoenixReplay.Collector",
+  "PhoenixReplay.Collector.Captured",
+  "PhoenixReplay.Collector.Ecto",
+  "PhoenixReplay.Collector.Finch",
+  "PhoenixReplay.Collector.Telemetry",
   "PhoenixReplay.Sanitizer",
   "PhoenixReplay.Sanitizer.Default",
   "PhoenixReplay.Storage.Codec"
@@ -42,7 +48,9 @@ infrastructure = [
   "PhoenixReplay.Application",
   "PhoenixReplay.Recorder.AsyncComponents",
   "PhoenixReplay.Recorder.Buffer",
+  "PhoenixReplay.Recorder.Collectors",
   "PhoenixReplay.Recorder.Components",
+  "PhoenixReplay.Recorder.Logs",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",
   "PhoenixReplay.Storage.File",

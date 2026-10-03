@@ -31,6 +31,49 @@ defmodule PhoenixReplay.ConfigTest do
     assert_raise ArgumentError, ~r/:sample_rate/, fn -> Config.new(sample_rate: 1.5) end
   end
 
+  test "normalizes collectors" do
+    assert Config.new([]).collect == []
+
+    assert Config.new(
+             collect: [
+               MyCollector,
+               {MyCollector, limit: 5},
+               [:my_app, :checkout, :stop],
+               {[:my_app, :search, :stop], metadata: [:query]}
+             ]
+           ).collect == [
+             {MyCollector, []},
+             {MyCollector, limit: 5},
+             {PhoenixReplay.Collector.Telemetry, event: [:my_app, :checkout, :stop]},
+             {PhoenixReplay.Collector.Telemetry,
+              event: [:my_app, :search, :stop], metadata: [:query]}
+           ]
+
+    assert_raise ArgumentError, ~r/:collect entry/, fn -> Config.new(collect: ["nope"]) end
+  end
+
+  test "validates tail sampling, logs, redaction and memory" do
+    assert Config.new([]).keep == %{rate: 1.0, errors: false, slower_than: nil}
+
+    assert Config.new(keep: [rate: 0, errors: true]).keep == %{
+             rate: 0.0,
+             errors: true,
+             slower_than: nil
+           }
+
+    assert_raise ArgumentError, ~r/:rate/, fn -> Config.new(keep: [rate: 2]) end
+
+    assert Config.new([]).logs == nil
+    assert Config.new(logs: []).logs == %{level: :info, metadata: [], limit: 1_000}
+    assert_raise ArgumentError, ~r/:level/, fn -> Config.new(logs: [level: :loud]) end
+
+    assert [%Regex{source: "a+"}, %Regex{source: "b"}] = Config.new(redact: ["a+", ~r/b/]).redact
+    assert_raise ArgumentError, ~r/:redact pattern/, fn -> Config.new(redact: [:email]) end
+
+    assert Config.new(max_memory: 1_024).max_memory == 1_024
+    assert_raise ArgumentError, ~r/:max_memory/, fn -> Config.new(max_memory: 0) end
+  end
+
   test "rejects unknown keys and invalid values" do
     assert_raise ArgumentError, ~r/:max_events/, fn -> Config.new(max_events: 0) end
     assert_raise ArgumentError, ~r/:unknown/, fn -> Config.new(unknown: true) end

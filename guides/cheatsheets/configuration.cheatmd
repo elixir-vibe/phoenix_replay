@@ -41,7 +41,46 @@ Share of sessions recorded, `0.0` to `1.0`. Default: `1.0`.
 config :phoenix_replay, max_events: 10_000
 ```
 
-Events kept per session. Default: `10_000`.
+LiveView events kept per session. Default: `10_000`.
+
+### Tail sampling
+
+```elixir
+config :phoenix_replay,
+  keep: [rate: 0.05, errors: true, slower_than: 1_000],
+  max_memory: 256 * 1024 * 1024
+```
+
+Decides when a session ends whether it is saved. Default: `rate: 1.0`, no error or slowness rules, no memory limit.
+
+### Telemetry
+
+```elixir
+config :phoenix_replay,
+  collect: [
+    {PhoenixReplay.Collector.Ecto, repo: MyApp.Repo, slower_than: 5},
+    PhoenixReplay.Collector.Finch,
+    {[:my_app, :checkout, :stop], metadata: [:order_id], limit: 100}
+  ]
+```
+
+Default: `[]`. Each collector keeps `1_000` events per session unless `:limit` is set.
+
+### Logs
+
+```elixir
+config :phoenix_replay, logs: [level: :info, metadata: [:request_id]]
+```
+
+Off by default.
+
+### Redaction
+
+```elixir
+config :phoenix_replay, redact: [~r/\b\d{13,19}\b/]
+```
+
+Masks matches in collected SQL, log messages and exit reasons.
 
 ### Retention
 
@@ -96,7 +135,7 @@ live_session :checkout,
 end
 ```
 
-Accepts `:sample_rate`, `:max_events` and `:sanitizer`.
+Accepts `:sample_rate`, `:keep`, `:max_events`, `:sanitizer` and `:redact`.
 
 ## Router
 {: .col-2}
@@ -154,6 +193,7 @@ phoenix_replay "/replay", as: :staff_replay
 | `event` | Triggered event name |
 | `within` | `1h`, `24h` or `7d` |
 | `min_events` | Minimum event count |
+| `errors` | `1` for sessions with an error |
 
 ### In code
 

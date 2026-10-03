@@ -3,12 +3,13 @@ defmodule PhoenixReplay.Recording.Summary do
   Lightweight description of a recording, used for listings and filtering.
 
   Storage backends return summaries without decoding full recordings.
-  `event_names` are the distinct `handle_event/3` names, sorted. `live?` is
-  true while the recorded LiveView process is still running.
+  `event_names` are the distinct `handle_event/3` names, sorted.
+  `error_count` counts the events for which `PhoenixReplay.Recording.Event.error?/1`
+  holds. `live?` is true while the recorded LiveView process is still running.
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.Timeline
+  alias PhoenixReplay.Recording.{Event, Timeline}
 
   @type t :: %__MODULE__{
           id: Recording.id(),
@@ -17,6 +18,7 @@ defmodule PhoenixReplay.Recording.Summary do
           connected_at: integer(),
           event_count: non_neg_integer(),
           event_names: [String.t()],
+          error_count: non_neg_integer(),
           duration_ms: non_neg_integer(),
           live?: boolean()
         }
@@ -29,6 +31,7 @@ defmodule PhoenixReplay.Recording.Summary do
     :connected_at,
     event_count: 0,
     event_names: [],
+    error_count: 0,
     duration_ms: 0,
     live?: false
   ]
@@ -43,13 +46,14 @@ defmodule PhoenixReplay.Recording.Summary do
       connected_at: recording.connected_at,
       event_count: length(recording.events),
       event_names: event_names(recording.events),
+      error_count: Enum.count(recording.events, &Event.error?/1),
       duration_ms: Timeline.duration_ms(recording),
       live?: Keyword.get(opts, :live?, false)
     }
   end
 
   @doc "Distinct `handle_event/3` names among `events`, sorted."
-  @spec event_names([PhoenixReplay.Recording.Event.t()]) :: [String.t()]
+  @spec event_names([Event.t()]) :: [String.t()]
   def event_names(events) do
     names = for %{type: :event, data: %{name: name}} <- events, uniq: true, do: name
     Enum.sort(names)

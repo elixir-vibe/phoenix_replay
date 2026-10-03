@@ -46,13 +46,16 @@ The index lists sessions still running first, marked live, then stored recording
 - view module,
 - an event the session triggered, with suggestions from recorded event names,
 - start time within the last hour, day or week,
-- minimum number of events.
+- minimum number of events,
+- sessions with an error, such as an error log, a failed query or a crash.
 
-Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&event=pay&within=24h`, so a filtered list can be shared or bookmarked. `PhoenixReplay.Recordings.Filter` applies the same criteria in code.
+Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&event=pay&within=24h&errors=1`, so a filtered list can be shared or bookmarked. `PhoenixReplay.Recordings.Filter` applies the same criteria in code.
 
 ## Player
 
 The player shows the replayed page, a timeline with a marker per event, the event list and the assigns at the current position. Play at 1×, 2×, 5× or 10×, click or drag the timeline, click an event to jump to it, or focus the timeline and use `←`, `→` and `Space`.
+
+[Collected](telemetry-and-logs.md) queries, requests and logs are listed under the event that caused them, with their durations, and errors are marked red on the timeline. Hide a kind of event with the **LiveView**, **Telemetry** and **Logs** toggles above the list. Selecting a collected event shows its details next to the assigns; it leaves the replayed page as it was.
 
 Each viewer drives a private frame, so several people can watch the same recording independently.
 

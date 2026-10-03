@@ -29,6 +29,16 @@ defmodule PhoenixReplay.Test.Router do
       live "/limited/counter", PhoenixReplay.Test.Live.Counter
     end
 
+    live_session :collected, on_mount: [{PhoenixReplay.Recorder, redact: ["card-\\d+"]}] do
+      live "/telemetry", PhoenixReplay.Test.Live.TelemetryPage
+    end
+
+    live_session :tail_sampled,
+      on_mount: [{PhoenixReplay.Recorder, keep: [rate: 0.0, errors: true, slower_than: 100]}] do
+      live "/tail/counter", PhoenixReplay.Test.Live.Counter
+      live "/tail/telemetry", PhoenixReplay.Test.Live.TelemetryPage
+    end
+
     phoenix_replay "/replay"
   end
 

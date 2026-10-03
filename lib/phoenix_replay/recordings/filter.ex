@@ -10,6 +10,8 @@ defmodule PhoenixReplay.Recordings.Filter do
     * `"event"` — a `handle_event/3` name the session triggered
     * `"within"` — `"1h"`, `"24h"` or `"7d"` since the session started
     * `"min_events"` — minimum number of recorded events
+    * `"errors"` — `"1"` to keep only sessions with an error, such as an
+      error log, a failed query or a crash
 
   Blank or invalid parameters are ignored.
   """
@@ -23,10 +25,11 @@ defmodule PhoenixReplay.Recordings.Filter do
           view: String.t() | nil,
           event: String.t() | nil,
           within: String.t() | nil,
-          min_events: pos_integer() | nil
+          min_events: pos_integer() | nil,
+          errors: boolean()
         }
 
-  defstruct [:query, :view, :event, :within, :min_events]
+  defstruct [:query, :view, :event, :within, :min_events, errors: false]
 
   @doc "The supported `\"within\"` values, shortest first."
   @spec windows() :: [String.t()]
@@ -40,7 +43,8 @@ defmodule PhoenixReplay.Recordings.Filter do
       view: text(params["view"]),
       event: text(params["event"]),
       within: if(Map.has_key?(@windows, params["within"]), do: params["within"]),
-      min_events: positive_integer(params["min_events"])
+      min_events: positive_integer(params["min_events"]),
+      errors: params["errors"] == "1"
     }
   end
 
@@ -52,7 +56,8 @@ defmodule PhoenixReplay.Recordings.Filter do
       {"view", filter.view},
       {"event", filter.event},
       {"within", filter.within},
-      {"min_events", filter.min_events && Integer.to_string(filter.min_events)}
+      {"min_events", filter.min_events && Integer.to_string(filter.min_events)},
+      {"errors", if(filter.errors, do: "1")}
     ]
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
@@ -73,7 +78,8 @@ defmodule PhoenixReplay.Recordings.Filter do
       (is_nil(filter.view) or summary.view == filter.view) and
       (is_nil(filter.event) or filter.event in summary.event_names) and
       (is_nil(filter.within) or now - summary.connected_at <= @windows[filter.within]) and
-      (is_nil(filter.min_events) or summary.event_count >= filter.min_events)
+      (is_nil(filter.min_events) or summary.event_count >= filter.min_events) and
+      (not filter.errors or summary.error_count > 0)
   end
 
   defp query?(_summary, nil), do: true

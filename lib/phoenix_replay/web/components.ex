@@ -5,6 +5,7 @@ defmodule PhoenixReplay.Web.Components do
 
   use Phoenix.Component
 
+  alias PhoenixReplay.Collector
   alias PhoenixReplay.Recording.Event
 
   @doc "A small bordered button."
@@ -108,16 +109,41 @@ defmodule PhoenixReplay.Web.Components do
   def event_icon(:render), do: "📝"
   def event_icon(:component), do: "🧩"
   def event_icon(:component_destroyed), do: "🧩"
+  def event_icon(:telemetry), do: "⏱"
+  def event_icon(:log), do: "💬"
+  def event_icon(:exit), do: "💥"
 
-  @doc "Tailwind background class for an event's timeline marker."
-  @spec marker_class(Event.type()) :: String.t()
-  def marker_class(:mount), do: "size-1.5 bg-indigo-600"
-  def marker_class(:event), do: "size-1.5 bg-amber-500"
-  def marker_class(:params), do: "size-1.5 bg-sky-500"
-  def marker_class(:info), do: "size-1 bg-neutral-500"
-  def marker_class(:render), do: "size-1 bg-neutral-400"
-  def marker_class(:component), do: "size-1 bg-violet-400"
-  def marker_class(:component_destroyed), do: "size-1 bg-violet-400"
+  @doc """
+  Groups event types for filtering the event list: `"liveview"`,
+  `"telemetry"` or `"logs"`.
+  """
+  @spec event_kind(Event.type()) :: String.t()
+  def event_kind(:telemetry), do: "telemetry"
+  def event_kind(:log), do: "logs"
+  def event_kind(_type), do: "liveview"
+
+  @doc "Tailwind classes for an event's timeline marker. Errors stand out in red."
+  @spec marker_class(Event.t()) :: String.t()
+  def marker_class(%Event{} = event) do
+    if Event.error?(event), do: "size-2 bg-red-600", else: type_marker_class(event.type)
+  end
+
+  defp type_marker_class(:mount), do: "size-1.5 bg-indigo-600"
+  defp type_marker_class(:event), do: "size-1.5 bg-amber-500"
+  defp type_marker_class(:params), do: "size-1.5 bg-sky-500"
+  defp type_marker_class(:info), do: "size-1 bg-neutral-500"
+  defp type_marker_class(:render), do: "size-1 bg-neutral-400"
+  defp type_marker_class(:component), do: "size-1 bg-violet-400"
+  defp type_marker_class(:component_destroyed), do: "size-1 bg-violet-400"
+  defp type_marker_class(:telemetry), do: "size-1 bg-teal-500"
+  defp type_marker_class(:log), do: "size-1 bg-neutral-300"
+  defp type_marker_class(:exit), do: "size-2 bg-red-600"
+
+  @doc "Formats a duration in milliseconds as `0.42 ms`, `12 ms` or `1.5 s`."
+  @spec milliseconds(number()) :: String.t()
+  def milliseconds(ms) when ms < 10, do: "#{:erlang.float_to_binary(ms / 1, decimals: 2)} ms"
+  def milliseconds(ms) when ms < 1_000, do: "#{round(ms)} ms"
+  def milliseconds(ms), do: "#{:erlang.float_to_binary(ms / 1_000, decimals: 1)} s"
 
   @doc "One-line description of an event."
   @spec event_label(Event.t()) :: String.t()
@@ -132,6 +158,17 @@ defmodule PhoenixReplay.Web.Components do
 
   def event_label(%Event{type: :component_destroyed, data: %{module: module, id: id}}),
     do: "#{component_label(module, id)} removed"
+
+  def event_label(%Event{type: :telemetry, data: %{event: event} = data}) do
+    label = data.summary || Collector.name(event)
+    if data.error, do: "#{label} — #{data.error}", else: label
+  end
+
+  def event_label(%Event{type: :log, data: %{level: level, message: message}}),
+    do: "[#{level}] #{message}"
+
+  def event_label(%Event{type: :exit, data: %{reason: reason}}),
+    do: "exited: " <> (reason |> String.split("\n", parts: 2) |> hd())
 
   def event_label(%Event{type: :event, data: %{name: name, params: params} = data}) do
     name =

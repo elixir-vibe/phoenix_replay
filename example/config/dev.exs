@@ -2,6 +2,13 @@ import Config
 
 config :volt, server: [prefix: "/assets", watch_dirs: ["lib/"]]
 
+# Record Ecto queries and log messages alongside LiveView events, and always
+# keep sessions that hit an error.
+config :phoenix_replay,
+  collect: [{PhoenixReplay.Collector.Ecto, repo: Example.Repo}],
+  logs: [level: :info],
+  keep: [errors: true]
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

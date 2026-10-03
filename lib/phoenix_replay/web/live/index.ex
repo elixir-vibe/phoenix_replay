@@ -147,7 +147,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         id="recording-filter"
         phx-change="filter"
         phx-submit="filter"
-        class="mb-6 grid grid-cols-2 gap-2 text-sm sm:grid-cols-6"
+        class="mb-6 grid grid-cols-2 gap-2 text-sm sm:grid-cols-7"
       >
         <input
           type="search"
@@ -203,6 +203,9 @@ defmodule PhoenixReplay.Web.Live.Index do
           phx-debounce="300"
           class="rounded-md border border-neutral-200 bg-white px-3 py-1.5"
         />
+        <label class="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-1.5">
+          <input type="checkbox" name="errors" value="1" checked={@filter.errors} /> Errors
+        </label>
       </form>
 
       <div :if={@any? and @recordings == []} class="py-16 text-center text-neutral-400">
@@ -240,6 +243,9 @@ defmodule PhoenixReplay.Web.Live.Index do
               {timestamp(recording.connected_at)} · {recording.event_count} events · {duration(
                 recording.duration_ms
               )}
+              <span :if={recording.error_count > 0} class="text-red-700">
+                · {recording.error_count} {if recording.error_count == 1, do: "error", else: "errors"}
+              </span>
             </p>
           </div>
           <div class="flex shrink-0 items-center gap-3">

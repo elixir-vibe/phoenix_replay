@@ -46,6 +46,26 @@ end
 
 See the [Recording guide](https://hexdocs.pm/phoenix_replay/recording.html) and [LiveComponents guide](https://hexdocs.pm/phoenix_replay/live-components.html).
 
+## Telemetry and logs
+
+See the queries, HTTP calls and log messages behind each click, listed under the event that caused them — including those from `start_async` and `assign_async` tasks:
+
+```elixir
+config :phoenix_replay,
+  collect: [{PhoenixReplay.Collector.Ecto, repo: MyApp.Repo}, PhoenixReplay.Collector.Finch],
+  logs: [level: :info]
+```
+
+Then record every session and keep the ones that matter — every session with an error or a slow query, and a sample of the rest:
+
+```elixir
+config :phoenix_replay,
+  keep: [rate: 0.05, errors: true, slower_than: 1_000],
+  max_memory: 256 * 1024 * 1024
+```
+
+Any telemetry event can be collected, and collectors are a small behaviour. See the [Telemetry and Logs guide](https://hexdocs.pm/phoenix_replay/telemetry-and-logs.html).
+
 ## Privacy
 
 Values of keys such as `password`, `token` and `secret` are replaced with `"[FILTERED]"` before anything is stored, through structs, changesets and forms. Plug in your own sanitizer to drop more:

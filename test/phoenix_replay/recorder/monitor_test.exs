@@ -2,9 +2,11 @@ defmodule PhoenixReplay.Recorder.MonitorTest do
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
+  import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Config, Storage}
   alias PhoenixReplay.Recorder.{Buffer, Monitor}
+  alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Test.{Fixtures, Sessions, TelemetryHandler}
 
   setup context do
@@ -25,8 +27,30 @@ defmodule PhoenixReplay.Recorder.MonitorTest do
     {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/counter")
 
     assert Sessions.stop(sessions, view) == :discarded
+    assert_received {:telemetry, :discarded, %{id: ^id, reason: :not_interactive}}
     assert Buffer.fetch(id) == :error
     assert Storage.fetch(Fixtures.storage(), id) == {:error, :not_found}
+  end
+
+  test "discards interactive sessions that keep: [rate: ...] does not sample",
+       %{sessions: sessions} do
+    {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/tail/counter")
+    view |> element("button", "+") |> render_click()
+
+    assert Sessions.stop(sessions, view) == :discarded
+    assert_received {:telemetry, :discarded, %{id: ^id, reason: :not_sampled}}
+  end
+
+  test "records an abnormal exit and keeps the session for keep: [errors: true]",
+       %{sessions: sessions} do
+    Process.flag(:trap_exit, true)
+    {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/tail/counter")
+    Process.exit(view.pid, {:boom, :test})
+
+    assert Sessions.await(sessions, id) == :persisted
+    {:ok, recording} = Storage.fetch(Fixtures.storage(), id)
+    assert %Event{data: %{reason: reason}} = Enum.find(recording.events, &(&1.type == :exit))
+    assert reason =~ "boom"
   end
 
   test "drops the buffer after persistence gives up" do
