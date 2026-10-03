@@ -1,28 +1,12 @@
-defmodule PhoenixReplay.TestEndpoint do
+defmodule PhoenixReplay.Test.Endpoint do
+  @moduledoc "Endpoint serving the test router."
+
   use Phoenix.Endpoint, otp_app: :phoenix_replay
 
-  socket("/live", Phoenix.LiveView.Socket)
+  @session_options [store: :cookie, key: "_replay_test", signing_salt: "test_salt"]
 
-  plug(Plug.Session,
-    store: :cookie,
-    key: "_replay_test",
-    signing_salt: "test_salt"
-  )
+  socket "/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]]
 
-  plug(:put_secret_key_base)
-
-  defp put_secret_key_base(conn, _) do
-    put_in(
-      conn.secret_key_base,
-      String.duplicate("a", 64)
-    )
-  end
-
-  plug(Plug.Parsers,
-    parsers: [:urlencoded, :multipart, :json],
-    pass: ["*/*"],
-    json_decoder: Jason
-  )
-
-  plug(PhoenixReplay.TestRouter)
+  plug Plug.Session, @session_options
+  plug PhoenixReplay.Test.Router
 end

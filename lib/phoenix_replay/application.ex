@@ -1,16 +1,24 @@
 defmodule PhoenixReplay.Application do
-  @moduledoc false
+  @moduledoc """
+  Starts PhoenixReplay's supervision tree.
+
+  The recording buffer table is created here rather than in a worker, so
+  in-progress recordings survive any worker restart.
+  """
+
   use Application
 
   @impl true
   def start(_type, _args) do
+    :ok = PhoenixReplay.Recorder.Buffer.create_table()
+
     children = [
       {Phoenix.PubSub, name: PhoenixReplay.PubSub},
-      PhoenixReplay.Store,
-      PhoenixReplay.Persistence
+      {Task.Supervisor, name: PhoenixReplay.TaskSupervisor},
+      PhoenixReplay.Recorder.Monitor,
+      PhoenixReplay.Retention
     ]
 
-    opts = [strategy: :one_for_one, name: PhoenixReplay.Supervisor]
-    Supervisor.start_link(children, opts)
+    Supervisor.start_link(children, strategy: :one_for_one, name: PhoenixReplay.Supervisor)
   end
 end

@@ -1,67 +1,57 @@
+# reach:disable-next-line behaviour_candidate -- this module is the behaviour; its functions are the dispatching facade
 defmodule PhoenixReplay.Storage do
   @moduledoc """
-  Behaviour for persistent recording storage backends.
+  Behaviour for finished-recording storage, and the facade used to call it.
 
-  Active (in-flight) recordings always live in ETS for performance.
-  When a LiveView process exits, the recording is finalized and
-  persisted through the configured storage backend.
+  In-progress recordings live in `PhoenixReplay.Recorder.Buffer`. When the
+  recorded LiveView exits, the recording is saved through the configured
+  backend.
 
   ## Built-in backends
 
-    * `PhoenixReplay.Storage.File` — writes recordings to disk (default)
-    * `PhoenixReplay.Storage.Ecto` — stores recordings in a database via Ecto
+    * `PhoenixReplay.Storage.File` — one file per recording on disk (default)
+    * `PhoenixReplay.Storage.Ecto` — a database table via an Ecto repo
 
   ## Configuration
 
       config :phoenix_replay,
-        storage: PhoenixReplay.Storage.File,
-        storage_opts: [
-          path: "priv/replay_recordings",
-          format: :etf  # or :json
-        ]
+        storage: {PhoenixReplay.Storage.File, path: "priv/replay_recordings"}
 
-  ## Serialization formats
+  ## Implementing a backend
 
-    * `:etf` — Erlang External Term Format (`:erlang.term_to_binary/1`). Fast,
-      compact, preserves all Elixir types. Default.
-    * `:json` — JSON via `Jason`. Portable, human-readable, but lossy for atoms,
-      tuples, and structs.
+  Callbacks receive the options from the `{module, opts}` tuple as their last
+  argument. `list/1` must return summaries without decoding full recordings,
+  ordered most recent first.
   """
 
   alias PhoenixReplay.Recording
+  alias PhoenixReplay.Recording.Summary
 
-  @type opts :: keyword()
+  @type t :: PhoenixReplay.Config.storage()
 
-  @doc "Initialize the backend (create tables, directories, etc)."
-  @callback init(opts()) :: :ok | {:error, term()}
+  @callback save(Recording.t(), keyword()) :: :ok | {:error, term()}
+  @callback fetch(Recording.id(), keyword()) :: {:ok, Recording.t()} | {:error, term()}
+  @callback list(keyword()) :: [Summary.t()]
+  @callback delete(Recording.id(), keyword()) :: :ok | {:error, term()}
+  @callback clear(keyword()) :: :ok | {:error, term()}
 
-  @doc "Persist a finalized recording."
-  @callback save(Recording.t(), opts()) :: :ok | {:error, term()}
+  @doc "Persists a finished recording."
+  @spec save(t(), Recording.t()) :: :ok | {:error, term()}
+  def save({module, opts}, %Recording{} = recording), do: module.save(recording, opts)
 
-  @doc "Retrieve a recording by ID."
-  @callback get(binary(), opts()) :: {:ok, Recording.t()} | :error
+  @doc "Fetches a recording by id."
+  @spec fetch(t(), Recording.id()) :: {:ok, Recording.t()} | {:error, term()}
+  def fetch({module, opts}, id), do: module.fetch(id, opts)
 
-  @doc "List all recordings, most recent first."
-  @callback list(opts()) :: [Recording.t()]
+  @doc "Lists stored recording summaries, most recent first."
+  @spec list(t()) :: [Summary.t()]
+  def list({module, opts}), do: module.list(opts)
 
-  @doc "List lightweight recording summaries, most recent first."
-  @callback list_summaries(opts()) :: [map()]
+  @doc "Deletes a recording by id."
+  @spec delete(t(), Recording.id()) :: :ok | {:error, term()}
+  def delete({module, opts}, id), do: module.delete(id, opts)
 
-  @optional_callbacks list_summaries: 1
-
-  @doc "Delete a recording by ID."
-  @callback delete(binary(), opts()) :: :ok | {:error, term()}
-
-  @doc "Delete all recordings."
-  @callback clear(opts()) :: :ok
-
-  @doc "Returns the configured storage backend module."
-  def backend do
-    Application.get_env(:phoenix_replay, :storage, PhoenixReplay.Storage.File)
-  end
-
-  @doc "Returns the configured storage options."
-  def storage_opts do
-    Application.get_env(:phoenix_replay, :storage_opts, [])
-  end
+  @doc "Deletes every stored recording."
+  @spec clear(t()) :: :ok | {:error, term()}
+  def clear({module, opts}), do: module.clear(opts)
 end

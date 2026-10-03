@@ -4,135 +4,98 @@ defmodule PhoenixReplay.RecorderTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.Store
-  alias PhoenixReplay.TestSupport
+  alias PhoenixReplay.{Recording, Storage}
+  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Recording.{Event, Timeline}
+  alias PhoenixReplay.Test.{Assertions, Fixtures}
 
-  @endpoint PhoenixReplay.TestEndpoint
+  @endpoint PhoenixReplay.Test.Endpoint
 
-  test "records mount, events, and assigns changes for a LiveView session" do
+  setup do
+    on_exit(fn -> Storage.clear(Fixtures.storage()) end)
+  end
+
+  defp recording_id(view), do: :sys.get_state(view.pid).socket.private.phoenix_replay.id
+
+  test "records events and render diffs without touching the view's assigns" do
     {:ok, view, _html} = live(build_conn(), "/counter")
+    id = recording_id(view)
 
-    # The LiveView should have started a recording
-    assert %{_replay_id: replay_id} = :sys.get_state(view.pid).socket.assigns
-
-    # Click increment a few times
     render_click(view, "inc")
     render_click(view, "inc")
     render_click(view, "dec")
+    send(view.pid, :reset)
+    render(view)
 
-    # Check active recording has events
-    {:ok, active} = Store.get_active(replay_id)
-    assert active.view == PhoenixReplay.TestLive.Counter
+    refute Enum.any?(
+             Map.keys(:sys.get_state(view.pid).socket.assigns),
+             &(to_string(&1) =~ "replay")
+           )
 
-    # Events: mount assigns + (event + assigns_delta) * 3
-    event_types = Enum.map(active.events, fn {_t, type, _payload} -> type end)
-    assert :mount in event_types
-    assert Enum.count(event_types, &(&1 == :event)) == 3
+    assert {:ok, %Recording{view: PhoenixReplay.Test.Live.Counter} = recording} = Buffer.fetch(id)
+    assert recording.url == "http://www.example.com/counter"
 
-    # Kill the LiveView — should auto-finalize
+    assert [
+             :mount,
+             :params,
+             :render,
+             :event,
+             :render,
+             :event,
+             :render,
+             :event,
+             :render,
+             :info,
+             :render
+           ] =
+             Enum.map(recording.events, & &1.type)
+
+    assert [0, 1, 2, 1, 0] =
+             for(
+               %Event{type: :render, data: %{assigns: %{count: count}}} <- recording.events,
+               do: count
+             )
+
+    assert %Event{data: %{tag: :reset}} = Enum.find(recording.events, &(&1.type == :info))
+
+    assert recording.events
+           |> Enum.map(& &1.at)
+           |> Enum.chunk_every(2, 1, :discard)
+           |> Enum.all?(fn [a, b] -> a <= b end)
+  end
+
+  test "saves the recording when the view exits" do
+    {:ok, view, _html} = live(build_conn(), "/counter")
+    id = recording_id(view)
+    render_click(view, "inc")
     GenServer.stop(view.pid)
 
-    recording = TestSupport.assert_eventually(fn -> Store.get_recording(replay_id) end)
-    assert recording.id == replay_id
-    assert length(recording.events) > 0
-
-    assigns_events =
-      Enum.filter(recording.events, fn {_t, type, _p} -> type == :assigns end)
-
-    deltas = Enum.map(assigns_events, fn {_t, :assigns, %{delta: d}} -> d end)
-
-    counts =
-      Enum.flat_map(deltas, fn d -> if Map.has_key?(d, :count), do: [d.count], else: [] end)
-
-    # Initial count 0, then inc→1, inc→2, dec→1
-    assert counts == [0, 1, 2, 1]
+    recording = Assertions.eventually(fn -> Storage.fetch(Fixtures.storage(), id) end)
+    assert Timeline.assigns_at(recording, Timeline.last_index(recording)).count == 1
+    # The buffer closes once the save task reports back, just after storage has it.
+    Assertions.eventually(fn -> if Buffer.fetch(id) == :error, do: {:ok, :closed} end)
   end
 
-  test "does not record on static (disconnected) render" do
-    conn = get(build_conn(), "/counter")
-    assert html_response(conn, 200) =~ "count"
-  end
-
-  test "sanitizes recorded event params" do
+  test "sanitizes params and assigns" do
     {:ok, view, _html} = live(build_conn(), "/form")
-    replay_id = :sys.get_state(view.pid).socket.assigns._replay_id
+    id = recording_id(view)
+    render_change(view, "validate", %{"name" => "dan", "password" => "hunter2"})
 
-    render_change(view, "validate", %{
-      "name" => "Alice",
-      "password" => "secret",
-      "profile" => %{"token" => "nested"}
-    })
+    {:ok, recording} = Buffer.fetch(id)
+    refute inspect(recording) =~ "hunter2"
 
-    {:ok, active} = Store.get_active(replay_id)
-    {_, :event, payload} = Enum.find(active.events, &match?({_, :event, _}, &1))
-
-    refute Map.has_key?(payload.params, "password")
-    refute Map.has_key?(payload.params["profile"], "token")
-    assert payload.params["name"] == "Alice"
+    assert %{name: "dan", password: "[FILTERED]"} =
+             Timeline.assigns_at(recording, Timeline.last_index(recording))
   end
 
-  test "records assigns delta with intermediate values for each keystroke" do
-    {:ok, view, _html} = live(build_conn(), "/form")
-    replay_id = :sys.get_state(view.pid).socket.assigns._replay_id
+  test "stops recording after max_events" do
+    Application.put_env(:phoenix_replay, :max_events, 3)
+    on_exit(fn -> Application.delete_env(:phoenix_replay, :max_events) end)
 
-    render_change(view, "validate", %{"name" => "H"})
-    render_change(view, "validate", %{"name" => "He"})
-    render_change(view, "validate", %{"name" => "Hel"})
-    render_change(view, "validate", %{"name" => "Hell"})
-    render_change(view, "validate", %{"name" => "Hello"})
+    {:ok, view, _html} = live(build_conn(), "/counter")
+    for _ <- 1..5, do: render_click(view, "inc")
 
-    {:ok, active} = Store.get_active(replay_id)
-
-    assert Enum.count(active.events, fn
-             {_, :event, _} -> true
-             _ -> false
-           end) == 5
-
-    name_values =
-      active.events
-      |> Enum.flat_map(fn
-        {_, :assigns, %{delta: %{name: n}}} -> [n]
-        {_, :assigns, %{snapshot: %{name: n}}} -> [n]
-        _ -> []
-      end)
-
-    assert name_values == ["", "H", "He", "Hel", "Hell", "Hello"]
-  end
-
-  test "form assigns are replayable via accumulated_assigns at each event" do
-    alias PhoenixReplay.Recording
-
-    {:ok, view, _html} = live(build_conn(), "/form")
-    replay_id = :sys.get_state(view.pid).socket.assigns._replay_id
-
-    render_change(view, "validate", %{"name" => "A"})
-    render_change(view, "validate", %{"name" => "Al"})
-    render_change(view, "validate", %{"name" => "Alice"})
-    render_click(view, "submit", %{"name" => "Alice"})
-
-    GenServer.stop(view.pid)
-
-    recording = TestSupport.assert_eventually(fn -> Store.get_recording(replay_id) end)
-
-    validate_indices =
-      recording.events
-      |> Enum.with_index()
-      |> Enum.flat_map(fn
-        {{_, :event, %{name: "validate"}}, i} -> [i]
-        _ -> []
-      end)
-
-    replayed_names =
-      Enum.map(validate_indices, fn i ->
-        assigns = Recording.accumulated_assigns(recording, i + 1)
-        assigns[:name]
-      end)
-
-    assert replayed_names == ["A", "Al", "Alice"]
-
-    last_index = length(recording.events) - 1
-    final = Recording.accumulated_assigns(recording, last_index)
-    assert final[:name] == "Alice"
-    assert final[:submitted] == true
+    assert {:ok, %{events: events}} = Buffer.fetch(recording_id(view))
+    assert length(events) == 3
   end
 end
