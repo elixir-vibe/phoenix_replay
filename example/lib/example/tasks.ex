@@ -13,6 +13,16 @@ defmodule Example.Tasks do
 
   def get_task(id), do: Repo.get(Task, id)
 
+  @doc "Counts open tasks by priority."
+  def open_by_priority do
+    Task
+    |> where([t], not t.completed)
+    |> group_by([t], t.priority)
+    |> select([t], {t.priority, count(t.id)})
+    |> Repo.all()
+    |> Map.new()
+  end
+
   def create_task(attrs) do
     %Task{}
     |> Task.changeset(attrs)

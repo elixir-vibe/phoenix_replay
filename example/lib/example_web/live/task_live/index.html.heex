@@ -60,6 +60,13 @@
     </button>
   </nav>
 
+  <%!-- The version changes whenever the tasks do, so the component recounts. --%>
+  <.live_component
+    module={ExampleWeb.TaskLive.StatsComponent}
+    id="task-stats"
+    version={:erlang.phash2(@tasks)}
+  />
+
   <div class="overflow-hidden rounded-lg border border-gray-200">
     <div
       :for={{task, i} <- filtered_tasks(@tasks, @filter) |> Enum.with_index()}
