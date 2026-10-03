@@ -4,7 +4,7 @@ Session recording and replay for Phoenix LiveView.
 
 ![PhoenixReplay dashboard replaying a form session](screenshot.jpg)
 
-LiveView templates are pure functions: same assigns produce the same HTML. PhoenixReplay captures assigns at each state transition and replays them by re-rendering the original view — no client-side recording, no DOM snapshots, no JavaScript changes. A 30-second session with active form input is ~400 events and ~8 KB on disk (ETF + gzip).
+LiveView templates are pure functions: same assigns produce the same HTML. PhoenixReplay captures assigns at each state transition and replays them by re-rendering the original view — no client-side recording, no DOM snapshots, no JavaScript changes. A 30-second session with active form input is ~400 events and a few kilobytes on disk.
 
 ## Quick start
 
@@ -12,7 +12,7 @@ Add the dependency:
 
 ```elixir
 def deps do
-  [{:phoenix_replay, "~> 0.1.0"}]
+  [{:phoenix_replay, "~> 0.3.0"}]
 end
 ```
 
@@ -25,151 +25,154 @@ live_session :default, on_mount: [PhoenixReplay.Recorder] do
 end
 ```
 
-Mount the replay dashboard:
+Mount the dashboard behind your admin pipeline:
 
 ```elixir
 import PhoenixReplay.Router
 
-scope "/" do
+scope "/admin" do
   pipe_through [:browser, :require_admin]
-  phoenix_replay "/replay"
+
+  phoenix_replay "/replay",
+    on_mount: [{MyAppWeb.UserAuth, :ensure_admin}],
+    authorize: MyApp.ReplayAuthorization
 end
 ```
 
-Visit `/replay` to browse recordings and replay sessions with a scrubber, play/pause, and speed controls. Every connected LiveView in the live session is recorded automatically — sanitized mount params, events, navigation, and assign deltas. Sessions with no user interaction are discarded.
+Add `:phoenix_replay` to `import_deps` in `.formatter.exs` so the macro keeps its parentheses-free form.
 
-Recordings can contain business data even after sanitization. Mount the dashboard only behind an authenticated admin pipeline. You can also add a final authorization callback:
-
-```elixir
-config :phoenix_replay,
-  authorize: fn recording -> recording.view in [MyAppWeb.SafeLive] end
-```
+Visit `/admin/replay` to browse recordings and replay them with a scrubber, keyboard controls, and playback speeds. Every connected LiveView in the live session is recorded. Sessions without user interaction are discarded.
 
 ## How it works
 
-1. The `on_mount` hook attaches lifecycle hooks to each connected LiveView.
-2. Session start sends a single async cast to the Store GenServer to set up a process monitor.
-3. All subsequent events are written directly to ETS (`ordered_set` with `write_concurrency`) — no GenServer messages on the hot path.
-4. When the LiveView process exits, the Store finalizes the recording and hands persistence to a supervised worker.
+1. `PhoenixReplay.Recorder` starts recording on the connected mount and attaches lifecycle hooks. Its state lives in `socket.private`, so your assigns are untouched.
+2. The LiveView process writes each event straight into an ETS buffer owned by the application, with no message passing on the hot path.
+3. `PhoenixReplay.Recorder.Monitor` watches the process. When it exits, the recording is saved in a supervised task with retries, then removed from the buffer. The buffer outlives worker restarts, and the monitor re-attaches to buffered sessions when it starts.
+4. Replay re-renders your view's own template with the recorded assigns inside an iframe. Each player drives its frame over a private channel, so viewers never interfere with each other.
 
 ### Recorded events
 
 | Event | Data |
 |---|---|
-| Mount | View module, URL, params, session, initial assigns |
-| Handle event | Event name, params |
-| Handle params | URL, params |
-| Handle info | Type marker only |
-| After render | Changed assigns (delta, or full snapshot when batched) |
+| `:mount` | Assigns when recording started |
+| `:params` | `handle_params/3` params and URI |
+| `:event` | `handle_event/3` name and params |
+| `:info` | `handle_info/2` message tag only, never message contents |
+| `:render` | Assigns changed by the render |
 
-Each event includes a millisecond offset from session start.
+Each event carries a millisecond offset from the start of the session.
 
 ### Current limitations
 
-Replay is currently based on root LiveView assigns. It does not fully reconstruct stateful LiveComponents, streams, uploads, client-only JavaScript state, or pushed JS events. Those sessions may still be useful for debugging server-side state, but replay output can differ from what the browser showed.
+Replay reconstructs root LiveView assigns. It does not fully reconstruct LiveComponents, streams, uploads, client-only JavaScript state, or pushed JS events. Templates that fail to render with the recorded assigns show a placeholder at that position.
+
+## Dashboard
+
+### Authorization
+
+Recordings can contain business data even after sanitization. Always mount the dashboard behind authentication, and use `PhoenixReplay.Authorization` for per-recording rules:
+
+```elixir
+defmodule MyApp.ReplayAuthorization do
+  @behaviour PhoenixReplay.Authorization
+
+  @impl true
+  def authorize(:clear, _subject, socket), do: socket.assigns.current_user.admin?
+  def authorize(_action, _recording, socket), do: socket.assigns.current_user != nil
+end
+```
+
+Actions are `:list`, `:view`, `:delete` and `:clear`. Recordings a viewer may not see respond with 404.
+
+### Frame layout
+
+The replay frame renders your views, so it needs your stylesheet. By default it loads `/assets/css/app.css` through your endpoint's `static_path/1`. If your assets are content-hashed by a bundler such as Volt, render the frame in your own root layout instead:
+
+```elixir
+phoenix_replay "/replay", frame_layout: {MyAppWeb.Layouts, :root}
+```
+
+### Assets
+
+The dashboard ships its own small script and stylesheet and loads your application's own Phoenix and LiveView clients, so the client always matches your server version. It needs nothing from your asset pipeline. If your LiveView socket is not mounted at `/live`, pass `live_socket_path: "/socket/live"`.
 
 ## Configuration
 
 ```elixir
 config :phoenix_replay,
+  storage: {PhoenixReplay.Storage.File, path: "priv/replay_recordings"},
+  sanitizer: PhoenixReplay.Sanitizer.Default,
   max_events: 10_000,
-  sanitizer: MyApp.ReplaySanitizer,
-  max_recordings: 1_000,
-  max_recording_age_ms: 7 * 24 * 60 * 60 * 1000,
-  cleanup_interval_ms: 60 * 60 * 1000,
-  persistence_retry_attempts: 3,
-  persistence_retry_delay_ms: 1_000
+  retention: [max_age: :timer.hours(24 * 7), max_count: 1_000, interval: :timer.minutes(10)],
+  persist: [attempts: 3, backoff: 1_000]
 ```
+
+All keys are optional and validated at startup; see `PhoenixReplay.Config`.
 
 ### Storage backends
 
-Active recordings live in ETS. When a LiveView process exits, the recording is persisted via the configured backend. Async persistence retries transient failures using `:persistence_retry_attempts` and `:persistence_retry_delay_ms`; cleanup can be limited by `:max_recordings`, `:max_recording_age_ms`, and `:cleanup_interval_ms`.
-
-**File (default):**
+**File (default)** stores each recording as a compressed Erlang term, plus a small summary file so listing never decodes recordings:
 
 ```elixir
-config :phoenix_replay,
-  storage: PhoenixReplay.Storage.File,
-  storage_opts: [path: "priv/replay_recordings", format: :etf]
+config :phoenix_replay, storage: {PhoenixReplay.Storage.File, path: "/var/lib/my_app/replays"}
 ```
 
-**Ecto:**
+**Ecto** stores recordings in a table:
 
 ```elixir
-config :phoenix_replay,
-  storage: PhoenixReplay.Storage.Ecto,
-  storage_opts: [repo: MyApp.Repo, format: :etf]
+config :phoenix_replay, storage: {PhoenixReplay.Storage.Ecto, repo: MyApp.Repo}
 ```
 
-Requires a migration:
+See `PhoenixReplay.Storage.Ecto` for the migration. Implement `PhoenixReplay.Storage` for any other backend.
 
-```elixir
-defmodule MyApp.Repo.Migrations.CreatePhoenixReplayRecordings do
-  use Ecto.Migration
+### Sanitizer
 
-  def change do
-    create table(:phoenix_replay_recordings, primary_key: false) do
-      add :id, :string, primary_key: true
-      add :view, :string, null: false
-      add :connected_at, :bigint, null: false
-      add :event_count, :integer, null: false, default: 0
-      add :data, :binary, null: false
-      timestamps(type: :utc_datetime)
-    end
-  end
-end
-```
-
-Both backends support `:etf` (default — fast, preserves Elixir types) and `:json` (portable but lossy).
-
-### Custom sanitizer
-
-The default sanitizer strips internal LiveView keys and sensitive fields, and compacts `Form`, `Changeset`, and Ecto structs. To customize:
+`PhoenixReplay.Sanitizer.Default` replaces the values of keys containing `password`, `token`, `secret`, `api_key`, `private_key` or `credential` with `"[FILTERED]"`, recursing through maps, lists, tuples and structs, and compacts changesets and forms. To customize, implement `PhoenixReplay.Sanitizer` and delegate what you keep:
 
 ```elixir
 defmodule MyApp.ReplaySanitizer do
-  @drop [:__changed__, :flash, :uploads, :streams,
-         :_replay_id, :_replay_t0, :csrf_token, :password,
-         :current_password, :password_confirmation, :token, :secret,
-         :my_custom_secret]
+  @behaviour PhoenixReplay.Sanitizer
 
-  def sanitize_assigns(assigns), do: Map.drop(assigns, @drop)
-  def sanitize_params(params), do: Map.drop(params, Enum.map(@drop, &Atom.to_string/1))
-
-  def sanitize_delta(changed, assigns) do
-    changed
-    |> Map.keys()
-    |> Enum.reject(&(&1 in @drop))
-    |> Map.new(fn key -> {key, Map.get(assigns, key)} end)
+  @impl true
+  def sanitize_assigns(assigns) do
+    assigns
+    |> Map.drop([:current_user])
+    |> PhoenixReplay.Sanitizer.Default.sanitize_assigns()
   end
+
+  @impl true
+  defdelegate sanitize_params(params), to: PhoenixReplay.Sanitizer.Default
 end
 ```
 
-## Manual attachment
+### Telemetry
 
-To record individual views instead of an entire live session:
-
-```elixir
-def mount(params, session, socket) do
-  {:ok, PhoenixReplay.Recorder.attach(socket, params, session)}
-end
-```
+`PhoenixReplay.Telemetry` documents the `[:phoenix_replay, :recording, :persisted | :discarded | :failed]` events.
 
 ## Programmatic access
 
 ```elixir
-PhoenixReplay.Store.list_recording_summaries()
-PhoenixReplay.Store.list_recordings()
-PhoenixReplay.Store.get_recording(id)
-PhoenixReplay.Store.get_active(id)
-PhoenixReplay.Store.delete_recording(id)
-PhoenixReplay.Store.clear_all()
-PhoenixReplay.Store.cleanup()
+config = PhoenixReplay.Config.load()
+
+PhoenixReplay.Recordings.list(config)
+PhoenixReplay.Recordings.fetch(config, id)
+PhoenixReplay.Recordings.delete(config, id)
+PhoenixReplay.Recordings.clear(config)
 ```
+
+## Development
+
+```sh
+mix deps.get
+npm ci
+npx playwright install chromium
+mix ci
+```
+
+The dashboard's TypeScript and CSS live in `priv/ts` and `priv/css`, linted and type-checked by `mix volt.js.check`. Their `*.test.ts` files run under `mix test` through Volt's test runner: pure modules in QuickBEAM, LiveView hooks in Chromium. Rebuild the committed bundle with `mix assets.build`; `mix ci` fails when it is stale.
 
 ## Roadmap
 
-- Real-time session observation via PubSub
 - LiveComponent state tracking
 - Configurable sampling (record N% of sessions)
 - Session search and filtering
