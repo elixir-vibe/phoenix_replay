@@ -4,6 +4,8 @@
 
 ### Added
 
+- `mix igniter.install phoenix_replay` mounts the dashboard behind `:dev_routes`, turns recording off in tests, imports the formatter settings and ignores local recordings.
+
 - LiveComponent state is recorded and replayed with no changes to components. Recording uses LiveView's component telemetry; replay renders each component's template with its recorded assigns.
 
 - `:sample_rate` records a share of sessions.

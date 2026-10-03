@@ -60,6 +60,22 @@ config :phoenix_replay, persist: [attempts: 3, backoff: 1_000]
 
 Backoff in milliseconds, multiplied by the attempt number.
 
+## Install and testing
+{: .col-2}
+
+### Install
+
+```bash
+mix igniter.install phoenix_replay
+```
+
+### Recording off in tests
+
+```elixir
+# config/test.exs
+config :phoenix_replay, sample_rate: 0.0
+```
+
 ## Live sessions
 {: .col-2}
 

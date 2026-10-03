@@ -8,6 +8,7 @@ app_config = [
 ]
 
 adapter = [
+  "Mix.Tasks.PhoenixReplay.*",
   "PhoenixReplay",
   "PhoenixReplay.Recorder",
   "PhoenixReplay.Router",

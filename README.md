@@ -6,24 +6,26 @@ Session recording and replay for Phoenix LiveView. PhoenixReplay records what yo
 
 ![PhoenixReplay replaying a form session](https://raw.githubusercontent.com/elixir-vibe/phoenix_replay/master/screenshot.jpg)
 
-```elixir
-def deps do
-  [{:phoenix_replay, "~> 0.4"}]
-end
+```bash
+mix igniter.install phoenix_replay
 ```
+
+The installer mounts the dashboard at `/dev/replay` in development. Record a live session:
 
 ```elixir
 live_session :default, on_mount: [PhoenixReplay.Recorder] do
   live "/checkout", CheckoutLive
 end
+```
 
+Use your app, then open `/dev/replay`. To use the dashboard in production, mount it behind your own authentication:
+
+```elixir
 scope "/admin" do
   pipe_through [:browser, :require_admin]
   phoenix_replay "/replay"
 end
 ```
-
-Use your app, then open `/admin/replay`.
 
 ## Why PhoenixReplay
 

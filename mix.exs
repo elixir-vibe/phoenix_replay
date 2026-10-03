@@ -42,9 +42,10 @@ defmodule PhoenixReplay.MixProject do
       {:phoenix_live_view, "~> 1.1"},
       {:telemetry, "~> 1.0"},
       {:ecto, "~> 3.12", optional: true},
+      {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
       {:ecto_sql, "~> 3.12", only: :test},
       {:ecto_sqlite3, "~> 0.22", only: :test},
-      {:jason, "~> 1.4", only: [:dev, :test]},
+      {:jason, "~> 1.4", optional: true},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:playwright_ex, "~> 0.14", only: :test},
       {:volt, "~> 0.20", only: [:dev, :test], runtime: false},
@@ -117,6 +118,7 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Storage.File
         ],
         Dashboard: [PhoenixReplay.Router],
+        "Mix Tasks": [Mix.Tasks.PhoenixReplay.Install],
         Internals: [
           PhoenixReplay.Application,
           PhoenixReplay.Config,

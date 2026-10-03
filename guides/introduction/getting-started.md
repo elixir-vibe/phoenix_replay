@@ -2,7 +2,15 @@
 
 PhoenixReplay needs Elixir 1.18 or later and Phoenix LiveView 1.1 or later.
 
-## Install
+## Install with Igniter
+
+```bash
+mix igniter.install phoenix_replay
+```
+
+The installer imports PhoenixReplay's formatter settings, mounts the dashboard at `/dev/replay` behind your `:dev_routes` flag (like Phoenix's LiveDashboard), turns recording off in `config/test.exs`, and ignores the local recordings directory. It then prints how to record a live session, which is the step below.
+
+## Install manually
 
 Add the dependency:
 
@@ -20,6 +28,8 @@ Add `:phoenix_replay` to `import_deps` in `.formatter.exs`, so `mix format` leav
   # ...
 ]
 ```
+
+Turn recording off in `config/test.exs`; see [Testing](#testing).
 
 ## Record a live session
 
@@ -58,6 +68,24 @@ Recordings can contain business data, so never mount the dashboard on a public r
 Start your app, use a recorded page for a while, then navigate away or close the tab. Open `/admin/replay`: the session is listed with its view, start time, event count and duration. Open it to replay it.
 
 The player re-renders your view inside an iframe with the assigns recorded at each event. Move through it with the timeline, the event list, or the keyboard: with the timeline focused, `←` and `→` step and `Space` plays or pauses.
+
+## Testing
+
+Your LiveView tests mount connected views, so with the recorder in your live sessions they would record sessions and save them to storage during every test run. Turn recording off in `config/test.exs`:
+
+```elixir
+config :phoenix_replay, sample_rate: 0.0
+```
+
+To test a flow with recording on, give its live session its own rate. Per-session options override the global configuration:
+
+```elixir
+live_session :checkout, on_mount: [{PhoenixReplay.Recorder, sample_rate: 1.0}] do
+  live "/checkout", CheckoutLive
+end
+```
+
+and point `:storage` at a temporary directory in `config/test.exs`. Sanitizers and authorization modules are plain modules, so test them by calling their callbacks directly.
 
 ## Next steps
 
