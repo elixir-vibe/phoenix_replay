@@ -1,9 +1,16 @@
-This is a web application written using the Phoenix web framework.
+This is a web application written using the Phoenix web framework. It is the example app for PhoenixReplay, which it depends on from the parent directory (`{:phoenix_replay, path: ".."}`).
 
 ## Project guidelines
 
-- Use `mix precommit` alias when you are done with all changes and fix any pending issues
-- Use the already included and available `:req` (`Req`) library for HTTP requests, **avoid** `:httpoison`, `:tesla`, and `:httpc`. Req is included by default and is the preferred HTTP client for Phoenix apps
+- Use `mix precommit` alias when you are done with all changes and fix any pending issues. It compiles with warnings as errors, formats, runs `mix volt.js.check --type-aware --type-check`, and runs the tests
+- There is no HTTP client dependency; if you need one, add `:req` rather than `:httpoison`, `:tesla`, or `:httpc`
+
+### PhoenixReplay
+
+- The task pages are in the `:recorded` live session, whose `on_mount` includes `PhoenixReplay.Recorder`. Keep new pages that should be recorded in that live session
+- The dashboard is mounted with `phoenix_replay "/replay", frame_layout: {ExampleWeb.Layouts, :root}`, so replays render in the app's own root layout and pick up its Volt-built assets
+- `config/test.exs` keeps recording on and stores recordings in a temporary directory, because `test/features/replay_test.exs` records a session and replays it. Host apps would normally set `sample_rate: 0.0` in tests
+- Changes to the library itself belong in `../lib`; run `mix ci` in the parent directory for its checks
 
 ### Phoenix v1.8 guidelines
 
@@ -20,20 +27,28 @@ custom classes must fully style the input
 
 ### JS and CSS guidelines
 
+Assets are built by [Volt](https://hexdocs.pm/volt), configured under `config :volt` in `config/config.exs`. There is no esbuild, no Tailwind CLI and no Node.js build step.
+
+- Browser code is **TypeScript**. The entry point is `assets/js/app.ts`; shared declarations live in `assets/js/env.d.ts` and `assets/js/modules.d.ts`
+- In development the `Volt.DevServer` plug in the endpoint serves and hot-reloads assets; there are no `:watchers`. Production builds use `mix assets.build` / `mix assets.deploy` (`mix volt.build --tailwind`)
+- Reference assets in layouts with `Volt.static_path(ExampleWeb.Endpoint, "/assets/js/app.js")`, never with hard-coded paths, since built files are content-hashed
+- Use `import.meta.env.DEV` and `import.meta.env.MODE`, **never** `process.env`; there is no Node.js runtime
+- Check scripts with `mix volt.js.check --type-aware --type-check`. Formatter options live under the `:volt` key in `.formatter.exs`
 - **Use Tailwind CSS classes and custom CSS rules** to create polished, responsive, and visually stunning interfaces.
-- Tailwindcss v4 **no longer needs a tailwind.config.js** and uses a new import syntax in `app.css`:
+- Tailwind CSS v4 is compiled by Volt from `assets/css/app.css`, which uses the v4 import syntax; **always maintain it**:
 
       @import "tailwindcss" source(none);
       @source "../css";
       @source "../js";
-      @source "../../lib/my_app_web";
+      @source "../../lib/example_web";
 
-- **Always use and maintain this import syntax** in the app.css file for projects generated with `phx.new`
+- The files Volt scans for classes are listed under `tailwind: [sources: ...]` in `config :volt`
 - **Never** use `@apply` when writing raw css
 - **Always** manually write your own tailwind-based components instead of using daisyUI for a unique, world-class design
-- Out of the box **only the app.js and app.css bundles are supported**
+- Keep assets local. Fonts live in `assets/fonts/` and are referenced with relative `url(...)`, which Volt hashes and rewrites; **never** load fonts or scripts from a CDN, which also keeps browser tests independent of the network
+- Out of the box **only the app.ts and app.css bundles are supported**
   - You cannot reference an external vendor'd script `src` or link `href` in the layouts
-  - You must import the vendor deps into app.js and app.css to use them
+  - You must import vendor code into app.ts and app.css to use them. CommonJS and UMD files such as `assets/vendor/topbar.js` work as imports; give them a `.d.ts` next to them
   - **Never write inline <script>custom js</script> tags within templates**
 
 ### UI/UX & design guidelines
@@ -101,6 +116,8 @@ custom classes must fully style the input
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
 
    - Instead of sleeping to synchronize before the next call, **always** use `_ = :sys.get_state/1` to ensure the process has handled prior messages
+- The `Process.sleep/1` calls in `test/features/replay_test.exs` are the one exception: they pace a scripted user session so the recording has realistic timing for the demo. They never wait for a result
+- Browser tests (PhoenixTest Playwright) load assets through Volt's build manifest; the `test` alias runs `mix assets.build` first
 <!-- phoenix:elixir-end -->
 
 <!-- phoenix:phoenix-start -->
@@ -306,20 +323,23 @@ when writing scripts inside the template**:
       }
     </script>
 
-- colocated hooks are automatically integrated into the app.js bundle
+- colocated hooks are automatically integrated into the app.ts bundle; Volt resolves `phoenix-colocated/example` from the build path through `resolve_dirs`
 - colocated hooks names **MUST ALWAYS** start with a `.` prefix, i.e. `.PhoneNumber`
 
 #### External phx-hook
 
-External JS hooks (`<div id="myhook" phx-hook="MyHook">`) must be placed in `assets/js/` and passed to the
-LiveSocket constructor:
+External JS hooks (`<div id="myhook" phx-hook="MyHook">`) must be written in TypeScript in `assets/js/` and passed to the
+LiveSocket constructor in `app.ts`:
 
-    const MyHook = {
-      mounted() { ... }
+    import { ViewHook } from 'phoenix_live_view'
+
+    export class MyHook extends ViewHook {
+      mounted(): void { ... }
     }
-    let liveSocket = new LiveSocket("/live", Socket, {
+
+    const liveSocket = new LiveSocket('/live', Socket, {
       hooks: { MyHook }
-    });
+    })
 
 #### Pushing events between client and server
 
