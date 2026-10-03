@@ -88,7 +88,8 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Recording,
           PhoenixReplay.Recording.Event,
           PhoenixReplay.Recording.Summary,
-          PhoenixReplay.Recording.Timeline
+          PhoenixReplay.Recording.Timeline,
+          PhoenixReplay.Recordings.Filter
         ],
         Extension: [
           PhoenixReplay.Authorization,

@@ -90,6 +90,7 @@ defmodule PhoenixReplay.Recorder.Buffer do
       %{
         Summary.new(recording, live?: Process.alive?(pid))
         | event_count: event_count(recording.id),
+          event_names: event_names(recording.id),
           duration_ms: duration_ms(recording.id)
       }
     end)
@@ -110,6 +111,11 @@ defmodule PhoenixReplay.Recorder.Buffer do
 
   defp event_count(id) do
     :ets.select_count(@table, [{{{id, :"$1"}, :_}, [{:is_integer, :"$1"}], [true]}])
+  end
+
+  defp event_names(id) do
+    pattern = {{id, :_}, %{__struct__: Event, type: :event, data: %{name: :"$1"}}}
+    @table |> :ets.select([{pattern, [], [:"$1"]}]) |> Enum.uniq() |> Enum.sort()
   end
 
   defp duration_ms(id) do

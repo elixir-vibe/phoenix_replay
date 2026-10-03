@@ -41,7 +41,7 @@ end
 
 Add `:phoenix_replay` to `import_deps` in `.formatter.exs` so the macro keeps its parentheses-free form.
 
-Visit `/admin/replay` to browse recordings and replay them with a scrubber, keyboard controls, and playback speeds. Every connected LiveView in the live session is recorded. Sessions without user interaction are discarded.
+Visit `/admin/replay` to browse recordings, filter them by view, URL, triggered event, age or size, and replay them with a scrubber, keyboard controls, and playback speeds. Filters live in the URL, so a filtered list can be shared as a link. Every connected LiveView in the live session is recorded. Sessions without user interaction are discarded.
 
 ## How it works
 
@@ -169,6 +169,7 @@ end
 config = PhoenixReplay.Config.load()
 
 PhoenixReplay.Recordings.list(config)
+|> PhoenixReplay.Recordings.Filter.apply(PhoenixReplay.Recordings.Filter.from_params(%{"event" => "pay"}), System.system_time(:millisecond))
 PhoenixReplay.Recordings.fetch(config, id)
 PhoenixReplay.Recordings.delete(config, id)
 PhoenixReplay.Recordings.clear(config)
@@ -188,7 +189,6 @@ The dashboard's TypeScript and CSS live in `priv/ts` and `priv/css`, linted and 
 ## Roadmap
 
 - LiveComponent state tracking
-- Session search and filtering
 
 ## Part of Elixir Vibe
 

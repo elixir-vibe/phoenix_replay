@@ -6,6 +6,13 @@
 
 - `:sample_rate` records a share of sessions.
 - `on_mount: {PhoenixReplay.Recorder, opts}` sets `:sample_rate`, `:max_events` and `:sanitizer` per live session.
+- Dashboard filters by view, URL or id, triggered event, age and event count, kept in the URL. `PhoenixReplay.Recordings.Filter` applies the same criteria in code.
+- `PhoenixReplay.Recording.Summary` lists the session's distinct `event_names`.
+  Recordings saved by 0.3.0 have none, so event filters do not match them.
+
+### Upgrading
+
+- `PhoenixReplay.Storage.Ecto` needs an `event_names` column: `add :event_names, :binary, null: false, default: <<131, 106>>`, the encoding of an empty list.
 
 ## 0.3.0
 
