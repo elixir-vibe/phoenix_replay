@@ -1,6 +1,7 @@
 defmodule PhoenixReplay.Web.Live.Index do
   @moduledoc """
-  Lists recordings, live sessions first.
+  Lists recordings, live sessions first, narrowed by a
+  `PhoenixReplay.Recordings.Filter` kept in the URL.
 
   Refreshes when `PhoenixReplay.Recordings` broadcasts a change, and every
   few seconds while live sessions are shown so their counters advance.
@@ -11,6 +12,7 @@ defmodule PhoenixReplay.Web.Live.Index do
   import PhoenixReplay.Web.Components
 
   alias PhoenixReplay.Recordings
+  alias PhoenixReplay.Recordings.Filter
   alias PhoenixReplay.Web.{Context, Layouts}
 
   @per_page 25
@@ -27,13 +29,17 @@ defmodule PhoenixReplay.Web.Live.Index do
        assets: Layouts.dashboard_assets(context),
        context: context,
        page: 1,
+       filter: %Filter{},
        refresh_timer: nil
      )}
   end
 
   @impl true
   def handle_params(params, _uri, socket) do
-    {:noreply, socket |> assign(:page, parse_integer(params["page"], 1)) |> load()}
+    {:noreply,
+     socket
+     |> assign(page: parse_integer(params["page"], 1), filter: Filter.from_params(params))
+     |> load()}
   end
 
   @impl true
@@ -47,6 +53,11 @@ defmodule PhoenixReplay.Web.Live.Index do
       nil -> {:noreply, socket}
       summary -> {:noreply, perform(socket, :delete, summary, &Recordings.delete(&1, id))}
     end
+  end
+
+  def handle_event("filter", params, socket) do
+    path = index_path(socket.assigns.context, Filter.from_params(params), 1)
+    {:noreply, push_patch(socket, to: path, replace: true)}
   end
 
   def handle_event("clear", _params, socket) do
@@ -67,11 +78,12 @@ defmodule PhoenixReplay.Web.Live.Index do
   end
 
   defp load(socket) do
-    summaries =
+    all =
       socket.assigns.context.config
       |> Recordings.list()
       |> Enum.filter(&Context.allowed?(socket, :list, &1))
 
+    summaries = Filter.apply(all, socket.assigns.filter, System.system_time(:millisecond))
     total = length(summaries)
     total_pages = max(1, ceil(total / @per_page))
     page = min(socket.assigns.page, total_pages)
@@ -82,8 +94,11 @@ defmodule PhoenixReplay.Web.Live.Index do
       page: page,
       total_pages: total_pages,
       total: total,
+      any?: all != [],
       recordings: recordings,
-      can_clear?: summaries != [] and Context.allowed?(socket, :clear, nil)
+      views: all |> Enum.map(& &1.view) |> Enum.uniq() |> Enum.sort(),
+      event_names: all |> Enum.flat_map(& &1.event_names) |> Enum.uniq() |> Enum.sort(),
+      can_clear?: all != [] and Context.allowed?(socket, :clear, nil)
     )
     |> schedule_refresh(Enum.any?(recordings, & &1.live?))
   end
@@ -97,7 +112,15 @@ defmodule PhoenixReplay.Web.Live.Index do
     assign(socket, :refresh_timer, timer)
   end
 
-  defp page_path(context, page), do: Context.path(context, []) <> "?page=#{page}"
+  defp index_path(context, filter, page) do
+    params = Filter.to_params(filter)
+    params = if page > 1, do: Map.put(params, "page", Integer.to_string(page)), else: params
+
+    case URI.encode_query(params) do
+      "" -> Context.path(context, [])
+      query -> Context.path(context, []) <> "?" <> query
+    end
+  end
 
   @impl true
   def render(assigns) do
@@ -119,7 +142,80 @@ defmodule PhoenixReplay.Web.Live.Index do
         </div>
       </header>
 
-      <div :if={@recordings == []} class="py-16 text-center text-neutral-400">
+      <form
+        :if={@any?}
+        id="recording-filter"
+        phx-change="filter"
+        phx-submit="filter"
+        class="mb-6 grid grid-cols-2 gap-2 text-sm sm:grid-cols-6"
+      >
+        <input
+          type="search"
+          name="q"
+          value={@filter.query}
+          placeholder="URL or id"
+          aria-label="Search by URL or id"
+          phx-debounce="300"
+          class="col-span-2 rounded-md border border-neutral-200 bg-white px-3 py-1.5"
+        />
+        <select
+          name="view"
+          aria-label="View"
+          class="rounded-md border border-neutral-200 bg-white px-2 py-1.5"
+        >
+          <option value="">All views</option>
+          <option :for={view <- @views} value={view} selected={view == @filter.view}>{view}</option>
+        </select>
+        <input
+          type="text"
+          name="event"
+          value={@filter.event}
+          list="recording-filter-events"
+          placeholder="Event name"
+          aria-label="Triggered event"
+          phx-debounce="300"
+          class="rounded-md border border-neutral-200 bg-white px-3 py-1.5"
+        />
+        <datalist id="recording-filter-events">
+          <option :for={name <- @event_names} value={name} />
+        </datalist>
+        <select
+          name="within"
+          aria-label="Started within"
+          class="rounded-md border border-neutral-200 bg-white px-2 py-1.5"
+        >
+          <option value="">Any time</option>
+          <option
+            :for={window <- Filter.windows()}
+            value={window}
+            selected={window == @filter.within}
+          >
+            Last {window}
+          </option>
+        </select>
+        <input
+          type="number"
+          name="min_events"
+          min="1"
+          value={@filter.min_events}
+          placeholder="Min events"
+          aria-label="Minimum events"
+          phx-debounce="300"
+          class="rounded-md border border-neutral-200 bg-white px-3 py-1.5"
+        />
+      </form>
+
+      <div :if={@any? and @recordings == []} class="py-16 text-center text-neutral-400">
+        <p>No recordings match these filters.</p>
+        <.link
+          patch={index_path(@context, %Filter{}, 1)}
+          class="mt-2 inline-block text-sm text-neutral-600 underline"
+        >
+          Clear filters
+        </.link>
+      </div>
+
+      <div :if={not @any?} class="py-16 text-center text-neutral-400">
         <p class="mb-4 text-5xl">📹</p>
         <p>No recordings yet.</p>
         <p class="mt-1 text-sm">
@@ -169,7 +265,7 @@ defmodule PhoenixReplay.Web.Live.Index do
       <nav :if={@total_pages > 1} class="mt-6 flex items-center justify-center gap-3 text-sm">
         <.link
           :if={@page > 1}
-          patch={page_path(@context, @page - 1)}
+          patch={index_path(@context, @filter, @page - 1)}
           class="text-neutral-600 hover:text-neutral-900"
         >
           ← Previous
@@ -177,7 +273,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         <span class="text-neutral-400">Page {@page} / {@total_pages}</span>
         <.link
           :if={@page < @total_pages}
-          patch={page_path(@context, @page + 1)}
+          patch={index_path(@context, @filter, @page + 1)}
           class="text-neutral-600 hover:text-neutral-900"
         >
           Next →

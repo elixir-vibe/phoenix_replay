@@ -62,6 +62,32 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     assert {:ok, _recording} = Storage.fetch(Fixtures.storage(), "secret-1")
   end
 
+  test "filters by URL params and keeps them while paginating" do
+    for i <- 1..26, do: save("match-#{i}")
+    save("other")
+
+    {:ok, view, html} = live(build_conn(), "/replay?q=match")
+    assert html =~ "Page 1 / 2"
+    refute has_element?(view, "#recording-other")
+    assert has_element?(view, ~s(a[href="/replay?page=2&q=match"]))
+  end
+
+  test "filter form patches the URL" do
+    save("alpha")
+    save("beta")
+    {:ok, view, _html} = live(build_conn(), "/replay")
+
+    view |> element("#recording-filter") |> render_change(%{"q" => "beta", "event" => "inc"})
+    assert_patch(view, "/replay?event=inc&q=beta")
+    assert has_element?(view, "#recording-beta")
+    refute has_element?(view, "#recording-alpha")
+
+    view |> element("#recording-filter") |> render_change(%{"q" => "nothing"})
+    assert render(view) =~ "No recordings match these filters."
+    view |> element("a", "Clear filters") |> render_click()
+    assert has_element?(view, "#recording-alpha")
+  end
+
   test "paginates" do
     for i <- 1..26, do: save("page-#{i}")
     {:ok, view, html} = live(build_conn(), "/replay")

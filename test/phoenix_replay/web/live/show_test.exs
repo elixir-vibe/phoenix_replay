@@ -19,6 +19,15 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
   defp assigns(view), do: :sys.get_state(view.pid).socket.assigns
 
+  # Delivers the pending playback step now. Playback tests use recordings
+  # with hour-long gaps, so the real timer cannot fire during the test.
+  defp advance(view) do
+    %{playing: {timer, ref}} = assigns(view)
+    Process.cancel_timer(timer)
+    send(view.pid, {:advance, ref})
+    assigns(view)
+  end
+
   test "starts at the first render and steps through events" do
     {:ok, view, html} = live(build_conn(), "/replay/show")
 
@@ -54,12 +63,24 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   end
 
   test "plays to the end at the chosen speed" do
-    {:ok, view, _html} = live(build_conn(), "/replay/show")
+    gap = :timer.hours(1)
+    recording = Fixtures.counter_recording(id: "hours", clicks: 2)
+
+    events =
+      recording.events
+      |> Enum.with_index()
+      |> Enum.map(fn {event, i} -> %{event | at: i * gap} end)
+
+    Storage.save(Fixtures.storage(), %{recording | events: events})
+    {:ok, view, _html} = live(build_conn(), "/replay/hours")
     render_change(view, "speed", %{"speed" => "10"})
     render_click(view, "toggle")
-    assert assigns(view).playing
 
-    Process.sleep(500)
+    # Every event is an hour apart; at 10x the next one is due in six minutes.
+    assert %{playing: {timer, _ref}} = assigns(view)
+    assert Process.read_timer(timer) in (div(gap, 10) - 1_000)..div(gap, 10)
+
+    assert [2, 3, 4, 5] = for(_ <- 1..4, do: advance(view).index)
     assert %{index: 5, playing: nil} = assigns(view)
 
     render_click(view, "toggle")

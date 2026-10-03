@@ -14,6 +14,8 @@ defmodule PhoenixReplay.Config do
       Defaults to `PhoenixReplay.Sanitizer.Default`.
     * `:max_events` — events recorded per session before recording stops.
       Defaults to `10_000`.
+    * `:sample_rate` — share of sessions to record, from `0.0` to `1.0`.
+      Defaults to `1.0`, recording every session.
     * `:retention` — keyword list controlling `PhoenixReplay.Retention`:
       * `:max_age` — milliseconds after which recordings are deleted
       * `:max_count` — number of most recent recordings to keep
@@ -39,6 +41,7 @@ defmodule PhoenixReplay.Config do
           storage: storage(),
           sanitizer: module(),
           max_events: pos_integer(),
+          sample_rate: float(),
           retention: retention(),
           persist: persist()
         }
@@ -46,20 +49,23 @@ defmodule PhoenixReplay.Config do
   defstruct storage: {PhoenixReplay.Storage.File, []},
             sanitizer: PhoenixReplay.Sanitizer.Default,
             max_events: 10_000,
+            sample_rate: 1.0,
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
 
   @doc """
   Loads and validates configuration from the application environment.
 
-  Module-keyed entries, such as an endpoint configured with
-  `otp_app: :phoenix_replay`, belong to those modules and are skipped.
+  `overrides` take precedence over the environment. Module-keyed entries,
+  such as an endpoint configured with `otp_app: :phoenix_replay`, belong to
+  those modules and are skipped.
   """
-  @spec load() :: t()
-  def load do
+  @spec load(keyword()) :: t()
+  def load(overrides \\ []) when is_list(overrides) do
     :phoenix_replay
     |> Application.get_all_env()
     |> Enum.reject(fn {key, _value} -> module_key?(key) end)
+    |> Kernel.++(overrides)
     |> new()
   end
 
@@ -86,6 +92,9 @@ defmodule PhoenixReplay.Config do
 
   defp put({:max_events, max}, config) when is_integer(max) and max > 0,
     do: %{config | max_events: max}
+
+  defp put({:sample_rate, rate}, config) when is_number(rate) and rate >= 0 and rate <= 1,
+    do: %{config | sample_rate: rate / 1}
 
   defp put({:retention, opts}, config) when is_list(opts),
     do: %{config | retention: merge(config.retention, opts, &valid_retention?/2)}

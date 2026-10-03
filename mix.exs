@@ -1,7 +1,7 @@
 defmodule PhoenixReplay.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.4.0"
   @source_url "https://github.com/elixir-vibe/phoenix_replay"
 
   def project do
@@ -42,9 +42,10 @@ defmodule PhoenixReplay.MixProject do
       {:phoenix_live_view, "~> 1.1"},
       {:telemetry, "~> 1.0"},
       {:ecto, "~> 3.12", optional: true},
+      {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
       {:ecto_sql, "~> 3.12", only: :test},
       {:ecto_sqlite3, "~> 0.22", only: :test},
-      {:jason, "~> 1.4", only: [:dev, :test]},
+      {:jason, "~> 1.4", optional: true},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:playwright_ex, "~> 0.14", only: :test},
       {:volt, "~> 0.20", only: [:dev, :test], runtime: false},
@@ -65,12 +66,12 @@ defmodule PhoenixReplay.MixProject do
         lib
         priv/static/dashboard.js
         priv/static/dashboard.css
+        guides
         mix.exs
         .formatter.exs
         README.md
         CHANGELOG.md
         LICENSE
-        screenshot.jpg
       )
     ]
   end
@@ -79,7 +80,24 @@ defmodule PhoenixReplay.MixProject do
     [
       main: "readme",
       source_ref: "v#{@version}",
-      extras: ["README.md", "CHANGELOG.md"],
+      extras: [
+        "README.md",
+        "CHANGELOG.md",
+        "guides/introduction/getting-started.md",
+        "guides/introduction/why-phoenix-replay.md",
+        "guides/introduction/how-it-works.md",
+        "guides/features/recording.md",
+        "guides/features/live-components.md",
+        "guides/features/dashboard.md",
+        "guides/features/storage.md",
+        "guides/features/privacy-and-security.md",
+        "guides/cheatsheets/configuration.cheatmd"
+      ],
+      groups_for_extras: [
+        Introduction: ~r/guides\/introduction\//,
+        Features: ~r/guides\/features\//,
+        Cheatsheets: ~r/guides\/cheatsheets\//
+      ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
       groups_for_modules: [
         Recording: [
@@ -88,7 +106,8 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Recording,
           PhoenixReplay.Recording.Event,
           PhoenixReplay.Recording.Summary,
-          PhoenixReplay.Recording.Timeline
+          PhoenixReplay.Recording.Timeline,
+          PhoenixReplay.Recordings.Filter
         ],
         Extension: [
           PhoenixReplay.Authorization,
@@ -99,10 +118,12 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Storage.File
         ],
         Dashboard: [PhoenixReplay.Router],
+        "Mix Tasks": [Mix.Tasks.PhoenixReplay.Install],
         Internals: [
           PhoenixReplay.Application,
           PhoenixReplay.Config,
           PhoenixReplay.Recorder.Buffer,
+          PhoenixReplay.Recorder.Components,
           PhoenixReplay.Recorder.Monitor,
           PhoenixReplay.Recorder.Persister,
           PhoenixReplay.Recordings,
@@ -116,8 +137,10 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Web.Live.Frame,
           PhoenixReplay.Web.Live.Index,
           PhoenixReplay.Web.Live.Show,
+          PhoenixReplay.Web.Live.ReplayComponent,
           PhoenixReplay.Web.NotFoundError,
-          PhoenixReplay.Web.Playback
+          PhoenixReplay.Web.Playback,
+          PhoenixReplay.Web.Replay
         ]
       ]
     ]

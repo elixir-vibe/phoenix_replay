@@ -4,7 +4,8 @@ if Code.ensure_loaded?(Ecto.Query) do
     Stores recordings in a database table through an Ecto repo.
 
     Summary columns are stored alongside the encoded recording so listing
-    never decodes recordings.
+    never decodes recordings. `event_names` holds the summary's event names
+    in the same encoding as `data`.
 
     ## Options
 
@@ -23,6 +24,7 @@ if Code.ensure_loaded?(Ecto.Query) do
               add :connected_at, :bigint, null: false
               add :event_count, :integer, null: false
               add :duration_ms, :integer, null: false
+              add :event_names, :binary, null: false
               add :data, :binary, null: false
             end
 
@@ -41,14 +43,16 @@ if Code.ensure_loaded?(Ecto.Query) do
 
     @table "phoenix_replay_recordings"
     @summary_fields [:id, :view, :url, :connected_at, :event_count, :duration_ms]
-    @replaced_fields [:view, :url, :connected_at, :event_count, :duration_ms, :data]
+    @replaced_fields [:view, :url, :connected_at, :event_count, :duration_ms, :event_names, :data]
 
     @impl true
     def save(%Recording{} = recording, opts) do
+      summary = Summary.new(recording)
+
       row =
-        recording
-        |> Summary.new()
+        summary
         |> Map.take(@summary_fields)
+        |> Map.put(:event_names, Codec.encode(summary.event_names))
         |> Map.put(:data, Codec.encode(recording))
 
       repo(opts).insert_all(@table, [row],
@@ -72,10 +76,10 @@ if Code.ensure_loaded?(Ecto.Query) do
       query =
         from(r in @table,
           order_by: [desc: r.connected_at],
-          select: map(r, ^@summary_fields)
+          select: map(r, ^[:event_names | @summary_fields])
         )
 
-      Enum.map(repo(opts).all(query), &struct!(Summary, &1))
+      Enum.map(repo(opts).all(query), &to_summary/1)
     end
 
     @impl true
@@ -88,6 +92,11 @@ if Code.ensure_loaded?(Ecto.Query) do
     def clear(opts) do
       repo(opts).delete_all(@table)
       :ok
+    end
+
+    defp to_summary(%{event_names: encoded} = row) do
+      {:ok, names} = Codec.decode(encoded, :list)
+      struct!(Summary, %{row | event_names: names})
     end
 
     defp repo(opts), do: Keyword.fetch!(opts, :repo)

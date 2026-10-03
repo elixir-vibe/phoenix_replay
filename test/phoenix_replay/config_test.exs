@@ -8,6 +8,7 @@ defmodule PhoenixReplay.ConfigTest do
              storage: {PhoenixReplay.Storage.File, []},
              sanitizer: PhoenixReplay.Sanitizer.Default,
              max_events: 10_000,
+             sample_rate: 1.0,
              retention: %{max_age: nil, max_count: nil, interval: 60_000},
              persist: %{attempts: 3, backoff: 1_000}
            } = Config.new([])
@@ -21,6 +22,13 @@ defmodule PhoenixReplay.ConfigTest do
     config = Config.new(retention: [max_count: 5], persist: [attempts: 1])
     assert config.retention == %{max_age: nil, max_count: 5, interval: 60_000}
     assert config.persist == %{attempts: 1, backoff: 1_000}
+  end
+
+  test "normalizes the sample rate and applies overrides" do
+    assert Config.new(sample_rate: 0).sample_rate == 0.0
+    assert Config.load(sample_rate: 0.25, max_events: 5).sample_rate == 0.25
+    assert Config.load(max_events: 5).max_events == 5
+    assert_raise ArgumentError, ~r/:sample_rate/, fn -> Config.new(sample_rate: 1.5) end
   end
 
   test "rejects unknown keys and invalid values" do

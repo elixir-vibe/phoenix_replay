@@ -106,6 +106,8 @@ defmodule PhoenixReplay.Web.Components do
   def event_icon(:params), do: "🔗"
   def event_icon(:info), do: "📨"
   def event_icon(:render), do: "📝"
+  def event_icon(:component), do: "🧩"
+  def event_icon(:component_destroyed), do: "🧩"
 
   @doc "Tailwind background class for an event's timeline marker."
   @spec marker_class(Event.type()) :: String.t()
@@ -114,6 +116,8 @@ defmodule PhoenixReplay.Web.Components do
   def marker_class(:params), do: "size-1.5 bg-sky-500"
   def marker_class(:info), do: "size-1 bg-neutral-500"
   def marker_class(:render), do: "size-1 bg-neutral-400"
+  def marker_class(:component), do: "size-1 bg-violet-400"
+  def marker_class(:component_destroyed), do: "size-1 bg-violet-400"
 
   @doc "One-line description of an event."
   @spec event_label(Event.t()) :: String.t()
@@ -123,12 +127,27 @@ defmodule PhoenixReplay.Web.Components do
   def event_label(%Event{type: :info, data: %{tag: tag}}), do: "handle_info #{inspect(tag)}"
   def event_label(%Event{type: :render, data: %{assigns: assigns}}), do: assigns_label(assigns)
 
-  def event_label(%Event{type: :event, data: %{name: name, params: params}}) do
+  def event_label(%Event{type: :component, data: %{module: module, id: id, assigns: assigns}}),
+    do: "#{component_label(module, id)} #{assigns_label(assigns)}"
+
+  def event_label(%Event{type: :component_destroyed, data: %{module: module, id: id}}),
+    do: "#{component_label(module, id)} removed"
+
+  def event_label(%Event{type: :event, data: %{name: name, params: params} = data}) do
+    name =
+      case data do
+        %{target: {module, id}} -> "#{name} → #{component_label(module, id)}"
+        %{} -> name
+      end
+
     case params_label(params) do
       "" -> name
       label -> "#{name}: #{label}"
     end
   end
+
+  defp component_label(module, id) when is_binary(id), do: "#{inspect(module)}##{id}"
+  defp component_label(module, id), do: "#{inspect(module)}##{inspect(id)}"
 
   defp assigns_label(assigns) do
     "assigns " <> (assigns |> Map.keys() |> Enum.sort() |> Enum.map_join(", ", &to_string/1))

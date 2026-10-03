@@ -2,6 +2,9 @@ defmodule PhoenixReplay.Telemetry do
   @moduledoc """
   Telemetry events emitted by PhoenixReplay.
 
+  Each event is emitted once its effect is complete: the session is no
+  longer buffered and, for `:persisted`, the recording is in storage.
+
     * `[:phoenix_replay, :recording, :persisted]` — a recording was saved.
       Measurements: `%{event_count: integer, duration_ms: integer}`.
       Metadata: `%{id: String.t(), view: module}`.

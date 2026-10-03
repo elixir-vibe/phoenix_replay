@@ -2,17 +2,15 @@ defmodule PhoenixReplay.Recorder.MonitorTest do
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
-  import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Config, Storage}
   alias PhoenixReplay.Recorder.{Buffer, Monitor}
-  alias PhoenixReplay.Test.{Assertions, Fixtures, TelemetryHandler}
-
-  @endpoint PhoenixReplay.Test.Endpoint
+  alias PhoenixReplay.Test.{Fixtures, Sessions, TelemetryHandler}
 
   setup context do
     TelemetryHandler.attach(context.test)
     on_exit(fn -> Storage.clear(Fixtures.storage()) end)
+    Sessions.setup_sessions(context)
   end
 
   defp buffer(recording, pid, config) do
@@ -23,12 +21,10 @@ defmodule PhoenixReplay.Recorder.MonitorTest do
     |> Enum.each(fn {event, seq} -> Buffer.append(recording.id, seq, event) end)
   end
 
-  test "discards sessions without interaction" do
-    {:ok, view, _html} = live(build_conn(), "/counter")
-    id = :sys.get_state(view.pid).socket.private.phoenix_replay.id
-    GenServer.stop(view.pid)
+  test "discards sessions without interaction", %{sessions: sessions} do
+    {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/counter")
 
-    assert_receive {:telemetry, :discarded, %{id: ^id}}
+    assert Sessions.stop(sessions, view) == :discarded
     assert Buffer.fetch(id) == :error
     assert Storage.fetch(Fixtures.storage(), id) == {:error, :not_found}
   end
@@ -51,7 +47,7 @@ defmodule PhoenixReplay.Recorder.MonitorTest do
     assert_receive {:save_attempt, ^id}
     assert_receive {:save_attempt, ^id}
     assert_receive {:telemetry, :failed, %{id: ^id, reason: :unavailable}}
-    Assertions.eventually(fn -> if Buffer.fetch(id) == :error, do: {:ok, :closed} end)
+    assert Buffer.fetch(id) == :error
   end
 
   test "recovers buffered sessions after a restart" do

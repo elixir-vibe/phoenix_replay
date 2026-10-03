@@ -26,8 +26,10 @@ defmodule PhoenixReplay.Recorder.BufferTest do
   test "summarizes sessions without decoding events", %{recording: %{id: id}} do
     Buffer.append(id, 0, %Event{at: 0, type: :mount, data: %{assigns: %{}}})
     Buffer.append(id, 1, %Event{at: 250, type: :info, data: %{tag: nil}})
+    Buffer.append(id, 2, %Event{at: 260, type: :event, data: %{name: "save", params: %{}}})
+    Buffer.append(id, 3, %Event{at: 270, type: :event, data: %{name: "save", params: %{}}})
 
-    assert %Summary{event_count: 2, duration_ms: 250, live?: true} =
+    assert %Summary{event_count: 4, event_names: ["save"], duration_ms: 270, live?: true} =
              Enum.find(Buffer.summaries(), &(&1.id == id))
   end
 

@@ -17,6 +17,15 @@ defmodule PhoenixReplay.Test.Router do
     live_session :recorded, on_mount: [PhoenixReplay.Recorder] do
       live "/counter", PhoenixReplay.Test.Live.Counter
       live "/form", PhoenixReplay.Test.Live.Form
+      live "/cart", PhoenixReplay.Test.Live.Cart
+    end
+
+    live_session :unsampled, on_mount: [{PhoenixReplay.Recorder, sample_rate: 0.0}] do
+      live "/unsampled/counter", PhoenixReplay.Test.Live.Counter
+    end
+
+    live_session :limited, on_mount: [{PhoenixReplay.Recorder, max_events: 3}] do
+      live "/limited/counter", PhoenixReplay.Test.Live.Counter
     end
 
     phoenix_replay "/replay"

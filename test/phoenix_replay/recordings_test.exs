@@ -20,8 +20,9 @@ defmodule PhoenixReplay.RecordingsTest do
     Buffer.open(buffered, self(), config)
     on_exit(fn -> Buffer.close("buffered") end)
 
-    assert [%{id: "buffered", live?: true}, %{id: "stored", live?: false}] =
-             Recordings.list(config)
+    # Other tests' LiveViews may still be buffered; only this test's sessions matter.
+    listed = Enum.filter(Recordings.list(config), &(&1.id in ["buffered", "stored"]))
+    assert [%{id: "buffered", live?: true}, %{id: "stored", live?: false}] = listed
   end
 
   test "fetches from the buffer first, then storage", %{config: config} do

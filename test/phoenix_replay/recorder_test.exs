@@ -4,22 +4,25 @@ defmodule PhoenixReplay.RecorderTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.{Recording, Storage}
+  alias PhoenixReplay.{Recorder, Recording, Storage}
   alias PhoenixReplay.Recorder.Buffer
   alias PhoenixReplay.Recording.{Event, Timeline}
-  alias PhoenixReplay.Test.{Assertions, Fixtures}
+  alias PhoenixReplay.Test.{Fixtures, Sessions}
 
   @endpoint PhoenixReplay.Test.Endpoint
+
+  setup :setup_sessions
 
   setup do
     on_exit(fn -> Storage.clear(Fixtures.storage()) end)
   end
 
-  defp recording_id(view), do: :sys.get_state(view.pid).socket.private.phoenix_replay.id
+  defp setup_sessions(context), do: Sessions.setup_sessions(context)
 
-  test "records events and render diffs without touching the view's assigns" do
-    {:ok, view, _html} = live(build_conn(), "/counter")
-    id = recording_id(view)
+  test "records events and render diffs without touching the view's assigns", %{
+    sessions: sessions
+  } do
+    {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/counter")
 
     render_click(view, "inc")
     render_click(view, "inc")
@@ -64,21 +67,18 @@ defmodule PhoenixReplay.RecorderTest do
            |> Enum.all?(fn [a, b] -> a <= b end)
   end
 
-  test "saves the recording when the view exits" do
-    {:ok, view, _html} = live(build_conn(), "/counter")
-    id = recording_id(view)
+  test "saves the recording when the view exits", %{sessions: sessions} do
+    {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/counter")
     render_click(view, "inc")
-    GenServer.stop(view.pid)
 
-    recording = Assertions.eventually(fn -> Storage.fetch(Fixtures.storage(), id) end)
+    assert Sessions.stop(sessions, view) == :persisted
+    assert Buffer.fetch(id) == :error
+    assert {:ok, recording} = Storage.fetch(Fixtures.storage(), id)
     assert Timeline.assigns_at(recording, Timeline.last_index(recording)).count == 1
-    # The buffer closes once the save task reports back, just after storage has it.
-    Assertions.eventually(fn -> if Buffer.fetch(id) == :error, do: {:ok, :closed} end)
   end
 
-  test "sanitizes params and assigns" do
-    {:ok, view, _html} = live(build_conn(), "/form")
-    id = recording_id(view)
+  test "sanitizes params and assigns", %{sessions: sessions} do
+    {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/form")
     render_change(view, "validate", %{"name" => "dan", "password" => "hunter2"})
 
     {:ok, recording} = Buffer.fetch(id)
@@ -88,14 +88,33 @@ defmodule PhoenixReplay.RecorderTest do
              Timeline.assigns_at(recording, Timeline.last_index(recording))
   end
 
-  test "stops recording after max_events" do
-    Application.put_env(:phoenix_replay, :max_events, 3)
-    on_exit(fn -> Application.delete_env(:phoenix_replay, :max_events) end)
-
-    {:ok, view, _html} = live(build_conn(), "/counter")
+  test "applies live session options", %{sessions: sessions} do
+    {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/limited/counter")
     for _ <- 1..5, do: render_click(view, "inc")
 
-    assert {:ok, %{events: events}} = Buffer.fetch(recording_id(view))
+    assert {:ok, %{events: events}} = Buffer.fetch(id)
     assert length(events) == 3
+  end
+
+  test "records only the sampled share of sessions" do
+    {:ok, view, _html} = live(build_conn(), "/unsampled/counter")
+    render_click(view, "inc")
+
+    refute Map.has_key?(:sys.get_state(view.pid).socket.private, :phoenix_replay)
+  end
+
+  test "samples sessions from a uniform draw" do
+    assert Recorder.sampled?(1.0, 0.99)
+    refute Recorder.sampled?(0.0, 0.0)
+    assert Recorder.sampled?(0.25, 0.25)
+    refute Recorder.sampled?(0.25, 0.26)
+  end
+
+  test "rejects unknown live session options" do
+    socket = %Phoenix.LiveView.Socket{}
+
+    assert_raise ArgumentError, ~r/:storage/, fn ->
+      PhoenixReplay.Recorder.on_mount([storage: Foo], %{}, %{}, socket)
+    end
   end
 end

@@ -21,6 +21,7 @@ defmodule PhoenixReplay.Storage.EctoTest do
       connected_at INTEGER NOT NULL,
       event_count INTEGER NOT NULL,
       duration_ms INTEGER NOT NULL,
+      event_names BLOB NOT NULL,
       data BLOB NOT NULL
     )
     """)
@@ -44,6 +45,7 @@ defmodule PhoenixReplay.Storage.EctoTest do
                id: "newer",
                view: "PhoenixReplay.Test.Live.Counter",
                event_count: 6,
+               event_names: ["inc"],
                duration_ms: 2001
              },
              %{id: "older"}

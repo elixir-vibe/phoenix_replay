@@ -8,6 +8,7 @@ app_config = [
 ]
 
 adapter = [
+  "Mix.Tasks.PhoenixReplay.*",
   "PhoenixReplay",
   "PhoenixReplay.Recorder",
   "PhoenixReplay.Router",
@@ -26,7 +27,8 @@ model = [
   "PhoenixReplay.Recording",
   "PhoenixReplay.Recording.Event",
   "PhoenixReplay.Recording.Summary",
-  "PhoenixReplay.Recording.Timeline"
+  "PhoenixReplay.Recording.Timeline",
+  "PhoenixReplay.Recordings.Filter"
 ]
 
 logic = [
@@ -39,6 +41,7 @@ logic = [
 infrastructure = [
   "PhoenixReplay.Application",
   "PhoenixReplay.Recorder.Buffer",
+  "PhoenixReplay.Recorder.Components",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",
   "PhoenixReplay.Storage.File",

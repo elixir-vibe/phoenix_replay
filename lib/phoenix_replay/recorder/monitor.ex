@@ -7,6 +7,9 @@ defmodule PhoenixReplay.Recorder.Monitor do
   `PhoenixReplay.Recorder.Persister` in a supervised task. The buffer is
   closed once the task finishes, whether it saved the recording or gave up.
 
+  Each outcome emits its `PhoenixReplay.Telemetry` event after the buffer is
+  closed, so a handler observes the finished state.
+
   On start the monitor re-attaches to every session already in
   `PhoenixReplay.Recorder.Buffer`, so a restart loses no recordings.
   """
@@ -46,14 +49,21 @@ defmodule PhoenixReplay.Recorder.Monitor do
   def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
     case state do
       %{sessions: %{^ref => id}} -> {:noreply, finalize(state, ref, id)}
-      %{saves: %{^ref => id}} -> {:noreply, save_crashed(state, ref, id, reason)}
+      %{saves: %{^ref => recording}} -> {:noreply, save_crashed(state, ref, recording, reason)}
+      %{} -> {:noreply, state}
     end
   end
 
-  def handle_info({ref, _result}, %{saves: saves} = state) when is_map_key(saves, ref) do
+  def handle_info({ref, result}, %{saves: saves} = state) when is_map_key(saves, ref) do
     Process.demonitor(ref, [:flush])
-    {id, saves} = Map.pop!(saves, ref)
-    close(id)
+    {recording, saves} = Map.pop!(saves, ref)
+    close(recording.id)
+
+    case result do
+      :ok -> Telemetry.persisted(recording)
+      {:error, reason} -> Telemetry.failed(recording.id, reason)
+    end
+
     {:noreply, %{state | saves: saves}}
   end
 
@@ -77,11 +87,11 @@ defmodule PhoenixReplay.Recorder.Monitor do
           config
         ])
 
-      %{state | saves: Map.put(state.saves, task.ref, id)}
+      %{state | saves: Map.put(state.saves, task.ref, recording)}
     else
       false ->
-        Telemetry.discarded(id)
         close(id)
+        Telemetry.discarded(id)
         state
 
       :error ->
@@ -89,13 +99,13 @@ defmodule PhoenixReplay.Recorder.Monitor do
     end
   end
 
-  defp save_crashed(state, ref, id, reason) do
+  defp save_crashed(state, ref, recording, reason) do
     Logger.error(
-      "PhoenixReplay: saving recording #{id} crashed: #{Exception.format_exit(reason)}"
+      "PhoenixReplay: saving recording #{recording.id} crashed: #{Exception.format_exit(reason)}"
     )
 
-    Telemetry.failed(id, reason)
-    close(id)
+    close(recording.id)
+    Telemetry.failed(recording.id, reason)
     %{state | saves: Map.delete(state.saves, ref)}
   end
 
