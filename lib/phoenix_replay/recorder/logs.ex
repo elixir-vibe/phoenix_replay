@@ -16,14 +16,14 @@ defmodule PhoenixReplay.Recorder.Logs do
   first of its `$callers` that has one, as for
   `PhoenixReplay.Recorder.Collectors`. Messages are formatted on one line,
   their metadata goes through the session's `PhoenixReplay.Sanitizer`, and
-  their text through the `:redact` patterns. Each is recorded as a `:log`
-  event.
+  each is recorded as a `:log` event. Their text is masked when the
+  recording is saved, by the session's `PhoenixReplay.Redactor`.
 
   `:logger` removes a handler that raises, so failures are reported with
   `[:phoenix_replay, :collector, :exception]` instead.
   """
 
-  alias PhoenixReplay.{Config, Sanitizer, Telemetry}
+  alias PhoenixReplay.{Config, Telemetry}
   alias PhoenixReplay.Recorder.{Buffer, Collectors}
 
   @formatter %{template: [:msg], single_line: true}
@@ -57,7 +57,7 @@ defmodule PhoenixReplay.Recorder.Logs do
           metadata: config.sanitizer.sanitize_params(Map.take(meta, logs.metadata))
         }
 
-        Buffer.collect(session, :log, Sanitizer.redact(data, config.redact), "log", logs.limit)
+        Buffer.collect(session, :log, data, "log", logs.limit)
 
       :error ->
         :ok

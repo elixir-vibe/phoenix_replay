@@ -52,18 +52,6 @@ defmodule PhoenixReplay.Sanitizer.DefaultTest do
     assert Default.sanitize_assigns(%{set: set, now: now}) == %{set: set, now: now}
   end
 
-  test "redact/2 masks pattern matches in nested strings, leaving structs alone" do
-    patterns = [~r/\d{4}-\d{4}/, ~r/secret/]
-    date = ~D[2026-01-01]
-
-    assert PhoenixReplay.Sanitizer.redact(
-             %{sql: "card 1234-5678", nested: [{"a secret", 1}], date: date, n: 1},
-             patterns
-           ) == %{sql: "card [REDACTED]", nested: [{"a [REDACTED]", 1}], date: date, n: 1}
-
-    assert PhoenixReplay.Sanitizer.redact("1234-5678", []) == "1234-5678"
-  end
-
   test "compacts changesets" do
     changeset =
       {%{}, %{name: :string, password: :string}}

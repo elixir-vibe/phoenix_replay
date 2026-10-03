@@ -80,7 +80,15 @@ Off by default.
 config :phoenix_replay, redact: [~r/\b\d{13,19}\b/]
 ```
 
-Masks matches in collected SQL, log messages and exit reasons.
+Masks matches in every recorded string when a session is saved.
+
+### Obscura
+
+```elixir
+config :phoenix_replay, redact: {PhoenixReplay.Redactor.Obscura, []}
+```
+
+Detects personal data. Needs `{:obscura, "~> 0.2"}`.
 
 ### Retention
 

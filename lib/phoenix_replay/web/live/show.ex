@@ -6,6 +6,17 @@ defmodule PhoenixReplay.Web.Live.Show do
   the recorded gap divided by the speed, and tells the frame which event to
   show through `PhoenixReplay.Web.Playback`. The `Scrubber` hook only maps
   pointer positions to events and animates the thumb between them.
+
+  A session that is still running is redacted before it is shown, which
+  can take a while with a detecting `PhoenixReplay.Redactor`. The player
+  then loads it with `start_async/3`, shows the redaction's progress, and
+  hands the redacted recording to its frame, so the frame never reads the
+  buffer itself. Stored recordings were redacted when they were saved and
+  load at once.
+
+  Collected telemetry and log events follow the LiveView event that caused
+  them, indented, and can be hidden by kind. They leave the replayed state
+  as it was, so selecting one shows its details next to the assigns.
   """
 
   use Phoenix.LiveView
@@ -17,32 +28,96 @@ defmodule PhoenixReplay.Web.Live.Show do
   alias PhoenixReplay.Web.{Context, Layouts, Playback}
 
   @speeds [1, 2, 5, 10]
+  @progress_every 25
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     context = Context.fetch(socket)
-    recording = Context.fetch_recording!(socket, id)
     channel = Playback.new_channel()
     if connected?(socket), do: Playback.subscribe(channel)
 
-    {:ok,
-     socket
-     |> assign(
-       page_title: "Replay · #{inspect(recording.view)}",
-       assets: Layouts.dashboard_assets(context),
-       context: context,
-       recording: recording,
-       channel: channel,
-       duration_ms: Timeline.duration_ms(recording),
-       speed: 1,
-       playing: nil,
-       speeds: @speeds,
-       kinds: kinds(recording),
-       hidden: MapSet.new(),
-       error_count: Enum.count(recording.events, &Event.error?/1),
-       dropped: Enum.sum_by(recording.dropped, fn {_name, count} -> count end)
-     )
-     |> seek(Timeline.first_render_index(recording))}
+    socket =
+      assign(socket,
+        page_title: "Replay",
+        assets: Layouts.dashboard_assets(context),
+        context: context,
+        id: id,
+        recording: nil,
+        live?: Recordings.live?(id),
+        frame_ready?: false,
+        progress: nil,
+        load_error?: false,
+        channel: channel,
+        speed: 1,
+        playing: nil,
+        speeds: @speeds,
+        hidden: MapSet.new()
+      )
+
+    cond do
+      not socket.assigns.live? -> {:ok, loaded(socket, Context.fetch_recording!(socket, id))}
+      connected?(socket) -> {:ok, load_live(socket)}
+      true -> {:ok, socket}
+    end
+  end
+
+  defp load_live(socket) do
+    %{context: context, id: id} = socket.assigns
+    player = self()
+
+    socket
+    |> assign(:progress, {0, 0})
+    |> start_async(:recording, fn ->
+      Recordings.fetch(context.config, id, progress: &report_progress(player, &1, &2))
+    end)
+  end
+
+  defp report_progress(player, done, total) when done == total or rem(done, @progress_every) == 0,
+    do: send(player, {:redaction_progress, done, total})
+
+  defp report_progress(_player, _done, _total), do: :ok
+
+  defp loaded(socket, recording) do
+    socket
+    |> assign(
+      page_title: "Replay · #{inspect(recording.view)}",
+      recording: recording,
+      progress: nil,
+      duration_ms: Timeline.duration_ms(recording),
+      kinds: kinds(recording),
+      error_count: Enum.count(recording.events, &Event.error?/1),
+      dropped: Enum.sum_by(recording.dropped, fn {_name, count} -> count end)
+    )
+    |> hand_over()
+    |> seek(Timeline.first_render_index(recording))
+  end
+
+  # A live session's frame waits for the redacted recording from the player.
+  defp hand_over(%{assigns: %{live?: true, frame_ready?: true}} = socket) do
+    :ok = Playback.load(socket.assigns.channel, socket.assigns.recording)
+    socket
+  end
+
+  defp hand_over(socket), do: socket
+
+  @impl true
+  def handle_async(:recording, {:ok, {:ok, recording}}, socket) do
+    if Context.allowed?(socket, :view, recording),
+      do: {:noreply, loaded(socket, recording)},
+      else: {:noreply, not_found(socket)}
+  end
+
+  def handle_async(:recording, {:ok, {:error, :not_found}}, socket),
+    do: {:noreply, not_found(socket)}
+
+  def handle_async(:recording, _failed, socket),
+    do: {:noreply, assign(socket, progress: nil, load_error?: true)}
+
+  # Missing and forbidden recordings look the same, as for stored ones.
+  defp not_found(socket) do
+    socket
+    |> put_flash(:error, "Recording not found")
+    |> push_navigate(to: Context.path(socket.assigns.context, []))
   end
 
   @impl true
@@ -108,10 +183,21 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   def handle_info({:advance, _stale}, socket), do: {:noreply, socket}
 
+  def handle_info({Playback, :frame_ready}, %{assigns: %{recording: nil}} = socket) do
+    {:noreply, assign(socket, :frame_ready?, true)}
+  end
+
   def handle_info({Playback, :frame_ready}, socket) do
+    socket = socket |> assign(:frame_ready?, true) |> hand_over()
     :ok = Playback.seek(socket.assigns.channel, socket.assigns.index)
     {:noreply, socket}
   end
+
+  def handle_info({:redaction_progress, done, total}, %{assigns: %{recording: nil}} = socket) do
+    {:noreply, assign(socket, :progress, {done, total})}
+  end
+
+  def handle_info({:redaction_progress, _done, _total}, socket), do: {:noreply, socket}
 
   defp seek(socket, index) do
     %{recording: recording, channel: channel} = socket.assigns
@@ -170,10 +256,72 @@ defmodule PhoenixReplay.Web.Live.Show do
   defp kind_label("telemetry"), do: "Telemetry"
   defp kind_label("logs"), do: "Logs"
 
+  defp redaction_label(nil), do: "Redacting the session before showing it…"
+  defp redaction_label({_done, 0}), do: "Redacting the session before showing it…"
+
+  defp redaction_label({done, total}),
+    do: "Redacting the session before showing it… #{done} / #{total} events"
+
+  defp redaction_percent({done, total}) when total > 0, do: Float.round(done / total * 100, 1)
+  defp redaction_percent(_progress), do: 0
+
+  attr :context, Context, required: true
+  attr :id, :string, required: true
+  attr :channel, :string, required: true
+
+  defp frame(assigns) do
+    ~H"""
+    <section class="mb-4 overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <iframe
+        id="replay-frame"
+        title="Replay"
+        src={Context.path(@context, [@id, "frame"]) <> "?channel=#{@channel}"}
+        class="block h-[600px] w-full border-0"
+      ></iframe>
+    </section>
+    """
+  end
+
   defp position(_at, 0), do: 0
   defp position(at, duration_ms), do: Float.round(at / duration_ms * 100, 3)
 
   @impl true
+  def render(%{recording: nil} = assigns) do
+    ~H"""
+    <main class="mx-auto max-w-6xl px-4 py-6">
+      <.flash_error flash={@flash} />
+      <header class="mb-4">
+        <.link
+          navigate={Context.path(@context, [])}
+          class="text-sm text-neutral-500 hover:text-neutral-800"
+        >
+          ← Recordings
+        </.link>
+        <h1 class="mt-1 text-xl font-semibold">Live session</h1>
+        <p :if={@load_error?} role="alert" class="text-sm text-red-700">
+          Could not redact this session, so it is not shown.
+        </p>
+        <div
+          :if={!@load_error?}
+          id="replay-redaction"
+          role="status"
+          class="mt-2 max-w-md text-sm text-neutral-500"
+        >
+          <p>{redaction_label(@progress)}</p>
+          <div class="mt-2 h-1 rounded-full bg-neutral-200">
+            <div
+              class="h-1 rounded-full bg-neutral-900 transition-[width]"
+              style={"width: #{redaction_percent(@progress)}%"}
+            >
+            </div>
+          </div>
+        </div>
+      </header>
+      <.frame :if={!@load_error?} context={@context} id={@id} channel={@channel} />
+    </main>
+    """
+  end
+
   def render(assigns) do
     ~H"""
     <main class="mx-auto max-w-6xl px-4 py-6">
@@ -272,14 +420,7 @@ defmodule PhoenixReplay.Web.Live.Show do
         </div>
       </section>
 
-      <section class="mb-4 overflow-hidden rounded-lg border border-neutral-200 bg-white">
-        <iframe
-          id="replay-frame"
-          title="Replay"
-          src={Context.path(@context, [@recording.id, "frame"]) <> "?channel=#{@channel}"}
-          class="block h-[600px] w-full border-0"
-        ></iframe>
-      </section>
+      <.frame context={@context} id={@recording.id} channel={@channel} />
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section class="flex min-w-0 flex-col rounded-lg border border-neutral-200 bg-white">

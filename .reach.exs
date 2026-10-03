@@ -39,6 +39,9 @@ logic = [
   "PhoenixReplay.Collector.Ecto",
   "PhoenixReplay.Collector.Finch",
   "PhoenixReplay.Collector.Telemetry",
+  "PhoenixReplay.Redactor",
+  "PhoenixReplay.Redactor.Obscura",
+  "PhoenixReplay.Redactor.Patterns",
   "PhoenixReplay.Sanitizer",
   "PhoenixReplay.Sanitizer.Default",
   "PhoenixReplay.Storage.Codec"
@@ -99,7 +102,8 @@ infrastructure = [
       {"PhoenixReplay*", app_config, except: ["PhoenixReplay.Config"]},
       {"PhoenixReplay.Recording", ["File.*", ":ets.*", "Phoenix.PubSub.*"]},
       {"PhoenixReplay.Recording.*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]},
-      {"PhoenixReplay.Sanitizer*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]}
+      {"PhoenixReplay.Sanitizer*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]},
+      {"PhoenixReplay.Redactor*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]}
     ]
   ],
   smells: [strict: true]

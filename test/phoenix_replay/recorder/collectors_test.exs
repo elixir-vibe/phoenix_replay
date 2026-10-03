@@ -4,7 +4,7 @@ defmodule PhoenixReplay.Recorder.CollectorsTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.Config
+  alias PhoenixReplay.{Config, Recordings}
   alias PhoenixReplay.Recorder.{Buffer, Collectors}
   alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Storage
@@ -94,11 +94,16 @@ defmodule PhoenixReplay.Recorder.CollectorsTest do
     assert collected(id) == []
   end
 
-  test "redacts text with the session's patterns", %{sessions: sessions} do
+  test "leaves text to the redactor, which reading the session applies", %{sessions: sessions} do
     {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/telemetry")
     view |> render_hook("work", %{"source" => "card-4242"})
 
-    assert [%Event{data: %{metadata: %{source: "[REDACTED]"}}}] = collected(id)
+    assert [%Event{data: %{metadata: %{source: "card-4242"}}}] = collected(id)
+
+    assert {:ok, %{events: events}} = Recordings.fetch(Config.load(), id)
+
+    assert %Event{data: %{metadata: %{source: "[REDACTED]"}}} =
+             Enum.find(events, &(&1.type == :telemetry))
   end
 
   test "counts events beyond the limit as dropped", %{sessions: sessions} do

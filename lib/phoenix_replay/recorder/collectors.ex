@@ -12,8 +12,8 @@ defmodule PhoenixReplay.Recorder.Collectors do
        session claims stop here, at the cost of one ETS lookup per process.
     2. Lets the collector capture or skip the event.
     3. Passes captured metadata through the session's
-       `PhoenixReplay.Sanitizer` and its text through the `:redact`
-       patterns, with `PhoenixReplay.Sanitizer.redact/2`.
+       `PhoenixReplay.Sanitizer`. Text such as SQL is masked later, when
+       the recording is saved, by the session's `PhoenixReplay.Redactor`.
     4. Records a `:telemetry` event, unless the collector reached its
        `:limit` for the session, in which case the event is counted as
        dropped.
@@ -23,7 +23,7 @@ defmodule PhoenixReplay.Recorder.Collectors do
   instead; see `PhoenixReplay.Telemetry`.
   """
 
-  alias PhoenixReplay.{Collector, Config, Sanitizer, Telemetry}
+  alias PhoenixReplay.{Collector, Config, Telemetry}
   alias PhoenixReplay.Collector.Captured
   alias PhoenixReplay.Recorder.Buffer
 
@@ -71,13 +71,7 @@ defmodule PhoenixReplay.Recorder.Collectors do
         error: captured.error
       }
 
-      Buffer.collect(
-        session,
-        :telemetry,
-        Sanitizer.redact(data, config.redact),
-        Collector.name(event),
-        limit
-      )
+      Buffer.collect(session, :telemetry, data, Collector.name(event), limit)
     end
 
     :ok

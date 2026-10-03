@@ -123,14 +123,7 @@ The dashboard's **Errors** filter, or `?errors=1`, lists the sessions that had o
 
 ## Redaction
 
-Collected metadata goes through your `PhoenixReplay.Sanitizer`, like params. SQL, log messages and exit reasons are free text with no keys to filter, so mask what must not be stored with `:redact` patterns:
-
-```elixir
-config :phoenix_replay,
-  redact: [~r/\b\d{13,19}\b/, ~r/[\w.+-]+@[\w-]+\.[\w.]+/]
-```
-
-Every match is replaced with `"[REDACTED]"`. Patterns can be given as strings too, which is convenient in releases. See [Privacy and Security](privacy-and-security.md).
+Collected metadata goes through your `PhoenixReplay.Sanitizer`, like params. SQL, log messages and exit reasons are free text with no keys to filter, so they are masked when the session is saved, by a `PhoenixReplay.Redactor`. See [Privacy and Security](privacy-and-security.md#redacting-values).
 
 ## Failures
 

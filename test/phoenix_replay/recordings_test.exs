@@ -37,6 +37,23 @@ defmodule PhoenixReplay.RecordingsTest do
     assert {:ok, %{events: []}} = Recordings.fetch(config, recording.id)
   end
 
+  test "redacts buffered sessions with their own redactor", %{config: config} do
+    recording = %{Fixtures.counter_recording() | url: "http://localhost/cards/4242"}
+    session_config = %{config | redact: {PhoenixReplay.Redactor.Patterns, patterns: [~r/\d{4}$/]}}
+    Buffer.open(recording, self(), session_config)
+    on_exit(fn -> Buffer.close(recording.id) end)
+    Buffer.put_url(recording.id, recording.url)
+
+    assert Recordings.live?(recording.id)
+    refute Recordings.live?("missing")
+
+    assert %{url: "http://localhost/cards/[REDACTED]"} =
+             Enum.find(Recordings.list(config), &(&1.id == recording.id))
+
+    assert {:ok, %{url: "http://localhost/cards/[REDACTED]"}} =
+             Recordings.fetch(config, recording.id)
+  end
+
   test "delete and clear notify subscribers", %{config: config} do
     Recordings.subscribe()
     Storage.save(config.storage, Fixtures.counter_recording(id: "a"))

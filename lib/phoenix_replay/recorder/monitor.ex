@@ -21,7 +21,7 @@ defmodule PhoenixReplay.Recorder.Monitor do
 
   alias PhoenixReplay.Recorder.{Buffer, Persister}
   alias PhoenixReplay.Recording.Keep
-  alias PhoenixReplay.{Recordings, Sanitizer, Telemetry}
+  alias PhoenixReplay.{Recordings, Telemetry}
 
   @max_reason 4_000
 
@@ -107,9 +107,9 @@ defmodule PhoenixReplay.Recorder.Monitor do
   defp record_exit(_pid, {:shutdown, _reason}), do: :ok
 
   defp record_exit(pid, reason) do
-    with {:ok, session, config} <- Buffer.attribute([pid]) do
+    with {:ok, session, _config} <- Buffer.attribute([pid]) do
       text = reason |> Exception.format_exit() |> String.slice(0, @max_reason)
-      Buffer.collect(session, :exit, %{reason: Sanitizer.redact(text, config.redact)}, "exit", 1)
+      Buffer.collect(session, :exit, %{reason: text}, "exit", 1)
     end
   end
 

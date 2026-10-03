@@ -17,6 +17,45 @@ defmodule PhoenixReplay.Recorder.PersisterTest do
     assert PhoenixReplay.Storage.fetch(config.storage, recording.id) == {:ok, recording}
   end
 
+  defmodule FailingRedactor do
+    @moduledoc false
+    @behaviour PhoenixReplay.Redactor
+
+    @impl true
+    def redact(_text, _opts), do: {:error, :model_unavailable}
+  end
+
+  test "redacts before saving", %{tmp_dir: tmp_dir} do
+    recording = %{Fixtures.counter_recording() | url: "http://localhost/cards/4242"}
+
+    config =
+      Config.new(storage: {PhoenixReplay.Storage.File, path: tmp_dir}, redact: [~r/\d{4}$/])
+
+    assert Persister.persist(recording, config) == :ok
+
+    assert {:ok, %{url: "http://localhost/cards/[REDACTED]"}} =
+             PhoenixReplay.Storage.fetch(config.storage, recording.id)
+  end
+
+  test "saves nothing when redaction fails" do
+    recording = Fixtures.counter_recording()
+
+    config =
+      Config.new(
+        storage: {PhoenixReplay.Test.FailingStorage, notify: self()},
+        redact: {FailingRedactor, []}
+      )
+
+    log =
+      capture_log(fn ->
+        assert Persister.persist(recording, config) ==
+                 {:error, {:redaction_failed, :model_unavailable}}
+      end)
+
+    refute_received {:save_attempt, _id}
+    assert log =~ "redaction failed"
+  end
+
   test "retries, then gives up with the last error" do
     recording = Fixtures.counter_recording()
 

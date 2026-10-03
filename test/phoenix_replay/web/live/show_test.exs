@@ -4,7 +4,8 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.Storage
+  alias PhoenixReplay.{Config, Storage}
+  alias PhoenixReplay.Recorder.Buffer
   alias PhoenixReplay.Test.Fixtures
   alias PhoenixReplay.Web.Playback
 
@@ -18,6 +19,25 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   end
 
   defp assigns(view), do: :sys.get_state(view.pid).socket.assigns
+
+  # Buffers a running session whose URL the redactor masks.
+  defp buffer_live(id) do
+    recording = %{
+      Fixtures.counter_recording(id: id, clicks: 2)
+      | url: "http://localhost/cards/4242"
+    }
+
+    redactor = {PhoenixReplay.Redactor.Patterns, patterns: [~r/\d{4}$/]}
+    :ok = Buffer.open(recording, self(), %{Config.load() | redact: redactor})
+    Buffer.put_url(id, recording.url)
+
+    recording.events
+    |> Enum.with_index()
+    |> Enum.each(fn {event, seq} -> Buffer.append(id, seq, event) end)
+
+    on_exit(fn -> Buffer.close(id) end)
+    recording
+  end
 
   # Delivers the pending playback step now. Playback tests use recordings
   # with hour-long gaps, so the real timer cannot fire during the test.
@@ -44,6 +64,30 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     render_hook(view, "seek", %{"index" => 5})
     assert assigns(view).index == 5
     assert render(view) =~ "count: 2"
+  end
+
+  test "redacts a live session before showing it, and hands it to the frame" do
+    buffer_live("live-1")
+    html = build_conn() |> get("/replay/live-1") |> html_response(200)
+    assert html =~ "Redacting the session"
+    refute html =~ "4242"
+
+    {:ok, view, _html} = live(build_conn(), "/replay/live-1")
+    channel = assigns(view).channel
+    Playback.subscribe(channel)
+    Playback.frame_ready(channel)
+
+    assert render_async(view) =~ "PhoenixReplay.Test.Live.Counter"
+    assert assigns(view).recording.url == "http://localhost/cards/[REDACTED]"
+    assert_receive {Playback, {:load, %{url: "http://localhost/cards/[REDACTED]"}}}
+    assert_receive {Playback, {:seek, 1}}
+  end
+
+  test "navigates away from live sessions the viewer may not see" do
+    buffer_live("secret-live")
+    {:ok, view, _html} = live(build_conn(), "/restricted/replay/secret-live")
+
+    assert_redirect(view, "/restricted/replay")
   end
 
   test "drives its own frame channel" do

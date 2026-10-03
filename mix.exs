@@ -18,7 +18,7 @@ defmodule PhoenixReplay.MixProject do
       description: "Session recording and replay for Phoenix LiveView",
       source_url: @source_url,
       homepage_url: @source_url,
-      dialyzer: [plt_add_apps: [:mix, :ex_unit, :ecto]],
+      dialyzer: [plt_add_apps: [:mix, :ex_unit, :ecto, :obscura]],
       aliases: aliases()
     ]
   end
@@ -46,6 +46,7 @@ defmodule PhoenixReplay.MixProject do
       {:ecto_sql, "~> 3.12", only: :test},
       {:ecto_sqlite3, "~> 0.22", only: :test},
       {:jason, "~> 1.4", optional: true},
+      {:obscura, "~> 0.2", optional: true},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:playwright_ex, "~> 0.14", only: :test},
       {:volt, "~> 0.20", only: [:dev, :test], runtime: false},
@@ -122,6 +123,9 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Authorization,
           PhoenixReplay.Sanitizer,
           PhoenixReplay.Sanitizer.Default,
+          PhoenixReplay.Redactor,
+          PhoenixReplay.Redactor.Obscura,
+          PhoenixReplay.Redactor.Patterns,
           PhoenixReplay.Storage,
           PhoenixReplay.Storage.Ecto,
           PhoenixReplay.Storage.File

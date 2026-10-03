@@ -67,7 +67,15 @@ defmodule PhoenixReplay.ConfigTest do
     assert Config.new(logs: []).logs == %{level: :info, metadata: [], limit: 1_000}
     assert_raise ArgumentError, ~r/:level/, fn -> Config.new(logs: [level: :loud]) end
 
-    assert [%Regex{source: "a+"}, %Regex{source: "b"}] = Config.new(redact: ["a+", ~r/b/]).redact
+    assert Config.new([]).redact == nil
+    assert Config.new(redact: []).redact == nil
+
+    assert {PhoenixReplay.Redactor.Patterns,
+            patterns: [%Regex{source: "a+"}, %Regex{source: "b"}]} =
+             Config.new(redact: ["a+", ~r/b/]).redact
+
+    assert Config.new(redact: {MyRedactor, x: 1}).redact == {MyRedactor, x: 1}
+    assert Config.new(redact: MyRedactor).redact == {MyRedactor, []}
     assert_raise ArgumentError, ~r/:redact pattern/, fn -> Config.new(redact: [:email]) end
 
     assert Config.new(max_memory: 1_024).max_memory == 1_024

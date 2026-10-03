@@ -29,9 +29,10 @@ defmodule PhoenixReplay.Config do
       the events recorded per session (default `1_000`). Defaults to `[]`.
     * `:logs` — keyword list enabling `Logger` collection, or `nil` (the
       default) to leave logs out. See `PhoenixReplay.Recorder.Logs`.
-    * `:redact` — regexes, or regex sources as strings, whose matches are
-      replaced with `"[REDACTED]"` in collected text such as SQL, log
-      messages and exit reasons. Defaults to `[]`.
+    * `:redact` — a `PhoenixReplay.Redactor` that masks sensitive values
+      when a recording is saved: a list of regexes, or regex sources as
+      strings, for `PhoenixReplay.Redactor.Patterns`, or `{module, opts}`.
+      Defaults to `[]`, which stores recordings as the sanitizer left them.
     * `:max_memory` — bytes of buffered recordings above which new
       sessions are not recorded, or `nil` (the default) for no limit.
     * `:retention` — keyword list controlling `PhoenixReplay.Retention`:
@@ -75,6 +76,9 @@ defmodule PhoenixReplay.Config do
   @typedoc "A `PhoenixReplay.Collector` and its options."
   @type collector :: {module(), keyword()}
 
+  @typedoc "A `PhoenixReplay.Redactor` module and its options."
+  @type redactor :: {module(), keyword()}
+
   @type logs :: %{level: Logger.level(), metadata: [atom()], limit: pos_integer()}
 
   @typedoc "A storage backend module and its options."
@@ -88,7 +92,7 @@ defmodule PhoenixReplay.Config do
           keep: keep(),
           collect: [collector()],
           logs: logs() | nil,
-          redact: [Regex.t()],
+          redact: redactor() | nil,
           max_memory: pos_integer() | nil,
           retention: retention(),
           persist: persist()
@@ -101,7 +105,7 @@ defmodule PhoenixReplay.Config do
             keep: %{rate: 1.0, errors: false, slower_than: nil},
             collect: [],
             logs: nil,
-            redact: [],
+            redact: nil,
             max_memory: nil,
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
@@ -163,8 +167,19 @@ defmodule PhoenixReplay.Config do
   defp put({:logs, opts}, config) when is_list(opts),
     do: %{config | logs: merge(%{level: :info, metadata: [], limit: 1_000}, opts, &valid_logs?/2)}
 
+  defp put({:redact, []}, config), do: %{config | redact: nil}
+
   defp put({:redact, patterns}, config) when is_list(patterns),
-    do: %{config | redact: Enum.map(patterns, &pattern/1)}
+    do: %{
+      config
+      | redact: {PhoenixReplay.Redactor.Patterns, patterns: Enum.map(patterns, &pattern/1)}
+    }
+
+  defp put({:redact, {module, opts}}, config) when is_atom(module) and is_list(opts),
+    do: %{config | redact: {module, opts}}
+
+  defp put({:redact, module}, config) when is_atom(module) and not is_nil(module),
+    do: %{config | redact: {module, []}}
 
   defp put({:max_memory, max}, config) when is_nil(max) or (is_integer(max) and max > 0),
     do: %{config | max_memory: max}

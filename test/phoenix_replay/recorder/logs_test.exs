@@ -4,7 +4,7 @@ defmodule PhoenixReplay.Recorder.LogsTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.Config
+  alias PhoenixReplay.{Config, Recordings}
   alias PhoenixReplay.Recorder.{Buffer, Logs}
   alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Storage
@@ -45,7 +45,7 @@ defmodule PhoenixReplay.Recorder.LogsTest do
              %Event{
                data: %{
                  level: :warning,
-                 message: "payment for [REDACTED] declined",
+                 message: "payment for card-4242 declined",
                  metadata: %{source: "page"}
                }
              },
@@ -53,6 +53,12 @@ defmodule PhoenixReplay.Recorder.LogsTest do
            ] = logs(id)
 
     assert Event.error?(error)
+
+    # The session's redactor masks the text whenever the session is read.
+    assert {:ok, %{events: events}} = Recordings.fetch(Config.load(), id)
+
+    assert %Event{data: %{message: "payment for [REDACTED] declined"}} =
+             Enum.find(events, &(&1.type == :log))
   end
 
   test "ignores messages below the level and outside sessions", %{sessions: sessions} do

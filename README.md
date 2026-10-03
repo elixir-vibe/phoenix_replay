@@ -84,6 +84,12 @@ defmodule MyApp.ReplaySanitizer do
 end
 ```
 
+Values that only detection can find, such as an email address typed into a form or a card number in a log message, are masked when a session is saved, off your users' path. Use your own patterns or [Obscura](https://hexdocs.pm/obscura), an optional dependency:
+
+```elixir
+config :phoenix_replay, redact: {PhoenixReplay.Redactor.Obscura, []}
+```
+
 See the [Privacy and Security guide](https://hexdocs.pm/phoenix_replay/privacy-and-security.html).
 
 ## Dashboard
