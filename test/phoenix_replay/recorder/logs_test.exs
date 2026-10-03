@@ -18,7 +18,7 @@ defmodule PhoenixReplay.Recorder.LogsTest do
     :ok = Logs.attach(config, id)
 
     on_exit(fn ->
-      :logger.remove_handler(id)
+      Logs.detach(id)
       Storage.clear(Fixtures.storage())
     end)
 

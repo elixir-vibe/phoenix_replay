@@ -135,6 +135,7 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Recorder.Buffer,
           PhoenixReplay.Recorder.Collectors,
           PhoenixReplay.Recorder.Components,
+          PhoenixReplay.Recorder.Handlers,
           PhoenixReplay.Recorder.Logs,
           PhoenixReplay.Recorder.Monitor,
           PhoenixReplay.Recorder.Persister,

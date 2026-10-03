@@ -42,9 +42,16 @@ defmodule PhoenixReplay.Recorder.Components do
     [:phoenix, :live_view, :render, :stop]
   ]
 
-  @doc "Attaches the telemetry handlers. Called once from `PhoenixReplay.Application`."
+  @doc "Attaches the telemetry handlers. Called by `PhoenixReplay.Recorder.Handlers`."
   @spec attach() :: :ok | {:error, :already_exists}
   def attach, do: :telemetry.attach_many(@handler, @events, &__MODULE__.handle_event/4, nil)
+
+  @doc "Detaches the telemetry handlers, if attached."
+  @spec detach() :: :ok
+  def detach do
+    _result = :telemetry.detach(@handler)
+    :ok
+  end
 
   @doc "Handles a LiveComponent telemetry event in the LiveView process."
   @spec handle_event([atom()], map(), map(), nil) :: :ok

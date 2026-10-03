@@ -29,8 +29,8 @@ defmodule PhoenixReplay.Recorder.Logs do
   @formatter %{template: [:msg], single_line: true}
 
   @doc """
-  Adds the `:logger` handler when `:logs` is configured. Called once from
-  `PhoenixReplay.Application`.
+  Adds the `:logger` handler when `:logs` is configured. Called by
+  `PhoenixReplay.Recorder.Handlers`.
   """
   @spec attach(Config.t(), atom()) :: :ok | {:error, term()}
   def attach(config, id \\ __MODULE__)
@@ -38,6 +38,13 @@ defmodule PhoenixReplay.Recorder.Logs do
 
   def attach(%Config{logs: logs}, id),
     do: :logger.add_handler(id, __MODULE__, %{level: logs.level, config: logs})
+
+  @doc "Removes the `:logger` handler, if added."
+  @spec detach(atom()) :: :ok
+  def detach(id \\ __MODULE__) do
+    _result = :logger.remove_handler(id)
+    :ok
+  end
 
   @doc false
   @spec log(:logger.log_event(), :logger.handler_config()) :: :ok

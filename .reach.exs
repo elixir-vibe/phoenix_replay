@@ -50,6 +50,7 @@ infrastructure = [
   "PhoenixReplay.Recorder.Buffer",
   "PhoenixReplay.Recorder.Collectors",
   "PhoenixReplay.Recorder.Components",
+  "PhoenixReplay.Recorder.Handlers",
   "PhoenixReplay.Recorder.Logs",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",

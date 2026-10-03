@@ -30,7 +30,7 @@ defmodule PhoenixReplay.Recorder.Collectors do
   @default_limit 1_000
 
   @doc """
-  Attaches the configured collectors. Called once from `PhoenixReplay.Application`.
+  Attaches the configured collectors. Called by `PhoenixReplay.Recorder.Handlers`.
 
   Handlers are identified by `{prefix, index}`.
   """
