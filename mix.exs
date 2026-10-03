@@ -66,6 +66,7 @@ defmodule PhoenixReplay.MixProject do
         priv/static/dashboard.js
         priv/static/dashboard.css
         mix.exs
+        .formatter.exs
         README.md
         CHANGELOG.md
         LICENSE
