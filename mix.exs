@@ -122,6 +122,7 @@ defmodule PhoenixReplay.MixProject do
         Internals: [
           PhoenixReplay.Application,
           PhoenixReplay.Config,
+          PhoenixReplay.Recorder.AsyncComponents,
           PhoenixReplay.Recorder.Buffer,
           PhoenixReplay.Recorder.Components,
           PhoenixReplay.Recorder.Monitor,

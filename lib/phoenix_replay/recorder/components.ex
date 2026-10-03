@@ -14,6 +14,10 @@ defmodule PhoenixReplay.Recorder.Components do
       component assigns changed by an update or event
     * `:component_destroyed` — `%{module: module, id: term}`
 
+  LiveView does not yet emit telemetry for async results applied to a
+  component; `PhoenixReplay.Recorder.AsyncComponents` covers them until it
+  does.
+
   Components of LiveViews that are not recorded cost one ETS lookup per
   event. Assigns go through the session's `PhoenixReplay.Sanitizer`.
 
@@ -22,7 +26,7 @@ defmodule PhoenixReplay.Recorder.Components do
   loosely and ignore shapes they do not expect.
   """
 
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Recorder.{AsyncComponents, Buffer}
 
   @handler __MODULE__
   @unreplayable [:myself, :flash]
@@ -31,7 +35,11 @@ defmodule PhoenixReplay.Recorder.Components do
     [:phoenix, :live_component, :handle_event, :start],
     [:phoenix, :live_component, :update, :stop],
     [:phoenix, :live_component, :handle_event, :stop],
-    [:phoenix, :live_component, :destroyed]
+    [:phoenix, :live_component, :destroyed],
+    # Proposed in https://github.com/phoenixframework/phoenix_live_view/pull/4463.
+    # Until LiveView emits it, AsyncComponents records async results instead.
+    [:phoenix, :live_component, :handle_async, :stop],
+    [:phoenix, :live_view, :render, :stop]
   ]
 
   @doc "Attaches the telemetry handlers. Called once from `PhoenixReplay.Application`."
@@ -68,12 +76,24 @@ defmodule PhoenixReplay.Recorder.Components do
   end
 
   def handle_event(
-        [:phoenix, :live_component, :handle_event, :stop],
+        [:phoenix, :live_component, callback, :stop],
         _measures,
         %{component: module, socket: socket},
         nil
-      ) do
+      )
+      when callback in [:handle_event, :handle_async] do
     record_changes(module, socket)
+    AsyncComponents.explain(socket)
+  end
+
+  def handle_event(
+        [:phoenix, :live_view, :render, :stop],
+        _measures,
+        %{component: module, id: id, cid: cid},
+        nil
+      )
+      when is_integer(cid) do
+    AsyncComponents.rendered(module, id, cid)
   end
 
   def handle_event(
