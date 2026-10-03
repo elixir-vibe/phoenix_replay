@@ -64,5 +64,4 @@ Each event fires after the session has left the buffer, so handlers see the fini
 Replay reconstructs the assigns of LiveViews and LiveComponents. It does not reconstruct:
 
 - streams and uploads, whose contents are not kept in assigns,
-- LiveComponent state changed by `handle_async/3`, which emits no telemetry,
 - client-only state: scroll position, unsubmitted input without `phx-change`, JavaScript hook state, and `Phoenix.LiveView.JS` commands applied on the client.

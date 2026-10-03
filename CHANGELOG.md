@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- LiveComponent state applied by `start_async`, `assign_async` and `stream_async` results is recorded. LiveView emits no telemetry for it yet, so `PhoenixReplay.Recorder.AsyncComponents` snapshots the component after such renders; see [phoenix_live_view#4463](https://github.com/phoenixframework/phoenix_live_view/pull/4463).
+- LiveViews not mounted at the router, such as `live_render/3` children, are recorded instead of crashing.
+
 ## 0.4.0 - 2026-10-03
 
 ### Added

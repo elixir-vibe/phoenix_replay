@@ -18,6 +18,7 @@ defmodule PhoenixReplay.Test.Router do
       live "/counter", PhoenixReplay.Test.Live.Counter
       live "/form", PhoenixReplay.Test.Live.Form
       live "/cart", PhoenixReplay.Test.Live.Cart
+      live "/async", PhoenixReplay.Test.Live.AsyncPage
     end
 
     live_session :unsampled, on_mount: [{PhoenixReplay.Recorder, sample_rate: 0.0}] do

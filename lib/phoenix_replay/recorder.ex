@@ -94,10 +94,17 @@ defmodule PhoenixReplay.Recorder do
     |> put_private(@private, state)
     |> record(:mount, %{assigns: sanitizer.sanitize_assigns(socket.assigns)})
     |> attach_hook(@private, :handle_event, &handle_event/3)
-    |> attach_hook(@private, :handle_params, &handle_params/3)
+    |> attach_params_hook(params)
     |> attach_hook(@private, :handle_info, &handle_info/2)
     |> attach_hook(@private, :after_render, &after_render/1)
   end
+
+  # LiveViews rendered with live_render/3 have no params and cannot take a
+  # handle_params hook.
+  defp attach_params_hook(socket, :not_mounted_at_router), do: socket
+
+  defp attach_params_hook(socket, _params),
+    do: attach_hook(socket, @private, :handle_params, &handle_params/3)
 
   defp handle_event(name, params, socket) do
     %{sanitizer: sanitizer} = socket.private[@private]
