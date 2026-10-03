@@ -6,6 +6,15 @@ defmodule PhoenixReplay.Recorder do
         live "/dashboard", DashboardLive
       end
 
+  Options given as `{PhoenixReplay.Recorder, opts}` override the
+  `PhoenixReplay.Config` values for that live session. `:sample_rate`,
+  `:max_events` and `:sanitizer` are accepted:
+
+      live_session :checkout,
+        on_mount: [{PhoenixReplay.Recorder, sample_rate: 0.1, max_events: 2_000}] do
+        live "/checkout", CheckoutLive
+      end
+
   Recording starts on the connected mount. Lifecycle hooks capture events,
   params changes, `handle_info/2` message tags, and the assigns changed by
   each render, all passed through the configured `PhoenixReplay.Sanitizer`.
@@ -24,15 +33,41 @@ defmodule PhoenixReplay.Recorder do
   alias PhoenixReplay.Recording.Event
 
   @private :phoenix_replay
+  @session_options [:sample_rate, :max_events, :sanitizer]
 
-  @doc "Starts recording on the connected mount."
-  @spec on_mount(:default, map() | :not_mounted_at_router, map(), Phoenix.LiveView.Socket.t()) ::
+  @doc """
+  Starts recording on the connected mount, for the sampled share of sessions.
+
+  Takes `:default` or a keyword list of live-session options.
+  """
+  @spec on_mount(
+          :default | keyword(),
+          map() | :not_mounted_at_router,
+          map(),
+          Phoenix.LiveView.Socket.t()
+        ) ::
           {:cont, Phoenix.LiveView.Socket.t()}
-  def on_mount(:default, params, session, socket) do
-    if connected?(socket),
-      do: {:cont, start(socket, params, session, Config.load())},
+  def on_mount(:default, params, session, socket), do: on_mount([], params, session, socket)
+
+  def on_mount(opts, params, session, socket) when is_list(opts) do
+    case Keyword.keys(opts) -- @session_options do
+      [] ->
+        :ok
+
+      unknown ->
+        raise ArgumentError, "unknown PhoenixReplay.Recorder options: #{inspect(unknown)}"
+    end
+
+    config = Config.load(opts)
+
+    if connected?(socket) and sampled?(config.sample_rate),
+      do: {:cont, start(socket, params, session, config)},
       else: {:cont, socket}
   end
+
+  defp sampled?(rate) when rate >= 1.0, do: true
+  defp sampled?(rate) when rate <= 0.0, do: false
+  defp sampled?(rate), do: :rand.uniform() <= rate
 
   defp start(socket, params, session, config) do
     sanitizer = config.sanitizer

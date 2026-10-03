@@ -88,14 +88,26 @@ defmodule PhoenixReplay.RecorderTest do
              Timeline.assigns_at(recording, Timeline.last_index(recording))
   end
 
-  test "stops recording after max_events" do
-    Application.put_env(:phoenix_replay, :max_events, 3)
-    on_exit(fn -> Application.delete_env(:phoenix_replay, :max_events) end)
-
-    {:ok, view, _html} = live(build_conn(), "/counter")
+  test "applies live session options" do
+    {:ok, view, _html} = live(build_conn(), "/limited/counter")
     for _ <- 1..5, do: render_click(view, "inc")
 
     assert {:ok, %{events: events}} = Buffer.fetch(recording_id(view))
     assert length(events) == 3
+  end
+
+  test "records only the sampled share of sessions" do
+    {:ok, view, _html} = live(build_conn(), "/unsampled/counter")
+    render_click(view, "inc")
+
+    refute Map.has_key?(:sys.get_state(view.pid).socket.private, :phoenix_replay)
+  end
+
+  test "rejects unknown live session options" do
+    socket = %Phoenix.LiveView.Socket{}
+
+    assert_raise ArgumentError, ~r/:storage/, fn ->
+      PhoenixReplay.Recorder.on_mount([storage: Foo], %{}, %{}, socket)
+    end
   end
 end

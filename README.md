@@ -103,11 +103,25 @@ config :phoenix_replay,
   storage: {PhoenixReplay.Storage.File, path: "priv/replay_recordings"},
   sanitizer: PhoenixReplay.Sanitizer.Default,
   max_events: 10_000,
+  sample_rate: 1.0,
   retention: [max_age: :timer.hours(24 * 7), max_count: 1_000, interval: :timer.minutes(10)],
   persist: [attempts: 3, backoff: 1_000]
 ```
 
 All keys are optional and validated at startup; see `PhoenixReplay.Config`.
+
+### Per-session options and sampling
+
+`:sample_rate`, `:max_events` and `:sanitizer` can also be set per live session, overriding the global values:
+
+```elixir
+live_session :checkout,
+  on_mount: [{PhoenixReplay.Recorder, sample_rate: 0.1, max_events: 2_000}] do
+  live "/checkout", CheckoutLive
+end
+```
+
+With `sample_rate: 0.1`, about one in ten connected sessions is recorded.
 
 ### Storage backends
 
@@ -174,7 +188,6 @@ The dashboard's TypeScript and CSS live in `priv/ts` and `priv/css`, linted and 
 ## Roadmap
 
 - LiveComponent state tracking
-- Configurable sampling (record N% of sessions)
 - Session search and filtering
 
 ## Part of Elixir Vibe
