@@ -52,6 +52,8 @@ defmodule ExampleWeb.Features.ReplayTest do
     conn =
       conn
       |> visit(~p"/")
+      # Interacting before the LiveView connects would drop the event.
+      |> assert_has("body .phx-connected")
       |> assert_has("h1", text: "Tasks")
 
     # User looks around, clicks filters
@@ -139,7 +141,7 @@ defmodule ExampleWeb.Features.ReplayTest do
     Process.sleep(300)
 
     # Navigate away to finalize the recording
-    conn = conn |> visit(~p"/replay")
+    conn = conn |> visit(~p"/replay") |> assert_has("body .phx-connected")
     conn = conn |> assert_has("h1", text: "PhoenixReplay")
 
     # --- Verify what was recorded ---
