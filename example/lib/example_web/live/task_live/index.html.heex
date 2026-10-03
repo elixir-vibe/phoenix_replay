@@ -63,7 +63,10 @@
   <div class="overflow-hidden rounded-lg border border-gray-200">
     <div
       :for={{task, i} <- filtered_tasks(@tasks, @filter) |> Enum.with_index()}
-      class={["flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50", i > 0 && "border-t border-gray-100"]}
+      class={[
+        "flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50",
+        i > 0 && "border-t border-gray-100"
+      ]}
     >
       <button
         phx-click="toggle"
@@ -172,7 +175,11 @@
     aria-modal="true"
     aria-label={if @live_action == :new, do: "New Task", else: "Edit Task"}
   >
-    <.link patch={~p"/"} class="absolute inset-0 bg-black/50 backdrop-blur-[2px]" aria-hidden="true">
+    <.link
+      patch={~p"/"}
+      class="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+      aria-hidden="true"
+    >
       <span class="sr-only">Close</span>
     </.link>
     <div class="relative w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl">

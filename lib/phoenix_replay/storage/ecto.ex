@@ -1,19 +1,16 @@
-if Code.ensure_loaded?(Ecto) do
+if Code.ensure_loaded?(Ecto.Query) do
   defmodule PhoenixReplay.Storage.Ecto do
     @moduledoc """
-    Ecto-based storage backend. Stores recordings in a database table.
+    Stores recordings in a database table through an Ecto repo.
 
-    Requires `ecto_sql` as a dependency of the host application.
+    Summary columns are stored alongside the encoded recording so listing
+    never decodes recordings.
 
     ## Options
 
       * `:repo` — the Ecto repo module (required)
-      * `:format` — `:etf` (default) or `:json` — controls the serialization
-        format of the `data` column
 
     ## Migration
-
-    Create the table with:
 
         defmodule MyApp.Repo.Migrations.CreatePhoenixReplayRecordings do
           use Ecto.Migration
@@ -22,123 +19,77 @@ if Code.ensure_loaded?(Ecto) do
             create table(:phoenix_replay_recordings, primary_key: false) do
               add :id, :string, primary_key: true
               add :view, :string, null: false
+              add :url, :text
               add :connected_at, :bigint, null: false
-              add :event_count, :integer, null: false, default: 0
+              add :event_count, :integer, null: false
+              add :duration_ms, :integer, null: false
               add :data, :binary, null: false
-
-              timestamps(type: :utc_datetime)
             end
+
+            create index(:phoenix_replay_recordings, [:connected_at])
           end
         end
     """
 
     @behaviour PhoenixReplay.Storage
 
-    alias PhoenixReplay.Storage.Serializer
-
     import Ecto.Query
 
-    defp repo(opts), do: Keyword.fetch!(opts, :repo)
-    defp format(opts), do: Keyword.get(opts, :format, :etf)
-    defp table, do: "phoenix_replay_recordings"
+    alias PhoenixReplay.Recording
+    alias PhoenixReplay.Recording.Summary
+    alias PhoenixReplay.Storage.Codec
+
+    @table "phoenix_replay_recordings"
+    @summary_fields [:id, :view, :url, :connected_at, :event_count, :duration_ms]
+    @replaced_fields [:view, :url, :connected_at, :event_count, :duration_ms, :data]
 
     @impl true
-    def init(_opts), do: :ok
+    def save(%Recording{} = recording, opts) do
+      row =
+        recording
+        |> Summary.new()
+        |> Map.take(@summary_fields)
+        |> Map.put(:data, Codec.encode(recording))
 
-    @impl true
-    def save(recording, opts) do
-      with {:ok, data} <- Serializer.encode(recording, format(opts)) do
-        now = DateTime.utc_now() |> DateTime.truncate(:second)
+      repo(opts).insert_all(@table, [row],
+        on_conflict: {:replace, @replaced_fields},
+        conflict_target: :id
+      )
 
-        repo(opts).insert_all(
-          table(),
-          [
-            %{
-              id: recording.id,
-              view: inspect(recording.view),
-              connected_at: recording.connected_at,
-              event_count: length(recording.events),
-              data: data,
-              inserted_at: now,
-              updated_at: now
-            }
-          ],
-          on_conflict: {:replace, [:data, :event_count, :updated_at]},
-          conflict_target: :id
-        )
-
-        :ok
-      end
+      :ok
     end
 
     @impl true
-    def get(id, opts) do
-      query = from(r in table(), where: r.id == ^id, select: r.data)
-
-      case repo(opts).one(query) do
-        nil -> :error
-        data -> Serializer.decode(data, format(opts))
+    def fetch(id, opts) do
+      case repo(opts).one(from(r in @table, where: r.id == ^id, select: r.data)) do
+        nil -> {:error, :not_found}
+        data -> Codec.decode(data, Recording)
       end
     end
 
     @impl true
     def list(opts) do
-      query = from(r in table(), order_by: [desc: r.connected_at], select: r.data)
-
-      repo(opts).all(query)
-      |> Enum.flat_map(fn data ->
-        case Serializer.decode(data, format(opts)) do
-          {:ok, recording} -> [recording]
-          {:error, _reason} -> []
-        end
-      end)
-    end
-
-    @impl true
-    def list_summaries(opts) do
       query =
-        from(r in table(),
+        from(r in @table,
           order_by: [desc: r.connected_at],
-          select: %{
-            id: r.id,
-            view: r.view,
-            connected_at: r.connected_at,
-            event_count: r.event_count
-          }
+          select: map(r, ^@summary_fields)
         )
 
-      Enum.map(repo(opts).all(query), fn summary ->
-        %{
-          id: summary.id,
-          view: module_from_string(summary.view),
-          url: nil,
-          connected_at: summary.connected_at,
-          event_count: summary.event_count,
-          duration_ms: nil,
-          active?: false
-        }
-      end)
+      Enum.map(repo(opts).all(query), &struct!(Summary, &1))
     end
 
     @impl true
     def delete(id, opts) do
-      query = from(r in table(), where: r.id == ^id)
-      repo(opts).delete_all(query)
+      repo(opts).delete_all(from(r in @table, where: r.id == ^id))
       :ok
     end
 
     @impl true
     def clear(opts) do
-      repo(opts).delete_all(from(r in table()))
+      repo(opts).delete_all(@table)
       :ok
     end
 
-    defp module_from_string(name) when is_binary(name) do
-      name
-      |> String.trim_leading("Elixir.")
-      |> then(&String.to_existing_atom("Elixir." <> &1))
-    rescue
-      _ in [ArgumentError] -> name
-    end
+    defp repo(opts), do: Keyword.fetch!(opts, :repo)
   end
 end

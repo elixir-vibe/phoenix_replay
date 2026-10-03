@@ -8,8 +8,17 @@
     <.live_title default="Tasks" suffix=" · Example">
       {assigns[:page_title]}
     </.live_title>
-    <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
-    <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
+    <link
+      phx-track-static
+      rel="stylesheet"
+      href={Volt.static_path(ExampleWeb.Endpoint, "/assets/css/app.css")}
+    />
+    <script
+      defer
+      phx-track-static
+      type="module"
+      src={Volt.static_path(ExampleWeb.Endpoint, "/assets/js/app.js")}
+    >
     </script>
   </head>
   <body class="min-h-screen bg-white text-gray-900 font-sans">

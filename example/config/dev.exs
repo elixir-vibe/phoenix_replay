@@ -1,5 +1,7 @@
 import Config
 
+config :volt, server: [prefix: "/assets", watch_dirs: ["lib/"]]
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -14,11 +16,7 @@ config :example, ExampleWeb.Endpoint,
   code_reloader: true,
   reloadable_apps: [:example, :phoenix_replay],
   debug_errors: true,
-  secret_key_base: "B5k/fPcLUFF31abKOAoHjDRW/RVOIq+IKaKVNqGN6Z6i9vLtMnMg8sQjQ0NvS4/S",
-  watchers: [
-    esbuild: {Esbuild, :install_and_run, [:example, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:example, ~w(--watch)]}
-  ]
+  secret_key_base: "B5k/fPcLUFF31abKOAoHjDRW/RVOIq+IKaKVNqGN6Z6i9vLtMnMg8sQjQ0NvS4/S"
 
 # ## SSL Support
 #

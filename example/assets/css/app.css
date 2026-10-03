@@ -2,7 +2,6 @@
 @source "../css";
 @source "../js";
 @source "../../lib/example_web";
-@source "../../../lib/phoenix_replay";
 
 @plugin "../vendor/heroicons";
 
@@ -11,7 +10,7 @@
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
-  src: url("https://cdn.jsdelivr.net/fontsource/fonts/geist:vf@latest/latin-wght-normal.woff2")
+  src: url("../fonts/geist.woff2")
     format("woff2-variations");
 }
 
@@ -20,7 +19,7 @@
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
-  src: url("https://cdn.jsdelivr.net/fontsource/fonts/geist-mono:vf@latest/latin-wght-normal.woff2")
+  src: url("../fonts/geist-mono.woff2")
     format("woff2-variations");
 }
 

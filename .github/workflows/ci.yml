@@ -12,3 +12,14 @@ permissions:
 jobs:
   ci:
     uses: elixir-vibe/actions/.github/workflows/elixir-ci.yml@v1
+    with:
+      latest-elixir: "1.20"
+      latest-otp: "29"
+      min-elixir: "1.18"
+      min-otp: "27"
+      deps-command: |
+        mix deps.get
+        npm ci
+        npx playwright install --with-deps chromium
+      latest-command: mix ci
+      min-command: mix compile --warnings-as-errors && mix test

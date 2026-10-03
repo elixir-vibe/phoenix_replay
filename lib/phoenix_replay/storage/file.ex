@@ -1,104 +1,112 @@
 defmodule PhoenixReplay.Storage.File do
   @moduledoc """
-  File-based storage backend. Writes one serialized file per recording.
+  Stores each recording as two files in a directory.
+
+  `<id>.recording` holds the full recording and `<id>.summary` holds its
+  `PhoenixReplay.Recording.Summary`, so listing never decodes recordings.
+  The summary is written last and deleted first: a summary file always points
+  at a complete recording.
 
   ## Options
 
-    * `:path` — directory to store recordings (default: `"priv/replay_recordings"`)
-    * `:format` — `:etf` (default) or `:json`
+    * `:path` — directory for recording files (default: `"priv/replay_recordings"`)
   """
 
   @behaviour PhoenixReplay.Storage
 
-  alias PhoenixReplay.Storage.Serializer
+  require Logger
 
-  defp dir(opts), do: Keyword.get(opts, :path, "priv/replay_recordings")
-  defp format(opts), do: Keyword.get(opts, :format, :etf)
+  alias PhoenixReplay.Recording
+  alias PhoenixReplay.Recording.Summary
+  alias PhoenixReplay.Storage.Codec
 
-  @impl true
-  def init(opts) do
-    File.mkdir_p!(dir(opts))
-    :ok
-  end
+  @recording_ext ".recording"
+  @summary_ext ".summary"
 
   @impl true
-  def save(recording, opts) do
-    with {:ok, data} <- Serializer.encode(recording, format(opts)) do
-      path = file_path(recording.id, opts)
-      File.write(path, data)
+  def save(%Recording{} = recording, opts) do
+    with {:ok, recording_path} <- path(recording.id, @recording_ext, opts),
+         {:ok, summary_path} <- path(recording.id, @summary_ext, opts),
+         :ok <- File.mkdir_p(dir(opts)),
+         :ok <- File.write(recording_path, Codec.encode(recording)) do
+      File.write(summary_path, Codec.encode(Summary.new(recording)))
     end
   end
 
   @impl true
-  def get(id, opts) do
-    path = file_path(id, opts)
-
-    with {:ok, data} <- File.read(path),
-         {:ok, recording} <- Serializer.decode(data, format(opts)) do
-      {:ok, recording}
-    else
-      _ -> :error
+  def fetch(id, opts) do
+    with {:ok, path} <- path(id, @recording_ext, opts),
+         {:ok, binary} <- read(path) do
+      Codec.decode(binary, Recording)
     end
   end
 
   @impl true
   def list(opts) do
-    base = dir(opts)
-
-    case File.ls(base) do
+    case File.ls(dir(opts)) do
       {:ok, files} ->
         files
-        |> Enum.flat_map(fn filename ->
-          id = strip_extensions(filename)
-
-          case get(id, opts) do
-            {:ok, recording} -> [recording]
-            :error -> []
-          end
-        end)
+        |> Enum.filter(&(Path.extname(&1) == @summary_ext))
+        |> Enum.flat_map(&read_summary(Path.join(dir(opts), &1)))
         |> Enum.sort_by(& &1.connected_at, :desc)
 
-      {:error, _} ->
+      {:error, :enoent} ->
         []
     end
   end
 
   @impl true
-  def list_summaries(opts) do
-    opts
-    |> list()
-    |> Enum.map(&PhoenixReplay.Recordings.summary/1)
-  end
-
-  @impl true
   def delete(id, opts) do
-    path = file_path(id, opts)
-    File.rm(path)
-    :ok
+    with {:ok, summary_path} <- path(id, @summary_ext, opts),
+         {:ok, recording_path} <- path(id, @recording_ext, opts),
+         :ok <- remove(summary_path) do
+      remove(recording_path)
+    end
   end
 
   @impl true
   def clear(opts) do
-    base = dir(opts)
-
-    case File.ls(base) do
+    case File.ls(dir(opts)) do
       {:ok, files} ->
-        Enum.each(files, fn filename -> File.rm(Path.join(base, filename)) end)
-        :ok
+        files
+        |> Enum.filter(&(Path.extname(&1) in [@summary_ext, @recording_ext]))
+        |> Enum.each(&remove(Path.join(dir(opts), &1)))
 
-      {:error, _} ->
+      {:error, :enoent} ->
         :ok
     end
   end
 
-  defp file_path(id, opts) do
-    basename = Path.basename(id)
-    Path.join(dir(opts), basename <> Serializer.extension(format(opts)))
+  defp read_summary(path) do
+    with {:ok, binary} <- File.read(path),
+         {:ok, summary} <- Codec.decode(binary, Summary) do
+      [summary]
+    else
+      error ->
+        Logger.warning("PhoenixReplay: skipping unreadable #{path}: #{inspect(error)}")
+        []
+    end
   end
 
-  defp strip_extensions(filename) do
-    filename
-    |> String.replace_suffix(".etf", "")
-    |> String.replace_suffix(".json", "")
+  defp read(path) do
+    case File.read(path) do
+      {:error, :enoent} -> {:error, :not_found}
+      result -> result
+    end
   end
+
+  defp remove(path) do
+    case File.rm(path) do
+      {:error, :enoent} -> :ok
+      result -> result
+    end
+  end
+
+  defp path(id, ext, opts) do
+    if Recording.valid_id?(id),
+      do: {:ok, Path.join(dir(opts), id <> ext)},
+      else: {:error, :not_found}
+  end
+
+  defp dir(opts), do: Keyword.get(opts, :path, "priv/replay_recordings")
 end

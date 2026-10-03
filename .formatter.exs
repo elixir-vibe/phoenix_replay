@@ -1,4 +1,16 @@
-# Used by "mix format"
+locals_without_parens = [phoenix_replay: 1, phoenix_replay: 2]
+
 [
-  inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"]
+  plugins: [Volt.Formatter, Phoenix.LiveView.HTMLFormatter],
+  import_deps: [:phoenix],
+  inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}", "priv/ts/**/*.ts"],
+  locals_without_parens: locals_without_parens,
+  volt: [
+    semi: false,
+    single_quote: true,
+    trailing_comma: :none,
+    print_width: 100,
+    arrow_parens: :always
+  ],
+  export: [locals_without_parens: locals_without_parens]
 ]

@@ -1,52 +1,49 @@
 defmodule PhoenixReplay.RecordingsTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
-  alias PhoenixReplay.{Recording, Recordings}
+  alias PhoenixReplay.{Config, Recordings, Storage}
+  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Test.Fixtures
 
-  test "summary returns lightweight recording metadata" do
-    recording = recording()
-
-    assert Recordings.summary(recording) == %{
-             id: "rec",
-             view: PhoenixReplay.TestLive.Counter,
-             url: "/counter",
-             connected_at: 1000,
-             event_count: 3,
-             duration_ms: 250,
-             active?: false
-           }
+  setup do
+    config = Config.load()
+    Storage.clear(config.storage)
+    on_exit(fn -> Storage.clear(config.storage) end)
+    %{config: config}
   end
 
-  test "active_summary marks recording active" do
-    assert %{active?: true} = Recordings.active_summary(recording())
+  test "lists buffered recordings before stored ones, without duplicates", %{config: config} do
+    stored = Fixtures.counter_recording(id: "stored", connected_at: 10)
+    buffered = Fixtures.counter_recording(id: "buffered", connected_at: 1)
+    Storage.save(config.storage, stored)
+    Storage.save(config.storage, buffered)
+    Buffer.open(buffered, self(), config)
+    on_exit(fn -> Buffer.close("buffered") end)
+
+    assert [%{id: "buffered", live?: true}, %{id: "stored", live?: false}] =
+             Recordings.list(config)
   end
 
-  test "event_offsets returns event timeline indices" do
-    assert Recordings.event_offsets(recording()) == [
-             %{ms: 0, index: 0},
-             %{ms: 100, index: 1},
-             %{ms: 250, index: 2}
-           ]
+  test "fetches from the buffer first, then storage", %{config: config} do
+    recording = Fixtures.counter_recording()
+    assert Recordings.fetch(config, recording.id) == {:error, :not_found}
+
+    Storage.save(config.storage, recording)
+    assert Recordings.fetch(config, recording.id) == {:ok, recording}
+
+    Buffer.open(recording, self(), config)
+    on_exit(fn -> Buffer.close(recording.id) end)
+    assert {:ok, %{events: []}} = Recordings.fetch(config, recording.id)
   end
 
-  test "total_duration returns last event offset" do
-    assert Recordings.total_duration(recording()) == 250
-    assert Recordings.total_duration(%Recording{events: []}) == 0
-  end
+  test "delete and clear notify subscribers", %{config: config} do
+    Recordings.subscribe()
+    Storage.save(config.storage, Fixtures.counter_recording(id: "a"))
 
-  defp recording do
-    %Recording{
-      id: "rec",
-      view: PhoenixReplay.TestLive.Counter,
-      url: "/counter",
-      params: %{},
-      session: %{},
-      connected_at: 1000,
-      events: [
-        {0, :mount, %{assigns: %{count: 0}}},
-        {100, :event, %{name: "inc", params: %{}}},
-        {250, :assigns, %{delta: %{count: 1}}}
-      ]
-    }
+    assert :ok = Recordings.delete(config, "a")
+    assert_receive :recordings_changed
+    assert :ok = Recordings.clear(config)
+    assert_receive :recordings_changed
+    assert Recordings.list(config) == []
   end
 end

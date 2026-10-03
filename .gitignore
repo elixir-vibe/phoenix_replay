@@ -21,3 +21,9 @@ phoenix_replay-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# JavaScript tooling for type-aware linting.
+/node_modules/
+
+# Build manifest written by Volt; only the bundle files are shipped.
+/priv/static/manifest.json
