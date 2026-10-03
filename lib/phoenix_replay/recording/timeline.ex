@@ -64,16 +64,4 @@ defmodule PhoenixReplay.Recording.Timeline do
         acc
     end)
   end
-
-  @doc """
-  Returns true when the recording contains user interaction worth keeping.
-
-  A session with no events and at most the initial `handle_params/3` is a
-  plain page view.
-  """
-  @spec interactive?(Recording.t()) :: boolean()
-  def interactive?(%Recording{events: events}) do
-    Enum.any?(events, &(&1.type == :event)) or
-      Enum.count_until(events, &(&1.type == :params), 2) == 2
-  end
 end

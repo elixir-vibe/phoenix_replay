@@ -13,7 +13,7 @@ defmodule PhoenixReplay.Recorder.PersisterTest do
     recording = Fixtures.counter_recording()
     config = Config.new(storage: {PhoenixReplay.Storage.File, path: tmp_dir})
 
-    assert Persister.persist(recording, config) == :ok
+    assert Persister.persist(recording, config) == {:ok, recording}
     assert PhoenixReplay.Storage.fetch(config.storage, recording.id) == {:ok, recording}
   end
 
@@ -31,7 +31,7 @@ defmodule PhoenixReplay.Recorder.PersisterTest do
     config =
       Config.new(storage: {PhoenixReplay.Storage.File, path: tmp_dir}, redact: [~r/\d{4}$/])
 
-    assert Persister.persist(recording, config) == :ok
+    assert {:ok, _recording} = Persister.persist(recording, config)
 
     assert {:ok, %{url: "http://localhost/cards/[REDACTED]"}} =
              PhoenixReplay.Storage.fetch(config.storage, recording.id)
@@ -48,12 +48,11 @@ defmodule PhoenixReplay.Recorder.PersisterTest do
 
     log =
       capture_log(fn ->
-        assert Persister.persist(recording, config) ==
-                 {:error, {:redaction_failed, :model_unavailable}}
+        assert Persister.persist(recording, config) == {:error, :redaction_failed}
       end)
 
     refute_received {:save_attempt, _id}
-    assert log =~ "redaction failed"
+    assert log =~ "redaction_failed"
   end
 
   test "retries, then gives up with the last error" do

@@ -8,6 +8,9 @@
 - Log collection with `:logs`, which records Logger messages in the same way.
 - Tail sampling with `:keep`: `rate` saves a share of sessions when they end, and `errors: true` and `slower_than: ms` always save sessions with an error or a slow collected event. LiveViews that exit abnormally record an `:exit` event.
 - `:max_memory` stops recording new sessions while the buffer is larger.
+- Running sessions are written to storage in chunks, as `:flush` configures (by default every 200 events or 5 seconds), once `:keep` decides to keep them. Their events leave memory, a crash of the node loses at most the last chunk, and the next start saves what was written as an interrupted recording, emitting `[:phoenix_replay, :recording, :recovered]`. `PhoenixReplay.Storage.File` implements the new optional `append/3`, `fetch_partial/2` and `partials/1` callbacks, and takes `sync: true` to sync each chunk.
+- File storage writes recordings and summaries to a temporary file, syncs and renames them into place.
+- The application waits for recordings being saved or written when it stops.
 - `:redact` takes a `PhoenixReplay.Redactor`, which masks sensitive values in every recorded string when a session is saved, in a background task, and when the dashboard opens a running session. A list of regexes uses `PhoenixReplay.Redactor.Patterns`; `PhoenixReplay.Redactor.Obscura` detects personal data with the optional [Obscura](https://hexdocs.pm/obscura) dependency. A failing redactor stops the save rather than storing unredacted data.
 - The player redacts running sessions with `start_async/3` and shows progress, and hands the result to its frame.
 - `[:phoenix_replay, :collector, :exception]` reports collectors that raised.

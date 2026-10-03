@@ -37,9 +37,39 @@ defmodule PhoenixReplay.Recordings do
   def fetch(%Config{storage: storage}, id, opts \\ []) do
     with {:ok, recording} <- Buffer.fetch(id),
          {:ok, config} <- Buffer.config(id) do
-      redact(recording, config.redact, Keyword.get(opts, :progress, fn _done, _total -> :ok end))
+      complete(recording, config, Keyword.get(opts, :progress, fn _done, _total -> :ok end))
     else
       :error -> Storage.fetch(storage, id)
+    end
+  end
+
+  @doc """
+  Completes a buffered session's recording: redacts the events still in the
+  buffer and puts the chunks already flushed to storage, which were
+  redacted when they were written, before them.
+
+  `progress` is called as the buffered events are redacted.
+  """
+  @spec complete(Recording.t(), Config.t(), Redactor.progress()) ::
+          {:ok, Recording.t()} | {:error, term()}
+  def complete(
+        %Recording{} = recording,
+        %Config{} = config,
+        progress \\ fn _done, _total -> :ok end
+      ) do
+    with {:ok, redacted} <- redact(recording, config.redact, progress),
+         {:ok, flushed} <- flushed_events(recording.id, config.storage) do
+      {:ok, %{redacted | events: flushed ++ redacted.events}}
+    end
+  end
+
+  # Events written concurrently can reach the buffer after a later one was
+  # flushed; they follow the flushed events here, microseconds out of order.
+  defp flushed_events(id, storage) do
+    if Buffer.flushed?(id) do
+      with {:ok, partial} <- Storage.fetch_partial(storage, id), do: {:ok, partial.events}
+    else
+      {:ok, []}
     end
   end
 
@@ -62,8 +92,6 @@ defmodule PhoenixReplay.Recordings do
   @doc "Subscribes the caller to `:recordings_changed` messages."
   @spec subscribe() :: :ok | {:error, term()}
   def subscribe, do: Phoenix.PubSub.subscribe(PhoenixReplay.PubSub, @topic)
-
-  defp redact(recording, nil, _progress), do: {:ok, recording}
 
   defp redact(recording, redactor, progress) do
     case Redactor.redact_recording(recording, redactor, progress) do

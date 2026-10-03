@@ -90,6 +90,14 @@ config :phoenix_replay, redact: {PhoenixReplay.Redactor.Obscura, []}
 
 Detects personal data. Needs `{:obscura, "~> 0.2"}`.
 
+### Writing running sessions
+
+```elixir
+config :phoenix_replay, flush: [events: 200, interval: 5_000]
+```
+
+Writes kept sessions to storage in chunks while they run. `flush: false` saves them only when they end.
+
 ### Retention
 
 ```elixir

@@ -78,6 +78,11 @@ defmodule PhoenixReplay.ConfigTest do
     assert Config.new(redact: MyRedactor).redact == {MyRedactor, []}
     assert_raise ArgumentError, ~r/:redact pattern/, fn -> Config.new(redact: [:email]) end
 
+    assert Config.new([]).flush == %{events: 200, interval: 5_000}
+    assert Config.new(flush: [events: 50]).flush == %{events: 50, interval: 5_000}
+    assert Config.new(flush: false).flush == nil
+    assert_raise ArgumentError, ~r/:interval/, fn -> Config.new(flush: [interval: 0]) end
+
     assert Config.new(max_memory: 1_024).max_memory == 1_024
     assert_raise ArgumentError, ~r/:max_memory/, fn -> Config.new(max_memory: 0) end
   end

@@ -63,6 +63,37 @@ defmodule PhoenixReplay.Recorder.BufferTest do
     assert Buffer.memory() > 0
   end
 
+  test "flushing moves events out of the buffer into the session's totals",
+       %{recording: %{id: id}} do
+    :ok = Buffer.record(self(), :event, %{name: "save", params: %{}})
+    :ok = Buffer.record(self(), :log, %{level: :error, message: "x", metadata: %{}})
+    :ok = Buffer.record(self(), :info, %{tag: nil})
+
+    refute Buffer.flushed?(id)
+    assert [{0, %Event{type: :event}}, {1, %Event{}}, {2, %Event{}}] = Buffer.pending(id)
+    assert [{2, %Event{type: :info}}] = Buffer.pending(id, 1)
+
+    chunk = Enum.take(Buffer.pending(id), 2)
+    :ok = Buffer.flushed(id, chunk)
+
+    assert Buffer.flushed?(id)
+    assert Buffer.pending_count(id) == 1
+    assert {:ok, %{events: [%Event{type: :info}]}} = Buffer.fetch(id)
+    assert {:ok, %{events: []}} = Buffer.meta(id)
+
+    assert %Summary{event_count: 3, event_names: ["save"], error_count: 1} =
+             Enum.find(Buffer.summaries(), &(&1.id == id))
+  end
+
+  test "keeps the draw made when the session opened" do
+    recording = %{Fixtures.counter_recording() | events: []}
+    :ok = Buffer.open(recording, self(), Config.new([]), 0.25)
+    on_exit(fn -> Buffer.close(recording.id) end)
+
+    assert Buffer.draw(recording.id) == {:ok, 0.25}
+    assert Buffer.draw("missing") == :error
+  end
+
   test "close removes the session and its events", %{recording: %{id: id}} do
     Buffer.append(id, 0, %Event{at: 0, type: :mount, data: %{assigns: %{}}})
     assert :ok = Buffer.close(id)

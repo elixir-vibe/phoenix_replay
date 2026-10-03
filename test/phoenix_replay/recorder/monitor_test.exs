@@ -86,4 +86,21 @@ defmodule PhoenixReplay.Recorder.MonitorTest do
     assert_receive {:telemetry, :persisted, %{id: ^id}}
     assert Storage.fetch(Fixtures.storage(), id) == {:ok, recording}
   end
+
+  test "waits for saves and flushes in flight when it stops" do
+    test = self()
+
+    task =
+      Task.Supervisor.async_nolink(PhoenixReplay.TaskSupervisor, fn ->
+        # Long enough that returning without waiting would miss it.
+        Process.sleep(50)
+        send(test, :finished)
+        :ok
+      end)
+
+    state = %{tasks: %{task.ref => %{kind: :save, id: "x", task: task}}}
+
+    assert Monitor.terminate(:shutdown, state) == :ok
+    assert_received :finished
+  end
 end

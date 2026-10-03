@@ -8,7 +8,7 @@ defmodule PhoenixReplay.Recorder do
 
   Options given as `{PhoenixReplay.Recorder, opts}` override the
   `PhoenixReplay.Config` values for that live session. `:sample_rate`,
-  `:keep`, `:max_events`, `:sanitizer` and `:redact` are accepted:
+  `:keep`, `:max_events`, `:sanitizer`, `:redact` and `:flush` are accepted:
 
       live_session :checkout,
         on_mount: [{PhoenixReplay.Recorder, keep: [rate: 0.1, errors: true]}] do
@@ -33,7 +33,7 @@ defmodule PhoenixReplay.Recorder do
   alias PhoenixReplay.Recorder.{Buffer, Monitor}
 
   @private :phoenix_replay
-  @session_options [:sample_rate, :keep, :max_events, :sanitizer, :redact]
+  @session_options [:sample_rate, :keep, :max_events, :sanitizer, :redact, :flush]
 
   @doc """
   Starts recording on the connected mount, for the sampled share of sessions.

@@ -12,7 +12,9 @@ config :phoenix_replay, PhoenixReplay.Test.Endpoint,
 config :phoenix_replay,
   storage:
     {PhoenixReplay.Storage.File, path: Path.join(System.tmp_dir!(), "phoenix_replay_test")},
-  persist: [attempts: 2, backoff: 0]
+  persist: [attempts: 2, backoff: 0],
+  # Tests flush sessions explicitly, so no chunk is written behind their backs.
+  flush: false
 
 config :logger, level: :warning
 

@@ -27,6 +27,28 @@ defmodule PhoenixReplay.Recording.KeepTest do
     assert Keep.decide(recording, %{@keep | rate: 0.0}, 0.0) == {:discard, :not_sampled}
   end
 
+  test "counts a second navigation as interaction" do
+    params = %Event{at: 1, type: :params, data: %{params: %{}, uri: "/"}}
+    quiet = Fixtures.counter_recording(clicks: 0)
+
+    assert Keep.decide(%{quiet | events: [params | quiet.events]}, @keep, 0.0) ==
+             {:discard, :not_interactive}
+
+    assert Keep.decide(%{quiet | events: [params, params | quiet.events]}, @keep, 0.0) == :keep
+  end
+
+  test "decides the same incrementally, and never turns back from keeping" do
+    recording = Fixtures.counter_recording(clicks: 2)
+    {head, tail} = Enum.split(recording.events, 3)
+    keep = %{@keep | rate: 0.5}
+
+    observation = Keep.observe(Keep.new(), head, keep)
+    assert Keep.decision(observation, keep, 0.1) == :keep
+
+    assert observation |> Keep.observe(tail, keep) |> Keep.decision(keep, 0.1) ==
+             Keep.decide(recording, keep, 0.1)
+  end
+
   test "discards sessions without interaction" do
     assert Keep.decide(Fixtures.counter_recording(clicks: 0), @keep, 0.0) ==
              {:discard, :not_interactive}

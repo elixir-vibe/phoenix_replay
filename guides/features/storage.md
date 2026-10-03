@@ -45,6 +45,30 @@ defmodule MyApp.Repo.Migrations.CreatePhoenixReplayRecordings do
 end
 ```
 
+## Running sessions
+
+A running session is buffered in memory. With file storage, PhoenixReplay also writes it to disk in chunks while it runs, so its events leave memory however long it lasts, and a crash of the node loses at most the last few seconds:
+
+```elixir
+config :phoenix_replay,
+  flush: [events: 200, interval: 5_000]
+```
+
+A chunk is written once a session has buffered `:events` events, or `:interval` milliseconds after its last one. Only sessions that will be kept are written, as `:keep` decides from the events seen so far; see [Telemetry and Logs](telemetry-and-logs.md#keeping-the-sessions-that-matter). Each chunk is redacted before it is written, so opening a running session in the dashboard only redacts the events since its last chunk. `flush: false` keeps sessions in memory until they end. `:flush` can be set per live session too.
+
+Chunks are appended to `<id>.<node>.part` as checksummed frames. When the session ends, its chunks and remaining events are saved as one compressed recording, written to a temporary file, synced and renamed into place, and the part file is deleted. If the node stops first, the next start saves what was written as a recording ending in an `:exit` event that says it was interrupted. Nodes sharing a directory only recover their own part files.
+
+A plain write survives a crash of the BEAM. To also survive losing power or the operating system, sync each chunk, at a cost per chunk:
+
+```elixir
+config :phoenix_replay,
+  storage: {PhoenixReplay.Storage.File, path: "priv/replay_recordings", sync: true}
+```
+
+`PhoenixReplay.Storage.Ecto` saves each recording once, when it ends. A custom backend can take chunks by implementing the optional callbacks of `PhoenixReplay.Storage`.
+
+When the application stops, it waits for recordings being saved or written.
+
 ## Retention
 
 `PhoenixReplay.Retention` deletes stored recordings older than `:max_age` milliseconds or beyond the newest `:max_count`, every `:interval` milliseconds:

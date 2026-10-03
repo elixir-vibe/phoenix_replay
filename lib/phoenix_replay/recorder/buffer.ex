@@ -18,17 +18,31 @@ defmodule PhoenixReplay.Recorder.Buffer do
       calling process
     * `{{:collected, id, name}, count, limit}` — events a collector captured
       for the session, including those beyond its `:limit`
-    * `{{id, seq}, event}` — one per event, `seq` counting up from `0`
+    * `{{id, :state}, draw, flushed}` — the session's draw for
+      `keep: [rate: ...]`, made when it opens, and totals of the events
+      already flushed to storage, written only by the process flushing it
+    * `{{id, seq}, event}` — one per event not yet flushed, `seq` counting
+      up from `0`
 
   Integer keys sort before atoms, so each session's events precede its
   metadata rows in the ordered set.
   """
 
-  alias PhoenixReplay.Config
+  alias PhoenixReplay.{Config, Storage}
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.{Event, Summary}
 
   @table __MODULE__
+
+  @typedoc "Totals of the events a session has flushed to storage."
+  @type flushed :: %{
+          event_count: non_neg_integer(),
+          error_count: non_neg_integer(),
+          event_names: [String.t()],
+          duration_ms: non_neg_integer()
+        }
+
+  @no_flushed %{event_count: 0, error_count: 0, event_names: [], duration_ms: 0}
 
   @typedoc "A buffered session found by `attribute/1`."
   @opaque session :: {Recording.id(), integer(), Config.t()}
@@ -45,11 +59,12 @@ defmodule PhoenixReplay.Recorder.Buffer do
 
   Event offsets are measured from this call.
   """
-  @spec open(Recording.t(), pid(), Config.t()) :: :ok
-  def open(%Recording{id: id} = recording, pid, %Config{} = config) do
+  @spec open(Recording.t(), pid(), Config.t(), float()) :: :ok
+  def open(%Recording{id: id} = recording, pid, %Config{} = config, draw \\ :rand.uniform()) do
     :ets.insert(@table, [
       {{id, :meta}, pid, config, %{recording | events: []}},
       {{id, :seq}, 0, 0},
+      {{id, :state}, draw, @no_flushed},
       {{:process, pid}, id, System.monotonic_time(:millisecond), config}
     ])
 
@@ -141,7 +156,73 @@ defmodule PhoenixReplay.Recorder.Buffer do
     :ok
   end
 
-  @doc "Returns the session's recording with all events appended so far."
+  @doc "Returns the session's recording without its events."
+  @spec meta(Recording.id()) :: {:ok, Recording.t()} | :error
+  def meta(id) do
+    case :ets.lookup(@table, {id, :meta}) do
+      [{_key, _pid, _config, recording}] -> {:ok, %{recording | dropped: dropped(id)}}
+      [] -> :error
+    end
+  end
+
+  @doc "Counts the session's buffered events."
+  @spec pending_count(Recording.id()) :: non_neg_integer()
+  def pending_count(id), do: event_count(id)
+
+  @doc "Returns the session's draw for `keep: [rate: ...]`, made when it opened."
+  @spec draw(Recording.id()) :: {:ok, float()} | :error
+  def draw(id) do
+    case :ets.lookup(@table, {id, :state}) do
+      [{_key, draw, _flushed}] -> {:ok, draw}
+      [] -> :error
+    end
+  end
+
+  @doc "Returns true once some of the session's events were flushed to storage."
+  @spec flushed?(Recording.id()) :: boolean()
+  def flushed?(id) do
+    match?(
+      [{_key, _draw, %{event_count: count}}] when count > 0,
+      :ets.lookup(@table, {id, :state})
+    )
+  end
+
+  @doc """
+  Returns the session's buffered events with their sequence numbers, in
+  order. Events written concurrently may still arrive with lower numbers;
+  they are returned by a later call.
+  """
+  @spec pending(Recording.id(), integer()) :: Storage.chunk()
+  def pending(id, after_seq \\ -1) do
+    :ets.select(@table, [
+      {{{id, :"$1"}, :"$2"}, [{:is_integer, :"$1"}, {:>, :"$1", after_seq}], [{{:"$1", :"$2"}}]}
+    ])
+  end
+
+  @doc """
+  Removes events written to storage by the session's flusher, and adds
+  them to its flushed totals.
+  """
+  @spec flushed(Recording.id(), Storage.chunk()) :: :ok
+  def flushed(id, chunk) do
+    [{key, draw, totals}] = :ets.lookup(@table, {id, :state})
+    events = Enum.map(chunk, fn {_seq, event} -> event end)
+
+    totals = %{
+      event_count: totals.event_count + length(events),
+      error_count: totals.error_count + Enum.count(events, &Event.error?/1),
+      event_names: Enum.sort(Enum.uniq(totals.event_names ++ Summary.event_names(events))),
+      duration_ms: Enum.reduce(events, totals.duration_ms, &max(&1.at, &2))
+    }
+
+    :ets.insert(@table, {key, draw, totals})
+    Enum.each(chunk, fn {seq, _event} -> :ets.delete(@table, {id, seq}) end)
+  end
+
+  @doc """
+  Returns the session's buffered recording. Events already flushed to
+  storage are not included; see `flushed?/1`.
+  """
   @spec fetch(Recording.id()) :: {:ok, Recording.t()} | :error
   def fetch(id) do
     case :ets.lookup(@table, {id, :meta}) do
@@ -174,12 +255,14 @@ defmodule PhoenixReplay.Recorder.Buffer do
     @table
     |> :ets.select([{{{:_, :meta}, :"$1", :_, :"$2"}, [], [{{:"$1", :"$2"}}]}])
     |> Enum.map(fn {pid, recording} ->
+      flushed = flushed_totals(recording.id)
+
       %{
         Summary.new(recording, live?: Process.alive?(pid))
-        | event_count: event_count(recording.id),
-          event_names: event_names(recording.id),
-          error_count: error_count(recording.id),
-          duration_ms: duration_ms(recording.id)
+        | event_count: flushed.event_count + event_count(recording.id),
+          event_names: Enum.sort(Enum.uniq(flushed.event_names ++ event_names(recording.id))),
+          error_count: flushed.error_count + error_count(recording.id),
+          duration_ms: max(flushed.duration_ms, duration_ms(recording.id))
       }
     end)
     |> Enum.sort_by(& &1.connected_at, :desc)
@@ -191,9 +274,17 @@ defmodule PhoenixReplay.Recorder.Buffer do
     :ets.match_delete(@table, {{:process, :_}, id, :_, :_})
     :ets.match_delete(@table, {{:collected, id, :_}, :_, :_})
     :ets.delete(@table, {id, :seq})
+    :ets.delete(@table, {id, :state})
     :ets.delete(@table, {id, :meta})
     :ets.select_delete(@table, [{{{id, :"$1"}, :_}, [{:is_integer, :"$1"}], [true]}])
     :ok
+  end
+
+  defp flushed_totals(id) do
+    case :ets.lookup(@table, {id, :state}) do
+      [{_key, _draw, totals}] -> totals
+      [] -> @no_flushed
+    end
   end
 
   defp write(id, started_at, type, data) do

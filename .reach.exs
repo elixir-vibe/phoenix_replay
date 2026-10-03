@@ -18,8 +18,10 @@ adapter = [
 orchestrator = [
   "PhoenixReplay.Recordings",
   "PhoenixReplay.Retention",
+  "PhoenixReplay.Recorder.Flusher",
   "PhoenixReplay.Recorder.Monitor",
-  "PhoenixReplay.Recorder.Persister"
+  "PhoenixReplay.Recorder.Persister",
+  "PhoenixReplay.Recorder.Recovery"
 ]
 
 model = [

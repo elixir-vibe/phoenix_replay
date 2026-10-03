@@ -29,6 +29,11 @@ defmodule PhoenixReplay.Test.Router do
       live "/limited/counter", PhoenixReplay.Test.Live.Counter
     end
 
+    live_session :flushed,
+      on_mount: [{PhoenixReplay.Recorder, flush: [events: 2, interval: 60_000]}] do
+      live "/flushed/counter", PhoenixReplay.Test.Live.Counter
+    end
+
     live_session :collected, on_mount: [{PhoenixReplay.Recorder, redact: ["card-\\d+"]}] do
       live "/telemetry", PhoenixReplay.Test.Live.TelemetryPage
     end

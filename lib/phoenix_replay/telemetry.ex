@@ -14,6 +14,9 @@ defmodule PhoenixReplay.Telemetry do
       :not_interactive | :not_sampled}`.
     * `[:phoenix_replay, :recording, :failed]` — a recording could not be
       saved and was dropped. Metadata: `%{id: String.t(), reason: term}`.
+    * `[:phoenix_replay, :recording, :recovered]` — a session whose node
+      stopped before it ended was saved from its chunks when the
+      application started. Measurements and metadata as for `:persisted`.
 
   Collector failures are emitted where they happen:
 
@@ -31,6 +34,16 @@ defmodule PhoenixReplay.Telemetry do
   def persisted(%Recording{} = recording) do
     :telemetry.execute(
       [:phoenix_replay, :recording, :persisted],
+      %{event_count: length(recording.events), duration_ms: Timeline.duration_ms(recording)},
+      %{id: recording.id, view: recording.view}
+    )
+  end
+
+  @doc "Emits `[:phoenix_replay, :recording, :recovered]`."
+  @spec recovered(Recording.t()) :: :ok
+  def recovered(%Recording{} = recording) do
+    :telemetry.execute(
+      [:phoenix_replay, :recording, :recovered],
       %{event_count: length(recording.events), duration_ms: Timeline.duration_ms(recording)},
       %{id: recording.id, view: recording.view}
     )

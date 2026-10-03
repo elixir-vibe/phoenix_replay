@@ -20,6 +20,7 @@ defmodule PhoenixReplay.Application do
       {Task.Supervisor, name: PhoenixReplay.TaskSupervisor},
       {PhoenixReplay.Recorder.Handlers, PhoenixReplay.Config.load()},
       PhoenixReplay.Recorder.Monitor,
+      {Task, &PhoenixReplay.Recorder.Recovery.run/0},
       PhoenixReplay.Retention
     ]
 

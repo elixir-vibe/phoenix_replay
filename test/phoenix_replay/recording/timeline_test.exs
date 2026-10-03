@@ -33,14 +33,4 @@ defmodule PhoenixReplay.Recording.TimelineTest do
     assert Timeline.duration_ms(recording([])) == 0
     assert Timeline.last_index(recording([])) == 0
   end
-
-  test "interactive?/1 requires an event or a second navigation" do
-    mount = %Event{at: 0, type: :mount, data: %{assigns: %{}}}
-    params = %Event{at: 1, type: :params, data: %{params: %{}, uri: "/"}}
-    event = %Event{at: 2, type: :event, data: %{name: "x", params: %{}}}
-
-    refute Timeline.interactive?(recording([mount, params]))
-    assert Timeline.interactive?(recording([mount, params, params]))
-    assert Timeline.interactive?(recording([mount, event]))
-  end
 end

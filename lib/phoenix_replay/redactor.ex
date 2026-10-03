@@ -56,15 +56,15 @@ defmodule PhoenixReplay.Redactor do
   Redacts every part of `recording` that holds recorded values: its URL,
   params, session and the data of each event.
 
-  `progress` is called after each event.
+  `progress` is called after each event. Without a redactor, the
+  recording is returned as it is.
   """
-  @spec redact_recording(Recording.t(), t(), progress()) ::
+  @spec redact_recording(Recording.t(), t() | nil, progress()) ::
           {:ok, Recording.t()} | {:error, term()}
-  def redact_recording(
-        %Recording{} = recording,
-        redactor,
-        progress \\ fn _done, _total -> :ok end
-      ) do
+  def redact_recording(recording, redactor, progress \\ fn _done, _total -> :ok end)
+  def redact_recording(%Recording{} = recording, nil, _progress), do: {:ok, recording}
+
+  def redact_recording(%Recording{} = recording, redactor, progress) do
     total = length(recording.events)
 
     with {:ok, url} <- redact_term(recording.url, redactor),

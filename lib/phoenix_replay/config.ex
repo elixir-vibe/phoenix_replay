@@ -33,6 +33,13 @@ defmodule PhoenixReplay.Config do
       when a recording is saved: a list of regexes, or regex sources as
       strings, for `PhoenixReplay.Redactor.Patterns`, or `{module, opts}`.
       Defaults to `[]`, which stores recordings as the sanitizer left them.
+    * `:flush` — keyword list controlling how running sessions are written
+      to storage in chunks, when the storage supports it (see
+      `PhoenixReplay.Storage`), or `false` to save each session only when
+      it ends:
+      * `:events` — events buffered before a chunk is written (default `200`)
+      * `:interval` — milliseconds after which buffered events are written
+        anyway (default `5_000`)
     * `:max_memory` — bytes of buffered recordings above which new
       sessions are not recorded, or `nil` (the default) for no limit.
     * `:retention` — keyword list controlling `PhoenixReplay.Retention`:
@@ -79,6 +86,8 @@ defmodule PhoenixReplay.Config do
   @typedoc "A `PhoenixReplay.Redactor` module and its options."
   @type redactor :: {module(), keyword()}
 
+  @type flush :: %{events: pos_integer(), interval: pos_integer()}
+
   @type logs :: %{level: Logger.level(), metadata: [atom()], limit: pos_integer()}
 
   @typedoc "A storage backend module and its options."
@@ -94,6 +103,7 @@ defmodule PhoenixReplay.Config do
           logs: logs() | nil,
           redact: redactor() | nil,
           max_memory: pos_integer() | nil,
+          flush: flush() | nil,
           retention: retention(),
           persist: persist()
         }
@@ -107,6 +117,7 @@ defmodule PhoenixReplay.Config do
             logs: nil,
             redact: nil,
             max_memory: nil,
+            flush: %{events: 200, interval: 5_000},
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
 
@@ -184,6 +195,11 @@ defmodule PhoenixReplay.Config do
   defp put({:max_memory, max}, config) when is_nil(max) or (is_integer(max) and max > 0),
     do: %{config | max_memory: max}
 
+  defp put({:flush, false}, config), do: %{config | flush: nil}
+
+  defp put({:flush, opts}, config) when is_list(opts),
+    do: %{config | flush: merge(%{events: 200, interval: 5_000}, opts, &valid_flush?/2)}
+
   defp put({:retention, opts}, config) when is_list(opts),
     do: %{config | retention: merge(config.retention, opts, &valid_retention?/2)}
 
@@ -231,6 +247,8 @@ defmodule PhoenixReplay.Config do
   defp valid_logs?(:level, value), do: value in Logger.levels()
   defp valid_logs?(:metadata, value), do: is_list(value) and Enum.all?(value, &is_atom/1)
   defp valid_logs?(:limit, value), do: pos_integer?(value)
+
+  defp valid_flush?(_key, value), do: pos_integer?(value)
 
   defp valid_retention?(:max_age, value), do: is_nil(value) or pos_integer?(value)
   defp valid_retention?(:max_count, value), do: is_nil(value) or non_neg_integer?(value)
