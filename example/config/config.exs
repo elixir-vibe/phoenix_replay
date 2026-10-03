@@ -7,6 +7,49 @@
 # General application configuration
 import Config
 
+config :volt,
+  entry: "assets/js/app.ts",
+  outdir: "priv/static/assets",
+  # LiveView writes colocated hooks under the build path ("phoenix-colocated/example").
+  resolve_dirs: ["deps", Mix.Project.build_path()],
+  target: :es2020,
+  sourcemap: :hidden,
+  tailwind: [
+    css: "assets/css/app.css",
+    sources: [
+      %{base: "lib/", pattern: "**/*.{ex,heex}"},
+      %{base: "assets/", pattern: "**/*.{js,ts,jsx,tsx}"}
+    ]
+  ],
+  lint: [
+    tsgolint: "assets/node_modules/.bin/tsgolint",
+    plugins: ["typescript", "import", "unicorn"],
+    rules: %{
+      "no-debugger" => :deny,
+      "no-unused-vars" => :warn,
+      "no-console" => :warn,
+      "no-empty-function" => :deny,
+      "eqeqeq" => :deny,
+      "no-var" => :deny,
+      "prefer-const" => :deny,
+      "typescript/no-explicit-any" => :warn,
+      "typescript/no-non-null-assertion" => :warn,
+      "typescript/consistent-type-imports" => :deny,
+      "typescript/no-floating-promises" => :deny,
+      "typescript/no-misused-promises" => :deny,
+      "import/no-cycle" => :deny,
+      "import/no-self-import" => :deny,
+      "import/no-duplicates" => :deny,
+      "import/no-mutable-exports" => :deny,
+      "unicorn/no-instanceof-array" => :deny,
+      "unicorn/no-typeof-undefined" => :deny,
+      "unicorn/no-nested-ternary" => :deny,
+      "unicorn/no-useless-fallback-in-spread" => :deny,
+      "unicorn/no-unnecessary-await" => :deny,
+      "unicorn/prefer-string-starts-ends-with" => :deny
+    }
+  ]
+
 config :example,
   ecto_repos: [Example.Repo],
   generators: [timestamp_type: :utc_datetime]
@@ -25,27 +68,6 @@ config :example, ExampleWeb.Endpoint,
   ],
   pubsub_server: Example.PubSub,
   live_view: [signing_salt: "lF9FlYQi"]
-
-# Configure esbuild (the version is required)
-config :esbuild,
-  version: "0.25.4",
-  example: [
-    args:
-      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
-    cd: Path.expand("../assets", __DIR__),
-    env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
-  ]
-
-# Configure tailwind (the version is required)
-config :tailwind,
-  version: "4.2.0",
-  example: [
-    args: ~w(
-      --input=assets/css/app.css
-      --output=priv/static/assets/css/app.css
-    ),
-    cd: Path.expand("..", __DIR__)
-  ]
 
 # Configure Elixir's Logger
 config :logger, :default_formatter,

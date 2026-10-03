@@ -40,6 +40,7 @@ defmodule Example.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:volt, "~> 0.19"},
       {:phoenix, "~> 1.8.4"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
@@ -47,8 +48,6 @@ defmodule Example.MixProject do
       {:lazy_html, ">= 0.1.0", only: :test},
       {:phoenix_test, "~> 0.10.0", only: :test, runtime: false},
       {:phoenix_test_playwright, "~> 0.13.0", only: :test, runtime: false},
-      {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
-      {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.2.0",
@@ -78,14 +77,21 @@ defmodule Example.MixProject do
       setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["compile", "tailwind example", "esbuild example"],
+      # Browser tests load assets through Volt's build manifest.
+      test: ["assets.build", "test"],
+      "assets.setup": [],
+      "assets.build": ["compile", "volt.build --tailwind"],
       "assets.deploy": [
-        "tailwind example --minify",
-        "esbuild example --minify",
+        "volt.build --tailwind",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "volt.js.check --type-aware --type-check",
+        "test"
+      ]
     ]
   end
 end

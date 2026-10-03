@@ -5,8 +5,9 @@ defmodule ExampleWeb.Features.ReplayTest do
   alias Example.{Repo, Tasks.Task}
 
   setup do
-    PhoenixReplay.Store.clear_all()
-    on_exit(fn -> PhoenixReplay.Store.clear_all() end)
+    config = PhoenixReplay.Config.load()
+    PhoenixReplay.Recordings.clear(config)
+    on_exit(fn -> PhoenixReplay.Recordings.clear(config) end)
 
     :ok
   end
@@ -21,9 +22,19 @@ defmodule ExampleWeb.Features.ReplayTest do
   """
   test "realistic user session is recorded and replayable", %{conn: conn} do
     # Seed some tasks so the list isn't empty
-    Repo.insert!(%Task{title: "Review PR #42", description: "Check the auth flow", priority: "high"})
+    Repo.insert!(%Task{
+      title: "Review PR #42",
+      description: "Check the auth flow",
+      priority: "high"
+    })
+
     Repo.insert!(%Task{title: "Update dependencies", priority: "low", completed: true})
-    Repo.insert!(%Task{title: "Write documentation", description: "API reference", priority: "medium"})
+
+    Repo.insert!(%Task{
+      title: "Write documentation",
+      description: "API reference",
+      priority: "medium"
+    })
 
     # --- Act 1: Browse and explore ---
     conn =
@@ -120,30 +131,29 @@ defmodule ExampleWeb.Features.ReplayTest do
     conn = conn |> assert_has("h1", text: "PhoenixReplay")
 
     # --- Verify the recording exists ---
-    conn = conn |> assert_has("a", text: "ExampleWeb.TaskLive.Index")
+    conn = conn |> assert_has("li", text: "ExampleWeb.TaskLive.Index")
 
     # Open it
-    conn = conn |> PhoenixTest.Playwright.click("a:has-text('ExampleWeb.TaskLive.Index')")
+    conn = conn |> click_link("Open")
     conn = conn |> assert_has("h1", text: "ExampleWeb.TaskLive.Index")
 
     # Player controls are present
-    conn = conn |> assert_has("button[phx-click='play']")
-    conn = conn |> assert_has("button[phx-click='step_forward']")
-    conn = conn |> assert_has("button[phx-click='step_back']")
-    conn = conn |> assert_has("#rp-scrubber")
+    conn = conn |> assert_has("button[aria-label='Play']")
+    conn = conn |> assert_has("#replay-scrubber[role='slider']")
+    conn = conn |> assert_has("iframe#replay-frame")
 
     # Events panel shows our actions
     conn = conn |> assert_has("button", text: "mount")
-    conn = conn |> assert_has("button", text: "assigns changed")
+    conn = conn |> assert_has("button", text: "assigns")
 
     # Step forward through a few events
     conn = conn |> click_button("Next event")
     conn = conn |> click_button("Next event")
     conn = conn |> click_button("Next event")
 
-    # Play briefly
-    conn = conn |> PhoenixTest.Playwright.click("button[phx-click='play']")
+    # Play briefly, then pause
+    conn = conn |> PhoenixTest.Playwright.click("button[aria-label='Play']")
     Process.sleep(1500)
-    conn |> PhoenixTest.Playwright.click("button[phx-click='pause']")
+    conn |> PhoenixTest.Playwright.click("button[aria-label='Pause']")
   end
 end

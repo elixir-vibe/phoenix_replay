@@ -33,6 +33,7 @@ defmodule ExampleWeb.Endpoint do
     socket "/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket
     plug Phoenix.LiveReloader
     plug Phoenix.CodeReloader
+    plug Volt.DevServer, root: "assets"
   end
 
   if Application.compile_env(:example, :sql_sandbox) do

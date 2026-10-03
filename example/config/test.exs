@@ -14,18 +14,15 @@ config :example, ExampleWeb.Endpoint,
 config :example, sql_sandbox: true
 
 config :phoenix_replay,
-  storage: PhoenixReplay.Storage.File,
-  storage_opts: [
-    path: Path.join(System.tmp_dir!(), "phoenix_replay_example_test"),
-    format: :etf
-  ]
+  storage:
+    {PhoenixReplay.Storage.File,
+     path: Path.join(System.tmp_dir!(), "phoenix_replay_example_test")}
 
 config :phoenix_test,
   otp_app: :example,
   playwright: [timeout: 5_000]
 
-config :example, Example.Repo,
-  pool: Ecto.Adapters.SQL.Sandbox
+config :example, Example.Repo, pool: Ecto.Adapters.SQL.Sandbox
 
 # Print only warnings and errors during test
 config :logger, level: :warning

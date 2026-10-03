@@ -23,6 +23,9 @@ defmodule ExampleWeb.Router do
 
   scope "/" do
     pipe_through :browser
-    phoenix_replay "/replay"
+
+    # Replays render inside the app's own root layout, so assets resolve
+    # through Volt's manifest in production.
+    phoenix_replay "/replay", frame_layout: {ExampleWeb.Layouts, :root}
   end
 end
