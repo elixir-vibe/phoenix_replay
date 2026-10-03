@@ -12,6 +12,10 @@
 - `PhoenixReplay.Recording.Summary` lists the session's distinct `event_names`.
   Recordings saved by 0.3.0 have none, so event filters do not match them.
 
+### Documentation
+
+- Guides for getting started, recording, LiveComponents, the dashboard, storage, and privacy and security, plus a configuration cheatsheet. The README is a short overview linking to them.
+
 ### Upgrading
 
 - `PhoenixReplay.Storage.Ecto` needs an `event_names` column: `add :event_names, :binary, null: false, default: <<131, 106>>`, the encoding of an empty list.

@@ -1,0 +1,154 @@
+# Configuration
+
+## Application
+{: .col-2}
+
+### Storage
+
+```elixir
+config :phoenix_replay,
+  storage: {PhoenixReplay.Storage.File, path: "priv/replay_recordings"}
+```
+
+A `{module, opts}` tuple or a bare module. Default: files under `priv/replay_recordings`.
+
+### Ecto storage
+
+```elixir
+config :phoenix_replay,
+  storage: {PhoenixReplay.Storage.Ecto, repo: MyApp.Repo}
+```
+
+### Sanitizer
+
+```elixir
+config :phoenix_replay, sanitizer: MyApp.ReplaySanitizer
+```
+
+Default: `PhoenixReplay.Sanitizer.Default`.
+
+### Sampling
+
+```elixir
+config :phoenix_replay, sample_rate: 0.25
+```
+
+Share of sessions recorded, `0.0` to `1.0`. Default: `1.0`.
+
+### Event limit
+
+```elixir
+config :phoenix_replay, max_events: 10_000
+```
+
+Events kept per session. Default: `10_000`.
+
+### Retention
+
+```elixir
+config :phoenix_replay,
+  retention: [max_age: :timer.hours(24 * 7), max_count: 1_000, interval: :timer.minutes(10)]
+```
+
+Off unless `:max_age` or `:max_count` is set. Default interval: one minute.
+
+### Save retries
+
+```elixir
+config :phoenix_replay, persist: [attempts: 3, backoff: 1_000]
+```
+
+Backoff in milliseconds, multiplied by the attempt number.
+
+## Live sessions
+{: .col-2}
+
+### Record a live session
+
+```elixir
+live_session :default, on_mount: [PhoenixReplay.Recorder] do
+  live "/", HomeLive
+end
+```
+
+### Per-session options
+
+```elixir
+live_session :checkout,
+  on_mount: [{PhoenixReplay.Recorder, sample_rate: 1.0, max_events: 2_000}] do
+  live "/checkout", CheckoutLive
+end
+```
+
+Accepts `:sample_rate`, `:max_events` and `:sanitizer`.
+
+## Router
+{: .col-2}
+
+### Mount the dashboard
+
+```elixir
+import PhoenixReplay.Router
+
+scope "/admin" do
+  pipe_through [:browser, :require_admin]
+  phoenix_replay "/replay"
+end
+```
+
+### Authentication and authorization
+
+```elixir
+phoenix_replay "/replay",
+  on_mount: [{MyAppWeb.UserAuth, :ensure_admin}],
+  authorize: MyApp.ReplayAuthorization
+```
+
+### Frame layout
+
+```elixir
+phoenix_replay "/replay", frame_layout: {MyAppWeb.Layouts, :root}
+```
+
+For content-hashed assets. Default: loads `/assets/css/app.css`.
+
+### Socket path
+
+```elixir
+phoenix_replay "/replay", live_socket_path: "/socket/live"
+```
+
+Default: `"/live"`.
+
+### Mount twice
+
+```elixir
+phoenix_replay "/replay", as: :staff_replay
+```
+
+## Dashboard filters
+{: .col-2}
+
+### Parameters
+
+| Parameter | Matches |
+|---|---|
+| `q` | Text in URL or id |
+| `view` | View module name |
+| `event` | Triggered event name |
+| `within` | `1h`, `24h` or `7d` |
+| `min_events` | Minimum event count |
+
+### In code
+
+```elixir
+alias PhoenixReplay.Recordings
+alias PhoenixReplay.Recordings.Filter
+
+config = PhoenixReplay.Config.load()
+filter = Filter.from_params(%{"event" => "pay", "within" => "24h"})
+
+config
+|> Recordings.list()
+|> Filter.apply(filter, System.system_time(:millisecond))
+```

@@ -65,12 +65,12 @@ defmodule PhoenixReplay.MixProject do
         lib
         priv/static/dashboard.js
         priv/static/dashboard.css
+        guides
         mix.exs
         .formatter.exs
         README.md
         CHANGELOG.md
         LICENSE
-        screenshot.jpg
       )
     ]
   end
@@ -79,7 +79,24 @@ defmodule PhoenixReplay.MixProject do
     [
       main: "readme",
       source_ref: "v#{@version}",
-      extras: ["README.md", "CHANGELOG.md"],
+      extras: [
+        "README.md",
+        "CHANGELOG.md",
+        "guides/introduction/getting-started.md",
+        "guides/introduction/why-phoenix-replay.md",
+        "guides/introduction/how-it-works.md",
+        "guides/features/recording.md",
+        "guides/features/live-components.md",
+        "guides/features/dashboard.md",
+        "guides/features/storage.md",
+        "guides/features/privacy-and-security.md",
+        "guides/cheatsheets/configuration.cheatmd"
+      ],
+      groups_for_extras: [
+        Introduction: ~r/guides\/introduction\//,
+        Features: ~r/guides\/features\//,
+        Cheatsheets: ~r/guides\/cheatsheets\//
+      ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
       groups_for_modules: [
         Recording: [
