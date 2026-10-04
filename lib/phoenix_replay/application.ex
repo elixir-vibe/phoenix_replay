@@ -13,6 +13,7 @@ defmodule PhoenixReplay.Application do
 
   @impl true
   def start(_type, _args) do
+    :ok = PhoenixReplay.Storage.File.remember_root()
     :ok = PhoenixReplay.Recorder.Buffer.create_table()
 
     children = [

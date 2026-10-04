@@ -27,3 +27,6 @@ phoenix_replay-*.tar
 
 # Build manifest written by Volt; only the bundle files are shipped.
 /priv/static/manifest.json
+
+# Recordings written while developing against the default storage path.
+/priv/replay_recordings/

@@ -16,7 +16,11 @@ defmodule PhoenixReplay.Storage.File do
 
   ## Options
 
-    * `:path` — directory for recording files (default: `"priv/replay_recordings"`)
+    * `:path` — directory for recording files (default: `"priv/replay_recordings"`).
+      A relative path is resolved against the working directory when
+      PhoenixReplay started, not when a file is written: the working
+      directory belongs to the whole VM, and tools such as Phoenix's code
+      reloader change it while they compile a path dependency.
     * `:sync` — whether to sync each appended chunk to disk. A plain write
       survives a crash of the node; syncing also survives losing power or
       the operating system, at a cost per chunk. Defaults to `false`.
@@ -211,5 +215,13 @@ defmodule PhoenixReplay.Storage.File do
       else: {:error, :not_found}
   end
 
-  defp dir(opts), do: Keyword.get(opts, :path, "priv/replay_recordings")
+  @doc false
+  @spec remember_root(Path.t()) :: :ok
+  def remember_root(dir \\ File.cwd!()), do: :persistent_term.put({__MODULE__, :root}, dir)
+
+  defp dir(opts) do
+    opts
+    |> Keyword.get(:path, "priv/replay_recordings")
+    |> Path.expand(:persistent_term.get({__MODULE__, :root}, nil) || File.cwd!())
+  end
 end
