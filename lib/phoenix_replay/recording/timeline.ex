@@ -46,6 +46,20 @@ defmodule PhoenixReplay.Recording.Timeline do
   end
 
   @doc """
+  The page URL after the event at `index`: the last navigation up to it, or
+  the URL the session started on.
+  """
+  @spec url_at(Recording.t(), non_neg_integer()) :: String.t() | nil
+  def url_at(%Recording{events: events, url: url}, index) do
+    events
+    |> Enum.take(index + 1)
+    |> Enum.reduce(url, fn
+      %Event{type: :params, data: %{uri: uri}}, _acc -> uri
+      %Event{}, acc -> acc
+    end)
+  end
+
+  @doc """
   The browser viewport after the event at `index`: the last `:viewport`
   event up to it, or the viewport the session connected with, if known.
   """

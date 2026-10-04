@@ -13,6 +13,13 @@ defmodule PhoenixReplay.Web.Format do
     "#{div(seconds, 60)}:#{seconds |> rem(60) |> Integer.to_string() |> String.pad_leading(2, "0")}"
   end
 
+  @doc "Formats an offset as `m:ss.cc`, to the hundredth of a second."
+  @spec precise_clock(non_neg_integer()) :: String.t()
+  def precise_clock(ms) do
+    hundredths = ms |> rem(1000) |> div(10) |> Integer.to_string() |> String.pad_leading(2, "0")
+    "#{clock(ms)}.#{hundredths}"
+  end
+
   @doc "Formats a duration as `12s` or `3m 4s`."
   @spec duration(non_neg_integer()) :: String.t()
   def duration(ms) do
@@ -28,6 +35,12 @@ defmodule PhoenixReplay.Web.Format do
   @spec timestamp(integer()) :: String.t()
   def timestamp(unix_ms) do
     unix_ms |> DateTime.from_unix!(:millisecond) |> Calendar.strftime("%Y-%m-%d %H:%M:%S")
+  end
+
+  @doc "Formats a Unix millisecond timestamp as UTC `Oct 4, 08:50`."
+  @spec started(integer()) :: String.t()
+  def started(unix_ms) do
+    unix_ms |> DateTime.from_unix!(:millisecond) |> Calendar.strftime("%b %-d, %H:%M")
   end
 
   @doc """

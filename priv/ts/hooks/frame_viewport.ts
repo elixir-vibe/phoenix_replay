@@ -14,6 +14,8 @@ const MIN_HEIGHT = 320
  * dimensions fit the element's width and the window's height below it,
  * centring narrower devices; `"actual"` renders it at 100% inside a box
  * that scrolls. `data-max-height` caps the height instead of the window.
+ * `data-below` names an element shown under the frame, such as playback
+ * controls, whose height is kept free too.
  *
  * The sizes are written as rules into the element's `phx-update="ignore"`
  * style element, keyed by the frame's and its box's ids, so LiveView keeps
@@ -89,6 +91,7 @@ export class FrameViewport extends ViewHook {
     if (max) return max
 
     const top = box.getBoundingClientRect().top + window.scrollY
-    return Math.max(MIN_HEIGHT, window.innerHeight - top - BOTTOM_GAP)
+    const below = document.getElementById(this.el.dataset.below ?? '')?.offsetHeight ?? 0
+    return Math.max(MIN_HEIGHT, window.innerHeight - top - below - BOTTOM_GAP)
   }
 }

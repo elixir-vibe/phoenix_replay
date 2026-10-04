@@ -7,6 +7,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   alias PhoenixReplay.Collector
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.Event
+  alias PhoenixReplay.Web.Format
 
   @typedoc "What the event list filters by."
   @type kind :: String.t()
@@ -28,6 +29,104 @@ defmodule PhoenixReplay.Web.Player.Events do
     |> Enum.uniq()
     |> Enum.sort_by(&(&1 != "liveview"))
   end
+
+  @typedoc "An event with its index in the recording."
+  @type indexed :: {Event.t(), non_neg_integer()}
+
+  # Events that start an interaction; the rest follow the one before them.
+  @starts [:mount, :event, :params, :info]
+
+  @doc """
+  Groups events into interactions: a mount, user event, navigation or
+  message, followed by the renders, component updates and collected events
+  it caused.
+  """
+  @spec interactions([Event.t()]) :: [{indexed(), [indexed()]}]
+  def interactions(events) do
+    events
+    |> Enum.with_index()
+    |> Enum.chunk_while(nil, &interaction/2, &close_interaction/1)
+  end
+
+  defp interaction({%Event{type: type}, _index} = item, acc) when type in @starts do
+    case acc do
+      nil -> {:cont, {item, []}}
+      acc -> {:cont, close(acc), {item, []}}
+    end
+  end
+
+  defp interaction(item, nil), do: {:cont, {item, []}}
+  defp interaction(item, {head, rows}), do: {:cont, {head, [item | rows]}}
+
+  defp close_interaction(nil), do: {:cont, nil}
+  defp close_interaction(acc), do: {:cont, close(acc), nil}
+
+  defp close({head, rows}), do: {head, Enum.reverse(rows)}
+
+  @doc "The events of each kind in a recording, as timeline lanes."
+  @spec lanes(Recording.t()) :: [{kind(), [indexed()]}]
+  def lanes(%Recording{events: events} = recording) do
+    indexed = Enum.with_index(events)
+
+    for kind <- kinds(recording),
+        do: {kind, Enum.filter(indexed, &(kind(elem(&1, 0).type) == kind))}
+  end
+
+  @doc "How many events of each kind a recording has."
+  @spec kind_counts(Recording.t()) :: %{kind() => non_neg_integer()}
+  def kind_counts(%Recording{events: events}), do: Enum.frequencies_by(events, &kind(&1.type))
+
+  @doc "The colour class of a kind's swatch."
+  @spec kind_class(kind()) :: String.t()
+  def kind_class("liveview"), do: "bg-kind-event"
+  def kind_class("telemetry"), do: "bg-kind-query"
+  def kind_class("logs"), do: "bg-kind-log"
+
+  @doc "The index of the first event that reports an error, or `nil`."
+  @spec first_error_index(Recording.t()) :: non_neg_integer() | nil
+  def first_error_index(%Recording{events: events}), do: Enum.find_index(events, &Event.error?/1)
+
+  @doc "The assigns an event set, which the state view marks as changed."
+  @spec changed_keys(Event.t() | nil) :: [atom()]
+  def changed_keys(%Event{type: type, data: %{assigns: assigns}}) when type in [:mount, :render],
+    do: Map.keys(assigns)
+
+  def changed_keys(_event), do: []
+
+  @doc "Whether an event's label contains `query`, ignoring case."
+  @spec matches?(Event.t(), String.t()) :: boolean()
+  def matches?(_event, ""), do: true
+
+  def matches?(event, query),
+    do: event |> label() |> String.downcase() |> String.contains?(String.downcase(query))
+
+  @doc """
+  Name–value pairs describing a collected event or an exit, shown when it
+  is selected. Other events describe themselves through the assigns.
+  """
+  @spec details(Event.t()) :: [{String.t(), String.t()}]
+  def details(%Event{type: :telemetry, data: data} = event) do
+    [
+      {"Event", Collector.name(data.event)},
+      data.summary && {"Summary", data.summary},
+      (duration = Event.duration(event)) && {"Duration", Format.milliseconds(duration)},
+      data.error && {"Error", data.error},
+      data.metadata != %{} && {"Metadata", inspect(data.metadata, pretty: true, limit: 50)}
+    ]
+    |> Enum.filter(& &1)
+  end
+
+  def details(%Event{type: :log, data: data}) do
+    [
+      {"Level", to_string(data.level)},
+      {"Message", data.message},
+      data.metadata != %{} && {"Metadata", inspect(data.metadata, pretty: true, limit: 50)}
+    ]
+    |> Enum.filter(& &1)
+  end
+
+  def details(%Event{type: :exit, data: %{reason: reason}}), do: [{"Reason", reason}]
+  def details(%Event{}), do: []
 
   @doc "A kind's name in the filter."
   @spec kind_label(kind()) :: String.t()

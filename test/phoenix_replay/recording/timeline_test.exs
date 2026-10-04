@@ -50,4 +50,18 @@ defmodule PhoenixReplay.Recording.TimelineTest do
     assert Timeline.viewport_at(recording, 2) == vp.(800)
     assert Timeline.viewport_at(recording([]), 0) == nil
   end
+
+  test "url_at/2 follows navigation from the URL the session started on" do
+    recording = %{
+      recording([
+        %Event{at: 0, type: :mount, data: %{assigns: %{}}},
+        %Event{at: 1, type: :params, data: %{params: %{}, uri: "http://x/b"}},
+        %Event{at: 2, type: :event, data: %{name: "x", params: %{}}}
+      ])
+      | url: "http://x/a"
+    }
+
+    assert Timeline.url_at(recording, 0) == "http://x/a"
+    assert Timeline.url_at(recording, 2) == "http://x/b"
+  end
 end

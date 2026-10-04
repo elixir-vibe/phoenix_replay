@@ -189,6 +189,13 @@ defmodule ExampleWeb.Features.ReplayTest do
     conn = conn |> click_button("Next event")
     conn = conn |> click_button("Next event")
 
+    # Tabs and segmented controls send their button's value
+    conn = conn |> PhoenixTest.Playwright.click("[role='tab']", "State")
+    conn = conn |> assert_has("#replay-assigns")
+    conn = conn |> PhoenixTest.Playwright.click("[role='tab']", "Events")
+    conn = conn |> click_button("2×")
+    conn = conn |> assert_has("button[aria-pressed='true']", text: "2×")
+
     # Play briefly, then pause
     conn = conn |> PhoenixTest.Playwright.click("button[aria-label='Play']")
     Process.sleep(1500)

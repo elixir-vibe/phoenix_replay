@@ -58,4 +58,77 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
     assert Events.marker_class(error) == "size-2 bg-error"
     assert Events.marker_class(%Event{at: 0, type: :params}) == "size-1.5 bg-kind-nav"
   end
+
+  defp event(at, type, data), do: %Event{at: at, type: type, data: data}
+
+  test "groups events into interactions led by mounts, events, navigation and messages" do
+    events = [
+      mount = event(0, :mount, %{assigns: %{}}),
+      render = event(1, :render, %{assigns: %{a: 1}}),
+      click = event(2, :event, %{name: "save", params: %{}}),
+      query = event(3, :telemetry, %{event: [:repo, :query], summary: "SELECT 1", error: nil}),
+      info = event(4, :info, %{tag: :tick})
+    ]
+
+    assert Events.interactions(events) == [
+             {{mount, 0}, [{render, 1}]},
+             {{click, 2}, [{query, 3}]},
+             {{info, 4}, []}
+           ]
+
+    # Events before the first leader start a group of their own.
+    assert Events.interactions([render, click]) == [{{render, 0}, []}, {{click, 1}, []}]
+    assert Events.interactions([]) == []
+  end
+
+  test "describes kinds, lanes, the first error and what an event changed" do
+    log = event(2, :log, %{level: :error, message: "boom", metadata: %{}})
+
+    recording = %Recording{
+      id: "r",
+      view: View,
+      connected_at: 0,
+      events: [
+        event(0, :mount, %{assigns: %{a: 1, b: 2}}),
+        event(1, :render, %{assigns: %{b: 3}}),
+        log
+      ]
+    }
+
+    assert Events.kind_counts(recording) == %{"liveview" => 2, "logs" => 1}
+    assert [{"liveview", [_mount, _render]}, {"logs", [{^log, 2}]}] = Events.lanes(recording)
+    assert Events.first_error_index(recording) == 2
+    assert Events.first_error_index(%{recording | events: []}) == nil
+    assert Events.changed_keys(Enum.at(recording.events, 1)) == [:b]
+    assert Events.changed_keys(log) == []
+    assert Events.changed_keys(nil) == []
+    assert Events.kind_class("logs") == "bg-kind-log"
+  end
+
+  test "matches labels and describes collected events" do
+    log = event(0, :log, %{level: :error, message: "Sync failed", metadata: %{}})
+    assert Events.matches?(log, "")
+    assert Events.matches?(log, "sync FAILED")
+    refute Events.matches?(log, "select")
+    assert Events.details(log) == [{"Level", "error"}, {"Message", "Sync failed"}]
+
+    query =
+      event(1, :telemetry, %{
+        event: [:repo, :query],
+        summary: "SELECT 1",
+        measurements: %{duration: 1.5},
+        metadata: %{},
+        error: "timeout"
+      })
+
+    assert Events.details(query) == [
+             {"Event", "repo.query"},
+             {"Summary", "SELECT 1"},
+             {"Duration", "1.50 ms"},
+             {"Error", "timeout"}
+           ]
+
+    assert Events.details(event(2, :exit, %{reason: "boom"})) == [{"Reason", "boom"}]
+    assert Events.details(event(3, :mount, %{assigns: %{}})) == []
+  end
 end

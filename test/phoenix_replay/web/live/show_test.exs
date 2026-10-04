@@ -5,6 +5,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Config, Storage}
+  alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
   alias PhoenixReplay.Web.Playback
@@ -19,6 +20,8 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   end
 
   defp assigns(view), do: :sys.get_state(view.pid).socket.assigns
+
+  defp open_tab(view, name), do: view |> element(~s(button[role="tab"]), name) |> render_click()
 
   # Buffers a running session whose URL the redactor masks.
   defp buffer_live(id) do
@@ -48,6 +51,48 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assigns(view)
   end
 
+  test "opens at a linked moment and links to the current one" do
+    {:ok, view, _html} = live(build_conn(), "/replay/show?at=4")
+    assert assigns(view).index == 4
+    assert has_element?(view, ~s(button[data-copy="/replay/show?at=4"]), "Copy link to 0:02")
+
+    render_click(view, "next")
+    assert has_element?(view, ~s(button[data-copy="/replay/show?at=5"]))
+  end
+
+  test "groups events by interaction, filters them and marks what changed" do
+    {:ok, view, _html} = live(build_conn(), "/replay/show")
+
+    # mount leads with its render; each click leads with its render.
+    assert has_element?(view, "#replay-events > li:nth-child(1) li", "assigns count")
+    assert has_element?(view, "#replay-events > li:nth-child(2) > button", "inc")
+
+    nested =
+      view |> render() |> LazyHTML.from_document() |> LazyHTML.query("#replay-events li li")
+
+    assert Enum.count(nested) == 3
+
+    view |> element("#replay-event-search") |> render_change(%{"q" => "nothing"})
+    assert has_element?(view, "#replay-events li", "No events match.")
+    view |> element("#replay-event-search") |> render_change(%{"q" => ""})
+
+    open_tab(view, "State")
+    assert has_element?(view, "#replay-assigns summary.bg-accent-soft", "count")
+  end
+
+  test "jumps to the first error" do
+    recording = Fixtures.counter_recording(id: "failing")
+    error = %Event{at: 1500, type: :log, data: %{level: :error, message: "boom", metadata: %{}}}
+    events = List.insert_at(recording.events, 4, error)
+    Storage.save(Fixtures.storage(), %{recording | events: events})
+
+    {:ok, view, _html} = live(build_conn(), "/replay/failing")
+    view |> element("button", "1 error · jump to first") |> render_click()
+
+    assert assigns(view).index == 4
+    assert has_element?(view, "#replay-events dd", "boom")
+  end
+
   test "starts at the first render and steps through events" do
     {:ok, view, html} = live(build_conn(), "/replay/show")
 
@@ -63,7 +108,8 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     render_hook(view, "seek", %{"index" => 5})
     assert assigns(view).index == 5
-    assert render(view) =~ "count: 2"
+    assert open_tab(view, "State") =~ "count"
+    assert has_element?(view, "#replay-assigns summary", "2")
   end
 
   test "redacts a live session before showing it, and hands it to the frame" do
@@ -117,7 +163,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     Storage.save(Fixtures.storage(), %{recording | events: events})
     {:ok, view, _html} = live(build_conn(), "/replay/hours")
-    render_change(view, "speed", %{"speed" => "10"})
+    view |> element(~s(button[value="10"])) |> render_click()
     render_click(view, "toggle")
 
     # Every event is an hour apart; at 10x the next one is due in six minutes.
@@ -175,9 +221,10 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
                ~s(#replay-viewport[data-width="390"][data-height="844"][data-mode="fit"])
              )
 
-      view |> element(~s(button[phx-value-value="actual"])) |> render_click()
+      view |> element(~s(button[value="actual"])) |> render_click()
       assert has_element?(view, ~s(#replay-viewport[data-mode="actual"]))
-      assert has_element?(view, ~s(button[phx-value-value="actual"][aria-pressed="true"]))
+      assert has_element?(view, ~s(button[value="actual"][aria-pressed="true"]))
+      open_tab(view, "Visit")
       device = view |> element("#replay-device") |> render()
       assert device =~ "390 × 844 @3x"
       assert device =~ "· Safari on iOS"
@@ -199,6 +246,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
       Storage.save(Fixtures.storage(), %{recording | client: client})
       {:ok, view, _html} = live(build_conn(), "/replay/visit")
+      open_tab(view, "Visit")
 
       visit = view |> element("#replay-visit") |> render()
       assert visit =~ "google / cpc"
@@ -214,9 +262,9 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
         Storage.save(Fixtures.storage(), %{recording | client: client(nil, "tab-9", referer)})
       end
 
-      {:ok, view, html} = live(build_conn(), "/replay/second")
+      {:ok, view, _html} = live(build_conn(), "/replay/second")
 
-      assert html =~ "Came from"
+      assert open_tab(view, "Visit") =~ "Came from"
       assert view |> element("#replay-journey") |> render() =~ "Session 2 of 3 in this tab"
       assert has_element?(view, ~s(#replay-journey a[href="/replay/first"]), "Previous")
       assert has_element?(view, ~s(#replay-journey a[href="/replay/third"]), "Next")

@@ -60,19 +60,29 @@ defmodule PhoenixReplay.Web.Components.Core do
     """
   end
 
+  @icon_button_sizes %{
+    "md" => "size-8 rounded-md pointer-coarse:size-11",
+    "lg" => "size-11 rounded-full"
+  }
+
   @doc """
   A square button showing only an icon. `label` names it for assistive
   technology and as a tooltip.
   """
   attr :label, :string, required: true
-  attr :variant, :string, values: ~w(secondary ghost), default: "secondary"
+  attr :variant, :string, values: ~w(primary secondary ghost), default: "secondary"
+  attr :size, :string, values: ~w(md lg), default: "md", doc: "`lg` is round, for main controls"
   attr :class, :any, default: nil
   attr :rest, :global, include: ~w(disabled)
   slot :inner_block, required: true
 
   @spec icon_button(map()) :: Phoenix.LiveView.Rendered.t()
   def icon_button(assigns) do
-    assigns = assign(assigns, :variant_class, @button_variants[assigns.variant])
+    assigns =
+      assign(assigns,
+        variant_class: @button_variants[assigns.variant],
+        size_class: @icon_button_sizes[assigns.size]
+      )
 
     ~H"""
     <button
@@ -80,9 +90,10 @@ defmodule PhoenixReplay.Web.Components.Core do
       aria-label={@label}
       title={@label}
       class={[
-        "inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors pointer-coarse:size-11",
+        "inline-flex shrink-0 items-center justify-center border transition-colors",
         "disabled:pointer-events-none disabled:opacity-40",
         @variant_class,
+        @size_class,
         @class
       ]}
       {@rest}
@@ -153,7 +164,8 @@ defmodule PhoenixReplay.Web.Components.Core do
 
   @doc """
   A row of mutually exclusive options. Clicking one sends `event` with the
-  option's value as `value`.
+  option's value as `value`, from the button's own `value`: LiveView sends a
+  clicked button's value under that key, over any `phx-value-value`.
   """
   attr :label, :string, required: true, doc: "names the group for assistive technology"
   attr :options, :list, required: true, doc: "`{value, label}` pairs"
@@ -172,12 +184,46 @@ defmodule PhoenixReplay.Web.Components.Core do
         :for={{value, label} <- @options}
         type="button"
         phx-click={@event}
-        phx-value-value={value}
+        value={value}
         aria-pressed={to_string(value == @value)}
         class={[
           "h-7 px-2.5 transition-colors pointer-coarse:h-11",
           value == @value && "bg-ink text-on-ink",
           value != @value && "text-muted hover:bg-hover hover:text-ink"
+        ]}
+      >
+        {label}
+      </button>
+    </div>
+    """
+  end
+
+  @doc """
+  Tabs that switch a panel. Clicking one sends `event` with the tab's value
+  as `value`; the panel is the caller's, with `id` plus `-panel`.
+  """
+  attr :id, :string, required: true
+  attr :label, :string, required: true, doc: "names the tabs for assistive technology"
+  attr :tabs, :list, required: true, doc: "`{value, label}` pairs"
+  attr :value, :string, required: true
+  attr :event, :string, required: true
+
+  @spec tabs(map()) :: Phoenix.LiveView.Rendered.t()
+  def tabs(assigns) do
+    ~H"""
+    <div id={@id} role="tablist" aria-label={@label} class="flex gap-1 border-b border-line px-3 pt-2">
+      <button
+        :for={{value, label} <- @tabs}
+        type="button"
+        role="tab"
+        aria-selected={to_string(value == @value)}
+        aria-controls={"#{@id}-panel"}
+        phx-click={@event}
+        value={value}
+        class={[
+          "-mb-px h-10 border-b-2 px-3 text-sm font-medium transition-colors pointer-coarse:h-11",
+          value == @value && "border-accent text-ink",
+          value != @value && "border-transparent text-muted hover:text-ink"
         ]}
       >
         {label}
@@ -394,7 +440,7 @@ defmodule PhoenixReplay.Web.Components.Core do
     >
       <%= for item <- @item do %>
         <dt class="text-muted">{item.title}</dt>
-        <dd class="break-all text-ink">{render_slot(item)}</dd>
+        <dd class="break-all whitespace-pre-wrap text-ink">{render_slot(item)}</dd>
       <% end %>
     </dl>
     """
