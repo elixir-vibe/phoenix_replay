@@ -143,8 +143,8 @@ if Code.ensure_loaded?(Ecto.Query) do
         filter.query &&
           dynamic(
             [r],
-            fragment("lower(?) LIKE ? ESCAPE '\\'", r.id, ^pattern(filter.query)) or
-              fragment("lower(coalesce(?, '')) LIKE ? ESCAPE '\\'", r.url, ^pattern(filter.query))
+            fragment("lower(?) LIKE ? ESCAPE '!'", r.id, ^pattern(filter.query)) or
+              fragment("lower(?) LIKE ? ESCAPE '!'", r.url, ^pattern(filter.query))
           ),
         filter.view && dynamic([r], r.view == ^filter.view),
         (after_ms = Filter.started_after(filter, now)) &&
@@ -159,9 +159,12 @@ if Code.ensure_loaded?(Ecto.Query) do
       |> Enum.reduce(from(r in @table), &where(&2, ^&1))
     end
 
-    # Matches text anywhere, taking %, _ and \ in it literally.
+    # Matches text anywhere, taking % and _ in it literally. Ecto's like/2
+    # takes no ESCAPE clause and ilike/2 is Postgres-only, so this is the
+    # one fragment; "!" escapes the same way in every SQL dialect, unlike a
+    # backslash, which MySQL reads as an escape inside the literal itself.
     defp pattern(text) do
-      "%" <> String.replace(String.downcase(text), ["\\", "%", "_"], &("\\" <> &1)) <> "%"
+      "%" <> String.replace(String.downcase(text), ["!", "%", "_"], &("!" <> &1)) <> "%"
     end
 
     # Event names of the most recent recordings only: they are stored encoded.
