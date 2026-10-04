@@ -10,6 +10,16 @@ defmodule PhoenixReplay.Web.FormatTest do
     assert Format.timestamp(0) == "1970-01-01 00:00:00"
   end
 
+  test "says how long ago a time was" do
+    now = 1_800_000_000_000
+    assert Format.relative(now - 12_000, now) == "12 s ago"
+    assert Format.relative(now - 5 * 60_000, now) == "5 min ago"
+    assert Format.relative(now - 11 * 3_600_000, now) == "11 h ago"
+    assert Format.relative(now - 30 * 3_600_000, now) == "Yesterday"
+    assert Format.relative(now - 6 * 86_400_000, now) == "Jan 9"
+    assert Format.relative(now + 5_000, now) == "0 s ago"
+  end
+
   test "formats durations and counts" do
     assert Format.milliseconds(0.4213) == "0.42 ms"
     assert Format.milliseconds(42.6) == "43 ms"

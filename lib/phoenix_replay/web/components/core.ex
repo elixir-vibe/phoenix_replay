@@ -13,6 +13,8 @@ defmodule PhoenixReplay.Web.Components.Core do
 
   use Phoenix.Component
 
+  alias Phoenix.LiveView.JS
+
   @button_variants %{
     "primary" => "border-transparent bg-ink text-on-ink hover:bg-ink/85",
     "secondary" => "border-line bg-surface text-ink hover:bg-hover",
@@ -217,6 +219,100 @@ defmodule PhoenixReplay.Web.Components.Core do
       </div>
     </section>
     """
+  end
+
+  @doc """
+  The bar across the top of a page: a mark, a trail of titles and actions.
+  """
+  attr :rest, :global
+  slot :mark, required: true
+  slot :crumb, required: true
+  slot :actions
+
+  @spec app_bar(map()) :: Phoenix.LiveView.Rendered.t()
+  def app_bar(assigns) do
+    ~H"""
+    <header class="border-b border-line bg-surface" {@rest}>
+      <div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
+        {render_slot(@mark)}
+        <%= for {crumb, index} <- Enum.with_index(@crumb) do %>
+          <span :if={index > 0} class="text-faint" aria-hidden="true">/</span>
+          <span class={["truncate", index == 0 && "font-semibold", index > 0 && "text-muted"]}>
+            {render_slot(crumb)}
+          </span>
+        <% end %>
+        <span class="flex-1"></span>
+        {render_slot(@actions)}
+      </div>
+    </header>
+    """
+  end
+
+  @doc """
+  A button that opens a short list of actions, closed again by a click
+  elsewhere or Escape. `label` names the button.
+  """
+  attr :id, :string, required: true
+  attr :label, :string, required: true
+  slot :trigger, required: true
+
+  slot :item, required: true do
+    attr :tone, :string, values: ~w(default danger)
+  end
+
+  @spec menu(map()) :: Phoenix.LiveView.Rendered.t()
+  def menu(assigns) do
+    ~H"""
+    <div class="relative">
+      <button
+        id={"#{@id}-button"}
+        type="button"
+        aria-label={@label}
+        title={@label}
+        aria-haspopup="menu"
+        aria-expanded="false"
+        aria-controls={"#{@id}-items"}
+        phx-click={toggle_menu(@id)}
+        class="inline-flex size-9 items-center justify-center rounded-md border border-line text-muted transition-colors hover:bg-hover hover:text-ink pointer-coarse:size-11"
+      >
+        {render_slot(@trigger)}
+      </button>
+      <div
+        id={"#{@id}-items"}
+        role="menu"
+        aria-labelledby={"#{@id}-button"}
+        phx-click-away={close_menu(@id)}
+        phx-window-keydown={close_menu(@id)}
+        phx-key="Escape"
+        class="absolute right-0 z-20 mt-1 hidden min-w-48 rounded-lg border border-line bg-surface p-1 shadow-lg"
+      >
+        <div
+          :for={item <- @item}
+          role="none"
+          phx-click={close_menu(@id)}
+          class={[
+            "rounded-md text-sm [&>*]:flex [&>*]:w-full [&>*]:items-center [&>*]:gap-2 [&>*]:px-3 [&>*]:py-2 [&>*]:text-left pointer-coarse:[&>*]:py-3",
+            item[:tone] == "danger" && "text-error hover:bg-error-soft",
+            item[:tone] != "danger" && "text-ink hover:bg-hover"
+          ]}
+        >
+          {render_slot(item)}
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp toggle_menu(id) do
+    %JS{}
+    |> JS.toggle(to: "##{id}-items")
+    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "##{id}-button")
+  end
+
+  defp close_menu(id) do
+    %JS{}
+    |> JS.hide(to: "##{id}-items")
+    |> JS.set_attribute({"aria-expanded", "false"}, to: "##{id}-button")
   end
 
   @doc "Shows a flash message of `kind`, if there is one."

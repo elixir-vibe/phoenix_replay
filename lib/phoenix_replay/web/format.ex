@@ -30,6 +30,24 @@ defmodule PhoenixReplay.Web.Format do
     unix_ms |> DateTime.from_unix!(:millisecond) |> Calendar.strftime("%Y-%m-%d %H:%M:%S")
   end
 
+  @doc """
+  Describes how long before `now` a Unix millisecond timestamp was, such as
+  `"12 s ago"`, `"5 min ago"`, `"11 h ago"` or `"Yesterday"`. Older times
+  are dates, such as `"Sep 28"`.
+  """
+  @spec relative(integer(), integer()) :: String.t()
+  def relative(unix_ms, now) do
+    seconds = max(div(now - unix_ms, 1000), 0)
+
+    cond do
+      seconds < 60 -> "#{seconds} s ago"
+      seconds < 3600 -> "#{div(seconds, 60)} min ago"
+      seconds < 86_400 -> "#{div(seconds, 3600)} h ago"
+      seconds < 172_800 -> "Yesterday"
+      true -> unix_ms |> DateTime.from_unix!(:millisecond) |> Calendar.strftime("%b %-d")
+    end
+  end
+
   @doc "Formats a duration in milliseconds as `0.42 ms`, `12 ms` or `1.5 s`."
   @spec milliseconds(number()) :: String.t()
   def milliseconds(ms) when ms < 10, do: "#{:erlang.float_to_binary(ms / 1, decimals: 2)} ms"

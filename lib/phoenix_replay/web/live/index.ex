@@ -10,7 +10,7 @@ defmodule PhoenixReplay.Web.Live.Index do
   use Phoenix.LiveView
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.Core
+  import PhoenixReplay.Web.Components.{Core, Recordings}
 
   alias PhoenixReplay.Recordings
   alias PhoenixReplay.Recordings.Filter
@@ -50,7 +50,7 @@ defmodule PhoenixReplay.Web.Live.Index do
 
   @impl true
   def handle_event("delete", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.recordings, &(&1.id == id and not &1.live?)) do
+    case Enum.find(socket.assigns.saved, &(&1.id == id)) do
       nil -> {:noreply, socket}
       summary -> {:noreply, perform(socket, :delete, summary, &Recordings.delete(&1, id))}
     end
@@ -84,7 +84,8 @@ defmodule PhoenixReplay.Web.Live.Index do
       |> Recordings.list()
       |> Enum.filter(&Context.allowed?(socket, :list, &1))
 
-    summaries = Filter.apply(all, socket.assigns.filter, System.system_time(:millisecond))
+    now = System.system_time(:millisecond)
+    summaries = Filter.apply(all, socket.assigns.filter, now)
     total = length(summaries)
     total_pages = max(1, ceil(total / @per_page))
     page = min(socket.assigns.page, total_pages)
@@ -96,7 +97,14 @@ defmodule PhoenixReplay.Web.Live.Index do
       total_pages: total_pages,
       total: total,
       any?: all != [],
-      recordings: recordings,
+      now: now,
+      live: Enum.filter(recordings, & &1.live?),
+      saved: Enum.reject(recordings, & &1.live?),
+      counts: %{
+        all: length(all),
+        live: Enum.count(all, & &1.live?),
+        errors: Enum.count(all, &(&1.error_count > 0))
+      },
       views: all |> Enum.map(& &1.view) |> Enum.uniq() |> Enum.sort(),
       event_names: all |> Enum.flat_map(& &1.event_names) |> Enum.uniq() |> Enum.sort(),
       can_clear?: all != [] and Context.allowed?(socket, :clear, nil)
@@ -126,98 +134,40 @@ defmodule PhoenixReplay.Web.Live.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <main class="mx-auto max-w-4xl px-4 py-8">
+    <.app_bar>
+      <:mark><.icon name="lucide:circle-play" class="size-5 text-accent" /></:mark>
+      <:crumb>PhoenixReplay</:crumb>
+      <:crumb>Recordings</:crumb>
+      <:actions>
+        <a
+          href="https://hexdocs.pm/phoenix_replay"
+          class="hidden rounded-md px-2.5 py-2 text-sm text-muted hover:text-ink sm:block"
+        >
+          Docs
+        </a>
+        <.menu :if={@can_clear?} id="recordings-menu" label="More actions">
+          <:trigger><.icon name="lucide:ellipsis" class="size-4" /></:trigger>
+          <:item tone="danger">
+            <button type="button" phx-click="clear" data-confirm="Delete every recording?">
+              <.icon name="lucide:trash-2" class="size-4" /> Delete all recordings
+            </button>
+          </:item>
+        </.menu>
+      </:actions>
+    </.app_bar>
+
+    <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <.flash flash={@flash} />
-      <header class="mb-8 flex items-center justify-between">
-        <h1 class="flex items-center gap-2 text-2xl font-semibold">
-          <.icon name="lucide:circle-play" class="size-6 text-accent" /> PhoenixReplay
-        </h1>
-        <div class="flex items-center gap-3 text-sm text-muted">
-          {Format.count(@total, "recording")}
-          <.button
-            :if={@can_clear?}
-            variant="danger"
-            phx-click="clear"
-            data-confirm="Delete every recording?"
-          >
-            Clear all
-          </.button>
-        </div>
+      <header class="mb-5">
+        <h1 class="text-2xl font-semibold tracking-tight">Recordings</h1>
+        <p :if={@any?} class="mt-1.5 text-sm text-muted">
+          {Format.count(@counts.all, "session")} · {@counts.live} live · {@counts.errors} with errors
+        </p>
       </header>
 
-      <form
-        :if={@any?}
-        id="recording-filter"
-        phx-change="filter"
-        phx-submit="filter"
-        class="mb-6 grid grid-cols-2 gap-2 text-sm sm:grid-cols-7"
-      >
-        <input
-          type="search"
-          name="q"
-          value={@filter.query}
-          placeholder="URL or id"
-          aria-label="Search by URL or id"
-          phx-debounce="300"
-          class="col-span-2 rounded-md border border-line bg-surface px-3 py-1.5 placeholder:text-faint"
-        />
-        <select
-          name="view"
-          aria-label="View"
-          class="rounded-md border border-line bg-surface px-2 py-1.5"
-        >
-          <option value="">All views</option>
-          <option :for={view <- @views} value={view} selected={view == @filter.view}>{view}</option>
-        </select>
-        <input
-          type="text"
-          name="event"
-          value={@filter.event}
-          list="recording-filter-events"
-          placeholder="Event name"
-          aria-label="Triggered event"
-          phx-debounce="300"
-          class="rounded-md border border-line bg-surface px-3 py-1.5 placeholder:text-faint"
-        />
-        <datalist id="recording-filter-events">
-          <option :for={name <- @event_names} value={name} />
-        </datalist>
-        <select
-          name="within"
-          aria-label="Started within"
-          class="rounded-md border border-line bg-surface px-2 py-1.5"
-        >
-          <option value="">Any time</option>
-          <option
-            :for={window <- Filter.windows()}
-            value={window}
-            selected={window == @filter.within}
-          >
-            Last {window}
-          </option>
-        </select>
-        <input
-          type="number"
-          name="min_events"
-          min="1"
-          value={@filter.min_events}
-          placeholder="Min events"
-          aria-label="Minimum events"
-          phx-debounce="300"
-          class="rounded-md border border-line bg-surface px-3 py-1.5 placeholder:text-faint"
-        />
-        <label class="flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-1.5">
-          <input
-            type="checkbox"
-            name="errors"
-            value="1"
-            checked={@filter.errors}
-            class="accent-accent"
-          /> Errors
-        </label>
-      </form>
+      <.filter_bar :if={@any?} filter={@filter} views={@views} event_names={@event_names} />
 
-      <.empty_state :if={@any? and @recordings == []} title="No recordings match these filters.">
+      <.empty_state :if={@any? and @total == 0} title="No recordings match these filters.">
         <:icon><.icon name="lucide:search-x" class="size-8" /></:icon>
         <:action>
           <.link
@@ -236,53 +186,21 @@ defmodule PhoenixReplay.Web.Live.Index do
         and use your app.
       </.empty_state>
 
-      <ul class="space-y-3">
-        <li
-          :for={recording <- @recordings}
-          id={"recording-#{recording.id}"}
-          class="flex items-center justify-between gap-4 rounded-lg border border-line bg-surface px-5 py-4 transition-shadow hover:shadow-md"
-        >
-          <div class="min-w-0">
-            <p class="flex items-center gap-2 font-medium">
-              <span class="truncate">{recording.view}</span>
-              <.badge :if={recording.live?} tone="live" dot="pulse">LIVE</.badge>
-            </p>
-            <p class="mt-1 flex flex-wrap items-center gap-x-1 text-sm text-muted tabular-nums">
-              {Format.timestamp(recording.connected_at)} · {Format.count(
-                recording.event_count,
-                "event"
-              )} · {Format.duration(recording.duration_ms)}
-              <span :if={recording.error_count > 0} class="text-error">
-                · {Format.count(recording.error_count, "error")}
-              </span>
-            </p>
-          </div>
-          <div class="flex shrink-0 items-center gap-3">
-            <code class="font-mono text-sm text-faint">{String.slice(recording.id, 0, 8)}</code>
-            <.link
-              navigate={Context.path(@context, [recording.id])}
-              class="inline-flex h-8 items-center rounded-md border border-line px-2.5 text-xs font-medium hover:bg-hover"
-            >
-              Open
-            </.link>
-            <.button
-              :if={!recording.live?}
-              variant="danger"
-              phx-click="delete"
-              phx-value-id={recording.id}
-              data-confirm="Delete this recording?"
-            >
-              Delete
-            </.button>
-          </div>
-        </li>
-      </ul>
-
-      <.pagination
-        page={@page}
-        total_pages={@total_pages}
-        path={&index_path(@context, @filter, &1)}
+      <.recording_list live recordings={@live} now={@now} path={&Context.path(@context, [&1.id])} />
+      <.recording_list
+        recordings={@saved}
+        now={@now}
+        path={&Context.path(@context, [&1.id])}
+        delete="delete"
       />
+
+      <div class="mt-6">
+        <.pagination
+          page={@page}
+          total_pages={@total_pages}
+          path={&index_path(@context, @filter, &1)}
+        />
+      </div>
     </main>
     """
   end
