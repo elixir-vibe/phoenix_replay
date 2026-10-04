@@ -31,33 +31,18 @@ MySQL is not supported: saving a recording upserts it on its `id`, and Ecto cann
 config :phoenix_replay, storage: {PhoenixReplay.Storage.Ecto, repo: MyApp.Repo}
 ```
 
-Create the table with a migration:
+Create the table with a migration that calls `PhoenixReplay.Storage.Ecto.Migration`:
 
 ```elixir
-defmodule MyApp.Repo.Migrations.CreatePhoenixReplayRecordings do
+defmodule MyApp.Repo.Migrations.AddPhoenixReplay do
   use Ecto.Migration
 
-  def change do
-    create table(:phoenix_replay_recordings, primary_key: false) do
-      add :id, :string, primary_key: true
-      add :view, :string, null: false
-      add :url, :text
-      add :connected_at, :bigint, null: false
-      add :event_count, :integer, null: false
-      add :duration_ms, :integer, null: false
-      add :error_count, :integer, null: false, default: 0
-      add :tab, :string
-      add :viewport, :string
-      add :device, :string
-      add :source, :string
-      add :event_names, :binary, null: false
-      add :data, :binary, null: false
-    end
-
-    create index(:phoenix_replay_recordings, [:connected_at])
-  end
+  def up, do: PhoenixReplay.Storage.Ecto.Migration.up()
+  def down, do: PhoenixReplay.Storage.Ecto.Migration.down()
 end
 ```
+
+The table is versioned. When a release changes it, the changelog says so; add a migration that upgrades from the version you have, such as `up(from: 1)` for a table PhoenixReplay 0.4 created.
 
 The dashboard reads one page at a time in SQL, with a count for the total. Text search matches the URL and session id case-insensitively. Event names are stored encoded, so filtering by an event name checks the rows that match the other filters after reading them, and the names the filter suggests come from the 500 most recent recordings.
 

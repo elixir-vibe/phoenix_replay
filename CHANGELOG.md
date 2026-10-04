@@ -30,16 +30,11 @@
 
 - Internal modules are grouped by role: `PhoenixReplay.Capture.*` observes LiveViews, `PhoenixReplay.Session.*` follows a running recording until it is stored. `PhoenixReplay.Recorder` is only the `on_mount` hook. `PhoenixReplay.Retention` is now `PhoenixReplay.Recordings.Retention`; the `:retention` option is unchanged.
 - `[:phoenix_replay, :recording, :discarded]` metadata carries a `reason`: `:not_interactive` or `:not_sampled`.
-- `PhoenixReplay.Storage.Ecto` stores `error_count`, `tab`, `viewport`, `device` and `source`. Add the columns to existing tables:
+- `PhoenixReplay.Storage.Ecto` stores `error_count`, `tab`, `viewport`, `device` and `source`. The table now comes from `PhoenixReplay.Storage.Ecto.Migration`, which needs `ecto_sql`, now an optional dependency; upgrade one made by 0.4 with a new migration:
 
   ```elixir
-  alter table(:phoenix_replay_recordings) do
-    add :error_count, :integer, null: false, default: 0
-    add :tab, :string
-    add :viewport, :string
-    add :device, :string
-    add :source, :string
-  end
+  def up, do: PhoenixReplay.Storage.Ecto.Migration.up(from: 1)
+  def down, do: PhoenixReplay.Storage.Ecto.Migration.down(from: 1)
   ```
 
 ### Fixed

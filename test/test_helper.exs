@@ -1,7 +1,16 @@
 {:ok, _} = PhoenixReplay.Test.Endpoint.start_link()
-# The Ecto storage runs on SQLite always, on DuckDB too, and on Postgres
-# when PHOENIX_REPLAY_POSTGRES_URL names a database.
-exclude = if System.get_env("PHOENIX_REPLAY_POSTGRES_URL"), do: [], else: [:postgres]
+# The Ecto storage is tested on SQLite, on DuckDB where QuackDB is a
+# dependency, and on PostgreSQL when PHOENIX_REPLAY_POSTGRES_URL names one.
+repos = PhoenixReplay.Test.Repos.start()
+
+exclude =
+  for {tag, repo} <- [
+        postgres: PhoenixReplay.Test.PostgresRepo,
+        duckdb: PhoenixReplay.Test.DuckDBRepo
+      ],
+      repo not in repos,
+      do: tag
+
 ExUnit.start(exclude: exclude)
 
 # Dashboard TypeScript tests from priv/ts run as ExUnit tests: pure modules in

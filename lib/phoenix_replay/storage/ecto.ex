@@ -21,28 +21,14 @@ if Code.ensure_loaded?(Ecto.Query) do
 
     ## Migration
 
-        defmodule MyApp.Repo.Migrations.CreatePhoenixReplayRecordings do
+    Create the table with `PhoenixReplay.Storage.Ecto.Migration`, which also
+    upgrades tables made by earlier releases:
+
+        defmodule MyApp.Repo.Migrations.AddPhoenixReplay do
           use Ecto.Migration
 
-          def change do
-            create table(:phoenix_replay_recordings, primary_key: false) do
-              add :id, :string, primary_key: true
-              add :view, :string, null: false
-              add :url, :text
-              add :connected_at, :bigint, null: false
-              add :event_count, :integer, null: false
-              add :duration_ms, :integer, null: false
-              add :error_count, :integer, null: false, default: 0
-              add :tab, :string
-              add :viewport, :string
-              add :device, :string
-              add :source, :string
-              add :event_names, :binary, null: false
-              add :data, :binary, null: false
-            end
-
-            create index(:phoenix_replay_recordings, [:connected_at])
-          end
+          def up, do: PhoenixReplay.Storage.Ecto.Migration.up()
+          def down, do: PhoenixReplay.Storage.Ecto.Migration.down()
         end
     """
 

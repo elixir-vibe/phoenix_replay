@@ -49,6 +49,7 @@ infrastructure = [
   "PhoenixReplay.Session.Buffer",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",
+  "PhoenixReplay.Storage.Ecto.Migration",
   "PhoenixReplay.Storage.File",
   "PhoenixReplay.Telemetry"
 ]
