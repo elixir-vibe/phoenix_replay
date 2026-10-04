@@ -10,6 +10,7 @@ defmodule PhoenixReplay.MixProject do
       version: @version,
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
+      compilers: Mix.compilers() ++ [:phoenix_iconify],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
@@ -42,6 +43,7 @@ defmodule PhoenixReplay.MixProject do
       {:phoenix_live_view, "~> 1.1"},
       {:telemetry, "~> 1.0"},
       {:ex2ms, "~> 1.7"},
+      {:phoenix_iconify, "~> 0.3.7"},
       {:ecto, "~> 3.12", optional: true},
       {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
       {:ecto_sql, "~> 3.12", only: :test},
@@ -68,6 +70,9 @@ defmodule PhoenixReplay.MixProject do
         lib
         priv/static/dashboard.js
         priv/static/dashboard.css
+        priv/static/*.woff2
+        priv/fonts/LICENSE
+        priv/iconify/manifest.json
         priv/static/phoenix_replay.js
         priv/static/phoenix_replay.d.ts
         package.json

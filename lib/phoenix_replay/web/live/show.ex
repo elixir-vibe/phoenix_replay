@@ -21,11 +21,13 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   use Phoenix.LiveView
 
-  import PhoenixReplay.Web.Components
+  import PhoenixIconify, only: [icon: 1]
+  import PhoenixReplay.Web.Components.{Core, Player}
 
   alias PhoenixReplay.Recording.{Event, Timeline}
   alias PhoenixReplay.Recordings
-  alias PhoenixReplay.Web.{Context, Layouts, Playback}
+  alias PhoenixReplay.Web.{Context, Format, Layouts, Params, Playback}
+  alias PhoenixReplay.Web.Player.Events
 
   @speeds [1, 2, 5, 10]
   @progress_every 25
@@ -85,9 +87,9 @@ defmodule PhoenixReplay.Web.Live.Show do
       recording: recording,
       progress: nil,
       duration_ms: Timeline.duration_ms(recording),
-      kinds: kinds(recording),
-      error_count: Enum.count(recording.events, &Event.error?/1),
-      dropped: Enum.sum_by(recording.dropped, fn {_name, count} -> count end),
+      kinds: Events.kinds(recording),
+      error_count: Events.error_count(recording),
+      dropped: Events.dropped_count(recording),
       journey: journey(socket, recording)
     )
     |> hand_over()
@@ -124,7 +126,7 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   @impl true
   def handle_event("seek", %{"index" => index}, socket) do
-    {:noreply, socket |> pause() |> seek(parse_integer(index, socket.assigns.index))}
+    {:noreply, socket |> pause() |> seek(Params.integer(index, socket.assigns.index))}
   end
 
   def handle_event("previous", _params, socket) do
@@ -142,13 +144,13 @@ defmodule PhoenixReplay.Web.Live.Show do
   def handle_event("toggle", _params, socket), do: {:noreply, pause(socket)}
 
   def handle_event("speed", %{"speed" => speed}, socket) do
-    speed = parse_integer(speed, 1)
+    speed = Params.integer(speed, 1)
     speed = if speed in @speeds, do: speed, else: 1
     socket = assign(socket, :speed, speed)
     {:noreply, if(socket.assigns.playing, do: socket |> pause() |> play(), else: socket)}
   end
 
-  def handle_event("frame_mode", %{"mode" => mode}, socket) when mode in ~w(fit actual) do
+  def handle_event("frame_mode", %{"value" => mode}, socket) when mode in ~w(fit actual) do
     {:noreply, assign(socket, :frame_mode, mode)}
   end
 
@@ -249,20 +251,6 @@ defmodule PhoenixReplay.Web.Live.Show do
     end
   end
 
-  # Kinds present in the recording, shown as filters when there is more than one.
-  defp kinds(recording) do
-    recording.events
-    |> Enum.map(&event_kind(&1.type))
-    |> Enum.uniq()
-    |> Enum.sort_by(&(&1 != "liveview"))
-  end
-
-  defp collected?(%Event{type: type}), do: type in [:telemetry, :log]
-
-  defp kind_label("liveview"), do: "LiveView"
-  defp kind_label("telemetry"), do: "Telemetry"
-  defp kind_label("logs"), do: "Logs"
-
   defp redaction_label(nil), do: "Redacting the session before showing it…"
   defp redaction_label({_done, 0}), do: "Redacting the session before showing it…"
 
@@ -270,7 +258,7 @@ defmodule PhoenixReplay.Web.Live.Show do
     do: "Redacting the session before showing it… #{done} / #{total} events"
 
   defp redaction_percent({done, total}) when total > 0, do: Float.round(done / total * 100, 1)
-  defp redaction_percent(_progress), do: 0
+  defp redaction_percent(_progress), do: 0.0
 
   # The sessions of the recording's browser tab, oldest first, when it has more than one.
   defp journey(socket, %{id: id, client: %{tab: tab}}) when is_binary(tab) do
@@ -311,37 +299,30 @@ defmodule PhoenixReplay.Web.Live.Show do
     <div
       :if={@landing || @headers != %{}}
       id="replay-visit"
-      class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-500"
+      class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted"
     >
-      <span
-        :if={@landing && campaign_label(@landing.params)}
-        class="rounded-full bg-neutral-200/70 px-2 py-0.5 text-neutral-800"
-      >
-        {campaign_label(@landing.params)}
-      </span>
-      <span :if={@landing && referrer_host(@landing.referrer)} title={@landing.referrer}>
-        from {referrer_host(@landing.referrer)}
+      <.badge :if={@landing && Format.campaign(@landing.params)}>
+        {Format.campaign(@landing.params)}
+      </.badge>
+      <span :if={@landing && Format.referrer_host(@landing.referrer)} title={@landing.referrer}>
+        from {Format.referrer_host(@landing.referrer)}
       </span>
       <span :if={@landing}>
-        landed on <code class="font-mono text-neutral-600">{@landing.path}</code>
-        at {timestamp(@landing.at)}
+        landed on <code class="font-mono text-ink">{@landing.path}</code>
+        at {Format.timestamp(@landing.at)}
       </span>
       <details class="basis-full">
-        <summary class="cursor-pointer select-none hover:text-neutral-800">Visit details</summary>
-        <dl class="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 font-mono text-xs">
-          <%= for {name, value} <- Enum.sort(if(@landing, do: @landing.params, else: %{})) do %>
-            <dt class="text-neutral-500">{name}</dt>
-            <dd class="break-all text-neutral-800">{value}</dd>
-          <% end %>
-          <dt :if={@landing && @landing.referrer} class="text-neutral-500">referrer</dt>
-          <dd :if={@landing && @landing.referrer} class="break-all text-neutral-800">
-            {@landing.referrer}
-          </dd>
-          <%= for {name, value} <- Enum.sort(@headers) do %>
-            <dt class="text-neutral-500">{name}</dt>
-            <dd class="break-all text-neutral-800">{value}</dd>
-          <% end %>
-        </dl>
+        <summary class="cursor-pointer select-none hover:text-ink">Visit details</summary>
+        <.data_list class="mt-2">
+          <:item
+            :for={{name, value} <- Enum.sort(if(@landing, do: @landing.params, else: %{}))}
+            title={name}
+          >
+            {value}
+          </:item>
+          <:item :if={@landing && @landing.referrer} title="referrer">{@landing.referrer}</:item>
+          <:item :for={{name, value} <- Enum.sort(@headers)} title={name}>{value}</:item>
+        </.data_list>
       </details>
     </div>
     """
@@ -365,13 +346,13 @@ defmodule PhoenixReplay.Web.Live.Show do
       data-width={@viewport && @viewport.width}
       data-height={@viewport && @viewport.height}
       data-mode={@mode}
-      class="mb-4 overflow-hidden rounded-lg border border-neutral-200 bg-white"
+      class="mb-4 overflow-hidden rounded-lg border border-line bg-surface"
     >
       <style id="replay-viewport-style" phx-update="ignore">
       </style>
       <div
         :if={@viewport}
-        class="flex items-center gap-2 border-b border-neutral-100 px-3 py-1.5 text-xs text-neutral-500"
+        class="flex items-center gap-2 border-b border-line bg-chrome px-3 py-1.5 text-xs text-muted"
       >
         <span
           id="replay-viewport-scale"
@@ -380,28 +361,14 @@ defmodule PhoenixReplay.Web.Live.Show do
           class="font-mono tabular-nums"
         ></span>
         <span class="flex-1"></span>
-        <div
-          role="group"
-          aria-label="Frame size"
-          class="inline-flex overflow-hidden rounded-md border border-neutral-200"
-        >
-          <button
-            :for={{mode, label} <- [{"fit", "Fit"}, {"actual", "100%"}]}
-            type="button"
-            phx-click="frame_mode"
-            phx-value-mode={mode}
-            aria-pressed={to_string(mode == @mode)}
-            class={[
-              "px-2.5 py-1",
-              mode == @mode && "bg-neutral-900 text-white",
-              mode != @mode && "hover:bg-neutral-50"
-            ]}
-          >
-            {label}
-          </button>
-        </div>
+        <.segmented
+          label="Frame size"
+          options={[{"fit", "Fit"}, {"actual", "100%"}]}
+          value={@mode}
+          event="frame_mode"
+        />
       </div>
-      <div id="replay-viewport-box" class="bg-neutral-100">
+      <div id="replay-viewport-box" class="bg-canvas">
         <iframe
           id="replay-frame"
           title="Replay"
@@ -413,6 +380,19 @@ defmodule PhoenixReplay.Web.Live.Show do
     """
   end
 
+  attr :context, Context, required: true
+
+  defp back(assigns) do
+    ~H"""
+    <.link
+      navigate={Context.path(@context, [])}
+      class="inline-flex items-center gap-1 text-sm text-muted hover:text-ink"
+    >
+      <.icon name="lucide:arrow-left" class="size-4" /> Recordings
+    </.link>
+    """
+  end
+
   defp position(_at, 0), do: 0
   defp position(at, duration_ms), do: Float.round(at / duration_ms * 100, 3)
 
@@ -420,32 +400,21 @@ defmodule PhoenixReplay.Web.Live.Show do
   def render(%{recording: nil} = assigns) do
     ~H"""
     <main class="mx-auto max-w-6xl px-4 py-6">
-      <.flash_error flash={@flash} />
+      <.flash flash={@flash} />
       <header class="mb-4">
-        <.link
-          navigate={Context.path(@context, [])}
-          class="text-sm text-neutral-500 hover:text-neutral-800"
-        >
-          ← Recordings
-        </.link>
+        <.back context={@context} />
         <h1 class="mt-1 text-xl font-semibold">Live session</h1>
-        <p :if={@load_error?} role="alert" class="text-sm text-red-700">
+        <p :if={@load_error?} role="alert" class="text-sm text-error">
           Could not redact this session, so it is not shown.
         </p>
         <div
           :if={!@load_error?}
           id="replay-redaction"
           role="status"
-          class="mt-2 max-w-md text-sm text-neutral-500"
+          class="mt-2 max-w-md text-sm text-muted"
         >
-          <p>{redaction_label(@progress)}</p>
-          <div class="mt-2 h-1 rounded-full bg-neutral-200">
-            <div
-              class="h-1 rounded-full bg-neutral-900 transition-[width]"
-              style={"width: #{redaction_percent(@progress)}%"}
-            >
-            </div>
-          </div>
+          <p class="mb-2">{redaction_label(@progress)}</p>
+          <.progress label="Redaction" value={redaction_percent(@progress)} />
         </div>
       </header>
       <.frame :if={!@load_error?} context={@context} id={@id} channel={@channel} />
@@ -456,87 +425,85 @@ defmodule PhoenixReplay.Web.Live.Show do
   def render(assigns) do
     ~H"""
     <main class="mx-auto max-w-6xl px-4 py-6">
-      <.flash_error flash={@flash} />
+      <.flash flash={@flash} />
       <header class="mb-4">
         <div class="flex items-center justify-between gap-3">
-          <.link
-            navigate={Context.path(@context, [])}
-            class="text-sm text-neutral-500 hover:text-neutral-800"
-          >
-            ← Recordings
-          </.link>
+          <.back context={@context} />
           <.button variant="danger" phx-click="delete" data-confirm="Delete this recording?">
-            Delete recording
+            <.icon name="lucide:trash-2" class="size-3.5" /> Delete recording
           </.button>
         </div>
         <h1 class="mt-1 text-xl font-semibold">{inspect(@recording.view)}</h1>
-        <p class="text-sm text-neutral-500 tabular-nums">
-          Session <code class="font-mono text-neutral-600">{String.slice(@recording.id, 0, 12)}</code>
-          · {length(@recording.events)} events · {clock(@duration_ms)}
-          <span :if={@error_count > 0} class="text-red-700">
-            · {@error_count} {if @error_count == 1, do: "error", else: "errors"}
-          </span>
+        <p class="flex flex-wrap items-center gap-x-1 text-sm text-muted tabular-nums">
+          Session <code class="font-mono text-ink">{String.slice(@recording.id, 0, 12)}</code>
+          · {Format.count(length(@recording.events), "event")} · {Format.clock(@duration_ms)}
+          <.badge :if={@error_count > 0} tone="error">
+            {Format.count(@error_count, "error")}
+          </.badge>
           <span :if={@dropped > 0} title={inspect(@recording.dropped)}>
             · {@dropped} collected events over the limit dropped
           </span>
         </p>
         <p
           :if={@viewport || @recording.client.user_agent || @recording.client.referer || @journey}
-          class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-500"
+          class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted"
         >
           <span :if={@viewport} id="replay-device" title={@recording.client.user_agent}>
-            {viewport_label(@viewport)}<span :if={label = device_label(@recording.client.user_agent)}> · {label}</span>
+            {Format.viewport(@viewport)}<span :if={
+              label = Format.device(@recording.client.user_agent)
+            }> · {label}</span>
           </span>
           <span :if={!@viewport && @recording.client.user_agent} title={@recording.client.user_agent}>
-            {device_label(@recording.client.user_agent) || "Unknown browser"}
+            {Format.device(@recording.client.user_agent) || "Unknown browser"}
           </span>
           <span :if={@recording.client.referer} title={@recording.client.referer}>
             Came from
-            <code class="font-mono text-neutral-600">{path_of(@recording.client.referer)}</code>
+            <code class="font-mono text-ink">{Format.path_of(@recording.client.referer)}</code>
           </span>
           <span :if={@journey} id="replay-journey" class="inline-flex items-center gap-2">
             <.link
               navigate={Context.path(@context, []) <> "?" <> URI.encode_query(%{"tab" => @journey.tab})}
-              class="underline decoration-neutral-300 hover:text-neutral-800"
+              class="underline decoration-line hover:text-ink"
             >
               Session {@journey.position} of {@journey.total} in this tab
             </.link>
             <.link
               :if={@journey.previous}
               navigate={Context.path(@context, [@journey.previous.id])}
-              class="hover:text-neutral-800"
+              class="inline-flex items-center gap-1 hover:text-ink"
             >
-              ← Previous
+              <.icon name="lucide:arrow-left" class="size-3.5" /> Previous
             </.link>
             <.link
               :if={@journey.next}
               navigate={Context.path(@context, [@journey.next.id])}
-              class="hover:text-neutral-800"
+              class="inline-flex items-center gap-1 hover:text-ink"
             >
-              Next →
+              Next <.icon name="lucide:arrow-right" class="size-3.5" />
             </.link>
           </span>
         </p>
         <.visit client={@recording.client} />
       </header>
 
-      <section class="mb-4 rounded-lg border border-neutral-200 bg-white p-4">
+      <.panel padded class="mb-4">
         <div class="mb-3 flex items-center gap-1.5">
-          <.button phx-click="previous" aria-label="Previous event" disabled={@index == 0}>
-            ⏮
-          </.button>
-          <.button phx-click="toggle" aria-label={if @playing, do: "Pause", else: "Play"}>
-            {if @playing, do: "⏸", else: "▶"}
-          </.button>
-          <.button
+          <.icon_button phx-click="previous" label="Previous event" disabled={@index == 0}>
+            <.icon name="lucide:skip-back" class="size-4" />
+          </.icon_button>
+          <.icon_button phx-click="toggle" label={if @playing, do: "Pause", else: "Play"}>
+            <.icon :if={@playing} name="lucide:pause" class="size-4" />
+            <.icon :if={!@playing} name="lucide:play" class="size-4" />
+          </.icon_button>
+          <.icon_button
             phx-click="next"
-            aria-label="Next event"
+            label="Next event"
             disabled={@index == length(@recording.events) - 1}
           >
-            ⏭
-          </.button>
-          <span class="ml-2 font-mono text-xs text-neutral-500 tabular-nums">
-            {clock(@at)} / {clock(@duration_ms)}
+            <.icon name="lucide:skip-forward" class="size-4" />
+          </.icon_button>
+          <span class="ml-2 font-mono text-xs text-muted tabular-nums">
+            {Format.clock(@at)} / {Format.clock(@duration_ms)}
           </span>
           <span class="flex-1"></span>
           <form id="replay-speed-form" phx-change="speed">
@@ -544,7 +511,7 @@ defmodule PhoenixReplay.Web.Live.Show do
             <select
               id="replay-speed"
               name="speed"
-              class="rounded-md border border-neutral-200 bg-white px-2 py-1 font-mono text-xs"
+              class="h-8 rounded-md border border-line bg-surface px-2 font-mono text-xs"
             >
               <option :for={speed <- @speeds} value={speed} selected={speed == @speed}>
                 {speed}×
@@ -570,24 +537,24 @@ defmodule PhoenixReplay.Web.Live.Show do
           data-playing={to_string(@playing != nil)}
           class="relative flex h-5 cursor-pointer touch-none items-center select-none"
         >
-          <div class="relative h-1 flex-1 rounded-full bg-neutral-200">
+          <div class="relative h-1 flex-1 rounded-full bg-track">
             <span
               :for={event <- @recording.events}
               class={[
                 "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full",
-                marker_class(event)
+                Events.marker_class(event)
               ]}
               style={"left: #{position(event.at, @duration_ms)}%"}
-              title={event_label(event)}
+              title={Events.label(event)}
             ></span>
           </div>
           <span
             data-thumb
-            class="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-neutral-900 shadow-sm"
+            class="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-ink shadow-sm"
             style={"left: #{position(@at, @duration_ms)}%"}
           ></span>
         </div>
-      </section>
+      </.panel>
 
       <.frame
         context={@context}
@@ -598,26 +565,19 @@ defmodule PhoenixReplay.Web.Live.Show do
       />
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section class="flex min-w-0 flex-col rounded-lg border border-neutral-200 bg-white">
-          <h2 class="flex items-center justify-between gap-2 border-b border-neutral-100 px-4 py-2.5 text-xs font-medium tracking-wide text-neutral-500 uppercase">
-            Events <span class="flex-1"></span>
-            <button
+        <.panel title="Events">
+          <:actions>
+            <.chip
               :for={kind <- @kinds}
               :if={length(@kinds) > 1}
-              type="button"
+              pressed={not MapSet.member?(@hidden, kind)}
               phx-click="toggle_kind"
               phx-value-kind={kind}
-              aria-pressed={to_string(not MapSet.member?(@hidden, kind))}
-              class={[
-                "rounded-full border px-2 py-0.5 normal-case tracking-normal",
-                MapSet.member?(@hidden, kind) && "border-neutral-200 text-neutral-400 line-through",
-                not MapSet.member?(@hidden, kind) && "border-neutral-300 text-neutral-700"
-              ]}
             >
-              {kind_label(kind)}
-            </button>
-            <span class="tabular-nums text-neutral-400">{length(@recording.events)}</span>
-          </h2>
+              {Events.kind_label(kind)}
+            </.chip>
+            <span class="text-xs text-faint tabular-nums">{length(@recording.events)}</span>
+          </:actions>
           <ol
             id="replay-events"
             phx-hook="EventList"
@@ -625,7 +585,7 @@ defmodule PhoenixReplay.Web.Live.Show do
           >
             <li
               :for={{event, index} <- Enum.with_index(@recording.events)}
-              :if={not MapSet.member?(@hidden, event_kind(event.type))}
+              :if={not MapSet.member?(@hidden, Events.kind(event.type))}
             >
               <button
                 type="button"
@@ -634,42 +594,37 @@ defmodule PhoenixReplay.Web.Live.Show do
                 aria-current={index == @index && "step"}
                 class={[
                   "flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px]",
-                  collected?(event) && "pl-7 text-xs",
-                  index == @index && "bg-neutral-900 text-white",
-                  index != @index && "hover:bg-neutral-50",
-                  index > @index && "text-neutral-400",
-                  index < @index && Event.error?(event) && "text-red-700"
+                  Events.collected?(event) && "pl-7 text-xs",
+                  index == @index && "bg-ink text-on-ink",
+                  index != @index && "hover:bg-hover",
+                  index > @index && "text-faint",
+                  index < @index && Event.error?(event) && "text-error"
                 ]}
               >
-                <span class="shrink-0">{event_icon(event.type)}</span>
-                <span class="min-w-0 flex-1 truncate">{event_label(event)}</span>
+                <.event_icon type={event.type} class="size-3.5 shrink-0 opacity-70" />
+                <span class="min-w-0 flex-1 truncate">{Events.label(event)}</span>
                 <span
                   :if={duration = Event.duration(event)}
                   class="shrink-0 font-mono text-[11px] tabular-nums opacity-60"
                 >
-                  {milliseconds(duration)}
+                  {Format.milliseconds(duration)}
                 </span>
-                <span class="shrink-0 font-mono text-[11px] tabular-nums opacity-60">{clock(event.at)}</span>
+                <span class="shrink-0 font-mono text-[11px] tabular-nums opacity-60">
+                  {Format.clock(event.at)}
+                </span>
               </button>
             </li>
           </ol>
-        </section>
+        </.panel>
 
-        <section class="flex min-w-0 flex-col rounded-lg border border-neutral-200 bg-white">
-          <div
-            :if={@event && @event.type in [:telemetry, :log, :exit]}
-            class="border-b border-neutral-100"
-          >
-            <h2 class="border-b border-neutral-100 px-4 py-2.5 text-xs font-medium tracking-wide text-neutral-500 uppercase">
-              Details
-            </h2>
-            <pre class="max-h-60 overflow-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-neutral-700">{inspect(@event.data, pretty: true, limit: 50)}</pre>
-          </div>
-          <h2 class="border-b border-neutral-100 px-4 py-2.5 text-xs font-medium tracking-wide text-neutral-500 uppercase">
-            Assigns
-          </h2>
-          <pre class="max-h-[clamp(300px,40vh,600px)] overflow-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-neutral-700">{@assigns_preview}</pre>
-        </section>
+        <div class="flex min-w-0 flex-col gap-4">
+          <.panel :if={@event && @event.type in [:telemetry, :log, :exit]} title="Details">
+            <pre class="max-h-60 overflow-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-ink">{inspect(@event.data, pretty: true, limit: 50)}</pre>
+          </.panel>
+          <.panel title="Assigns">
+            <pre class="max-h-[clamp(300px,40vh,600px)] overflow-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-ink">{@assigns_preview}</pre>
+          </.panel>
+        </div>
       </div>
     </main>
     """

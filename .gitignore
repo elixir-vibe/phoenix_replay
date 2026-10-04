@@ -30,3 +30,6 @@ phoenix_replay-*.tar
 
 # Recordings written while developing against the default storage path.
 /priv/replay_recordings/
+
+# phoenix_iconify's download cache; only the manifest ships.
+/priv/iconify/sets/

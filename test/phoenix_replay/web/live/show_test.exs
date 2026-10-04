@@ -175,9 +175,9 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
                ~s(#replay-viewport[data-width="390"][data-height="844"][data-mode="fit"])
              )
 
-      view |> element(~s(button[phx-value-mode="actual"])) |> render_click()
+      view |> element(~s(button[phx-value-value="actual"])) |> render_click()
       assert has_element?(view, ~s(#replay-viewport[data-mode="actual"]))
-      assert has_element?(view, ~s(button[phx-value-mode="actual"][aria-pressed="true"]))
+      assert has_element?(view, ~s(button[phx-value-value="actual"][aria-pressed="true"]))
       device = view |> element("#replay-device") |> render()
       assert device =~ "390 × 844 @3x"
       assert device =~ "· Safari on iOS"

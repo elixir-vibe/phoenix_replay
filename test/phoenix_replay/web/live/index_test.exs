@@ -66,8 +66,8 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     for i <- 1..26, do: save("match-#{i}")
     save("other")
 
-    {:ok, view, html} = live(build_conn(), "/replay?q=match")
-    assert html =~ "Page 1 / 2"
+    {:ok, view, _html} = live(build_conn(), "/replay?q=match")
+    assert has_element?(view, ~s(a[aria-current="page"]), "1")
     refute has_element?(view, "#recording-other")
     assert has_element?(view, ~s(a[href="/replay?page=2&q=match"]))
   end
@@ -90,10 +90,12 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
   test "paginates" do
     for i <- 1..26, do: save("page-#{i}")
-    {:ok, view, html} = live(build_conn(), "/replay")
-    assert html =~ "Page 1 / 2"
+    {:ok, view, _html} = live(build_conn(), "/replay")
+    assert has_element?(view, ~s(a[aria-current="page"]), "1")
+    refute has_element?(view, ~s(a[aria-label="Previous page"]))
 
-    html = view |> element("a", "Next") |> render_click()
-    assert html =~ "Page 2 / 2"
+    view |> element(~s(a[aria-label="Next page"])) |> render_click()
+    assert has_element?(view, ~s(a[aria-current="page"]), "2")
+    refute has_element?(view, ~s(a[aria-label="Next page"]))
   end
 end

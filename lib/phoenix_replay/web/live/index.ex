@@ -9,11 +9,12 @@ defmodule PhoenixReplay.Web.Live.Index do
 
   use Phoenix.LiveView
 
-  import PhoenixReplay.Web.Components
+  import PhoenixIconify, only: [icon: 1]
+  import PhoenixReplay.Web.Components.Core
 
   alias PhoenixReplay.Recordings
   alias PhoenixReplay.Recordings.Filter
-  alias PhoenixReplay.Web.{Context, Layouts}
+  alias PhoenixReplay.Web.{Context, Format, Layouts, Params}
 
   @per_page 25
   @live_refresh_ms 2_000
@@ -38,7 +39,7 @@ defmodule PhoenixReplay.Web.Live.Index do
   def handle_params(params, _uri, socket) do
     {:noreply,
      socket
-     |> assign(page: parse_integer(params["page"], 1), filter: Filter.from_params(params))
+     |> assign(page: Params.integer(params["page"], 1), filter: Filter.from_params(params))
      |> load()}
   end
 
@@ -126,11 +127,13 @@ defmodule PhoenixReplay.Web.Live.Index do
   def render(assigns) do
     ~H"""
     <main class="mx-auto max-w-4xl px-4 py-8">
-      <.flash_error flash={@flash} />
+      <.flash flash={@flash} />
       <header class="mb-8 flex items-center justify-between">
-        <h1 class="text-2xl font-bold">📹 PhoenixReplay</h1>
-        <div class="flex items-center gap-3 text-sm text-neutral-500">
-          {@total} {if @total == 1, do: "recording", else: "recordings"}
+        <h1 class="flex items-center gap-2 text-2xl font-semibold">
+          <.icon name="lucide:circle-play" class="size-6 text-accent" /> PhoenixReplay
+        </h1>
+        <div class="flex items-center gap-3 text-sm text-muted">
+          {Format.count(@total, "recording")}
           <.button
             :if={@can_clear?}
             variant="danger"
@@ -156,12 +159,12 @@ defmodule PhoenixReplay.Web.Live.Index do
           placeholder="URL or id"
           aria-label="Search by URL or id"
           phx-debounce="300"
-          class="col-span-2 rounded-md border border-neutral-200 bg-white px-3 py-1.5"
+          class="col-span-2 rounded-md border border-line bg-surface px-3 py-1.5 placeholder:text-faint"
         />
         <select
           name="view"
           aria-label="View"
-          class="rounded-md border border-neutral-200 bg-white px-2 py-1.5"
+          class="rounded-md border border-line bg-surface px-2 py-1.5"
         >
           <option value="">All views</option>
           <option :for={view <- @views} value={view} selected={view == @filter.view}>{view}</option>
@@ -174,7 +177,7 @@ defmodule PhoenixReplay.Web.Live.Index do
           placeholder="Event name"
           aria-label="Triggered event"
           phx-debounce="300"
-          class="rounded-md border border-neutral-200 bg-white px-3 py-1.5"
+          class="rounded-md border border-line bg-surface px-3 py-1.5 placeholder:text-faint"
         />
         <datalist id="recording-filter-events">
           <option :for={name <- @event_names} value={name} />
@@ -182,7 +185,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         <select
           name="within"
           aria-label="Started within"
-          class="rounded-md border border-neutral-200 bg-white px-2 py-1.5"
+          class="rounded-md border border-line bg-surface px-2 py-1.5"
         >
           <option value="">Any time</option>
           <option
@@ -201,58 +204,64 @@ defmodule PhoenixReplay.Web.Live.Index do
           placeholder="Min events"
           aria-label="Minimum events"
           phx-debounce="300"
-          class="rounded-md border border-neutral-200 bg-white px-3 py-1.5"
+          class="rounded-md border border-line bg-surface px-3 py-1.5 placeholder:text-faint"
         />
-        <label class="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-1.5">
-          <input type="checkbox" name="errors" value="1" checked={@filter.errors} /> Errors
+        <label class="flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-1.5">
+          <input
+            type="checkbox"
+            name="errors"
+            value="1"
+            checked={@filter.errors}
+            class="accent-accent"
+          /> Errors
         </label>
       </form>
 
-      <div :if={@any? and @recordings == []} class="py-16 text-center text-neutral-400">
-        <p>No recordings match these filters.</p>
-        <.link
-          patch={index_path(@context, %Filter{}, 1)}
-          class="mt-2 inline-block text-sm text-neutral-600 underline"
-        >
-          Clear filters
-        </.link>
-      </div>
+      <.empty_state :if={@any? and @recordings == []} title="No recordings match these filters.">
+        <:icon><.icon name="lucide:search-x" class="size-8" /></:icon>
+        <:action>
+          <.link
+            patch={index_path(@context, %Filter{}, 1)}
+            class="text-sm text-muted underline hover:text-ink"
+          >
+            Clear filters
+          </.link>
+        </:action>
+      </.empty_state>
 
-      <div :if={not @any?} class="py-16 text-center text-neutral-400">
-        <p class="mb-4 text-5xl">📹</p>
-        <p>No recordings yet.</p>
-        <p class="mt-1 text-sm">
-          Add <code class="font-mono text-neutral-600">on_mount: [PhoenixReplay.Recorder]</code>
-          to a <code class="font-mono text-neutral-600">live_session</code>
-          and use your app.
-        </p>
-      </div>
+      <.empty_state :if={not @any?} title="No recordings yet.">
+        <:icon><.icon name="lucide:video" class="size-10" /></:icon>
+        Add <code class="font-mono text-ink">on_mount: [PhoenixReplay.Recorder]</code>
+        to a <code class="font-mono text-ink">live_session</code>
+        and use your app.
+      </.empty_state>
 
       <ul class="space-y-3">
         <li
           :for={recording <- @recordings}
           id={"recording-#{recording.id}"}
-          class="flex items-center justify-between gap-4 rounded-lg border border-neutral-200 bg-white px-5 py-4 transition-shadow hover:shadow-md"
+          class="flex items-center justify-between gap-4 rounded-lg border border-line bg-surface px-5 py-4 transition-shadow hover:shadow-md"
         >
           <div class="min-w-0">
             <p class="flex items-center gap-2 font-medium">
               <span class="truncate">{recording.view}</span>
-              <.live_badge :if={recording.live?} />
+              <.badge :if={recording.live?} tone="live" dot="pulse">LIVE</.badge>
             </p>
-            <p class="mt-1 text-sm text-neutral-500 tabular-nums">
-              {timestamp(recording.connected_at)} · {recording.event_count} events · {duration(
-                recording.duration_ms
-              )}
-              <span :if={recording.error_count > 0} class="text-red-700">
-                · {recording.error_count} {if recording.error_count == 1, do: "error", else: "errors"}
+            <p class="mt-1 flex flex-wrap items-center gap-x-1 text-sm text-muted tabular-nums">
+              {Format.timestamp(recording.connected_at)} · {Format.count(
+                recording.event_count,
+                "event"
+              )} · {Format.duration(recording.duration_ms)}
+              <span :if={recording.error_count > 0} class="text-error">
+                · {Format.count(recording.error_count, "error")}
               </span>
             </p>
           </div>
           <div class="flex shrink-0 items-center gap-3">
-            <code class="font-mono text-sm text-neutral-400">{String.slice(recording.id, 0, 8)}</code>
+            <code class="font-mono text-sm text-faint">{String.slice(recording.id, 0, 8)}</code>
             <.link
               navigate={Context.path(@context, [recording.id])}
-              class="rounded-md border border-neutral-200 px-2.5 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
+              class="inline-flex h-8 items-center rounded-md border border-line px-2.5 text-xs font-medium hover:bg-hover"
             >
               Open
             </.link>
@@ -269,23 +278,11 @@ defmodule PhoenixReplay.Web.Live.Index do
         </li>
       </ul>
 
-      <nav :if={@total_pages > 1} class="mt-6 flex items-center justify-center gap-3 text-sm">
-        <.link
-          :if={@page > 1}
-          patch={index_path(@context, @filter, @page - 1)}
-          class="text-neutral-600 hover:text-neutral-900"
-        >
-          ← Previous
-        </.link>
-        <span class="text-neutral-400">Page {@page} / {@total_pages}</span>
-        <.link
-          :if={@page < @total_pages}
-          patch={index_path(@context, @filter, @page + 1)}
-          class="text-neutral-600 hover:text-neutral-900"
-        >
-          Next →
-        </.link>
-      </nav>
+      <.pagination
+        page={@page}
+        total_pages={@total_pages}
+        path={&index_path(@context, @filter, &1)}
+      />
     </main>
     """
   end
