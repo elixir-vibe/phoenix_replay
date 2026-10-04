@@ -67,13 +67,9 @@ defmodule PhoenixReplay.MixProject do
 
   # The Ecto storage tests also run on DuckDB through QuackDB, which needs
   # Elixir 1.19; the minimum-version CI job skips them.
-  # The branch requires json_codec 0.3, which iconify needs; switch to the
-  # Hex release that includes it (elixir-vibe/quackdb#5).
   defp duckdb do
     if Version.match?(System.version(), "~> 1.19"),
-      do: [
-        {:quackdb, github: "elixir-vibe/quackdb", branch: "chore/json-codec-0.3", only: :test}
-      ],
+      do: [{:quackdb, "~> 0.5.28", only: :test}],
       else: []
   end
 
