@@ -87,6 +87,37 @@ defmodule PhoenixReplay.ConfigTest do
     assert_raise ArgumentError, ~r/:max_memory/, fn -> Config.new(max_memory: 0) end
   end
 
+  test "normalizes request context" do
+    assert Config.new([]).context == %{headers: [], landing: nil}
+
+    context =
+      Config.new(
+        context: [
+          headers: ["Accept-Language", :cf_ipcountry],
+          landing: [params: [:utm, "ref", :click_ids, "ref"], attribution: :last]
+        ]
+      ).context
+
+    assert context.headers == ["accept-language", "cf_ipcountry"]
+
+    assert context.landing == %{
+             params:
+               ~w(utm_source utm_medium utm_campaign utm_term utm_content ref gclid fbclid msclkid),
+             referrer: true,
+             attribution: :last
+           }
+
+    assert_raise ArgumentError, ~r/"cookie"/, fn -> Config.new(context: [headers: ["Cookie"]]) end
+
+    assert_raise ArgumentError, ~r/:params/, fn ->
+      Config.new(context: [landing: [params: [:nope]]])
+    end
+
+    assert_raise ArgumentError, ~r/:attribution/, fn ->
+      Config.new(context: [landing: [attribution: :middle]])
+    end
+  end
+
   test "rejects unknown keys and invalid values" do
     assert_raise ArgumentError, ~r/:max_events/, fn -> Config.new(max_events: 0) end
     assert_raise ArgumentError, ~r/:unknown/, fn -> Config.new(unknown: true) end

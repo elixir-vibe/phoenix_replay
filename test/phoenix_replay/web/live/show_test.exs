@@ -176,6 +176,30 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       assert device =~ "· Safari on iOS"
     end
 
+    test "shows how the visit started" do
+      recording = Fixtures.counter_recording(id: "visit")
+
+      client =
+        Map.merge(recording.client, %{
+          headers: %{"accept-language" => "de-DE"},
+          landing: %{
+            path: "/pricing",
+            at: 1_700_000_000_000,
+            params: %{"utm_source" => "google", "utm_medium" => "cpc"},
+            referrer: "https://www.google.com/search"
+          }
+        })
+
+      Storage.save(Fixtures.storage(), %{recording | client: client})
+      {:ok, view, _html} = live(build_conn(), "/replay/visit")
+
+      visit = view |> element("#replay-visit") |> render()
+      assert visit =~ "google / cpc"
+      assert visit =~ "from www.google.com"
+      assert visit =~ "/pricing"
+      assert visit =~ "de-DE"
+    end
+
     test "links the sessions of one browser tab" do
       for {id, at} <- [{"first", 1}, {"second", 2}, {"third", 3}] do
         referer = if id != "first", do: "http://localhost/counter"

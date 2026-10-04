@@ -9,6 +9,7 @@ defmodule PhoenixReplay.Test.Router do
   pipeline :browser do
     plug :fetch_session
     plug :protect_from_forgery
+    plug PhoenixReplay.Plug
   end
 
   scope "/" do

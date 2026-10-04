@@ -51,6 +51,16 @@ defmodule Mix.Tasks.PhoenixReplay.InstallTest do
     assert router =~ ~r{phoenix_replay[ (]"/replay"}
   end
 
+  test "adds the context plug to the :browser pipeline once" do
+    router =
+      install()
+      |> apply_igniter!()
+      |> Igniter.compose_task("phoenix_replay.install", [])
+      |> content("lib/test_web/router.ex")
+
+    assert [_one] = Regex.scan(~r/plug PhoenixReplay\.Plug/, router)
+  end
+
   test "warns instead of mounting without a :browser pipeline" do
     router = "defmodule TestWeb.Router do\n  use Phoenix.Router\nend\n"
     igniter = install(%{"lib/test_web/router.ex" => router})

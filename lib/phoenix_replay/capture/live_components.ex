@@ -26,7 +26,7 @@ defmodule PhoenixReplay.Capture.LiveComponents do
   loosely and ignore shapes they do not expect.
   """
 
-  alias PhoenixReplay.Capture.{AsyncResults, Viewport}
+  alias PhoenixReplay.Capture.{AsyncResults, Client}
   alias PhoenixReplay.Session.Buffer
 
   @handler __MODULE__
@@ -65,7 +65,7 @@ defmodule PhoenixReplay.Capture.LiveComponents do
       when is_map(params) do
     case Buffer.session(self()) do
       {:ok, _id, config} ->
-        params = config.sanitizer.sanitize_params(Viewport.observe(params))
+        params = config.sanitizer.sanitize_params(Client.observe(params))
         record(:event, %{name: name, params: params, target: {module, id}})
 
       :error ->

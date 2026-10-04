@@ -40,6 +40,21 @@ defmodule PhoenixReplay.Config do
       * `:events` — events buffered before a chunk is written (default `200`)
       * `:interval` — milliseconds after which buffered events are written
         anyway (default `5_000`)
+    * `:context` — request context `PhoenixReplay.Plug` keeps for a visit
+      and recordings carry in `client`:
+      * `:headers` — request header names to capture, refreshed on each
+        request (default `[]`). `cookie`, `authorization` and
+        `proxy-authorization` are refused.
+      * `:landing` — keyword list capturing the visit's landing request, or
+        `nil` (the default):
+        * `:params` — query params to keep: names, or the presets `:utm`
+          (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`,
+          `utm_content`) and `:click_ids` (`gclid`, `fbclid`, `msclkid`)
+        * `:referrer` — `true` keeps the `Referer` without its query
+          string, `:full` keeps all of it, `false` none (default `true`)
+        * `:attribution` — `:first` keeps the first landing of the visit;
+          `:last` replaces it whenever a request carries tracked params
+          (default `:first`)
     * `:max_memory` — bytes of buffered recordings above which new
       sessions are not recorded, or `nil` (the default) for no limit.
     * `:retention` — keyword list controlling `PhoenixReplay.Recordings.Retention`:
@@ -88,6 +103,14 @@ defmodule PhoenixReplay.Config do
 
   @type flush :: %{events: pos_integer(), interval: pos_integer()}
 
+  @type landing :: %{
+          params: [String.t()],
+          referrer: boolean() | :full,
+          attribution: :first | :last
+        }
+
+  @type context :: %{headers: [String.t()], landing: landing() | nil}
+
   @type logs :: %{level: Logger.level(), metadata: [atom()], limit: pos_integer()}
 
   @typedoc "A storage backend module and its options."
@@ -104,6 +127,7 @@ defmodule PhoenixReplay.Config do
           redact: redactor() | nil,
           max_memory: pos_integer() | nil,
           flush: flush() | nil,
+          context: context(),
           retention: retention(),
           persist: persist()
         }
@@ -118,6 +142,7 @@ defmodule PhoenixReplay.Config do
             redact: nil,
             max_memory: nil,
             flush: %{events: 200, interval: 5_000},
+            context: %{headers: [], landing: nil},
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
 
@@ -195,6 +220,18 @@ defmodule PhoenixReplay.Config do
   defp put({:max_memory, max}, config) when is_nil(max) or (is_integer(max) and max > 0),
     do: %{config | max_memory: max}
 
+  defp put({:context, opts}, config) when is_list(opts) do
+    context =
+      Enum.reduce(opts, config.context, fn
+        {:headers, names}, acc when is_list(names) -> %{acc | headers: Enum.map(names, &header/1)}
+        {:landing, nil}, acc -> %{acc | landing: nil}
+        {:landing, landing}, acc when is_list(landing) -> %{acc | landing: landing(landing)}
+        {key, value}, _acc -> invalid!(key, value)
+      end)
+
+    %{config | context: context}
+  end
+
   defp put({:flush, false}, config), do: %{config | flush: nil}
 
   defp put({:flush, opts}, config) when is_list(opts),
@@ -249,6 +286,40 @@ defmodule PhoenixReplay.Config do
   defp valid_logs?(:limit, value), do: pos_integer?(value)
 
   defp valid_flush?(_key, value), do: pos_integer?(value)
+
+  @secret_headers ~w(cookie authorization proxy-authorization)
+  @param_presets %{
+    utm: ~w(utm_source utm_medium utm_campaign utm_term utm_content),
+    click_ids: ~w(gclid fbclid msclkid)
+  }
+
+  defp header(name) when is_binary(name) or is_atom(name) do
+    name = name |> to_string() |> String.downcase()
+
+    if name in @secret_headers or name == "",
+      do: invalid!(:headers, name),
+      else: name
+  end
+
+  defp header(name), do: invalid!(:headers, name)
+
+  defp landing(opts) do
+    landing = merge(%{params: [], referrer: true, attribution: :first}, opts, &valid_landing?/2)
+    %{landing | params: landing.params |> Enum.flat_map(&param/1) |> Enum.uniq()}
+  end
+
+  defp param(preset) when is_map_key(@param_presets, preset), do: @param_presets[preset]
+  defp param(name) when is_binary(name) and name != "", do: [name]
+  defp param(name), do: invalid!(:params, name)
+
+  defp valid_landing?(:params, value), do: is_list(value)
+  defp valid_landing?(:referrer, value), do: is_boolean(value) or value == :full
+  defp valid_landing?(:attribution, value), do: value in [:first, :last]
+
+  defp invalid!(key, value) do
+    raise ArgumentError,
+          "invalid :phoenix_replay configuration #{inspect(key)}: #{inspect(value)}"
+  end
 
   defp valid_retention?(:max_age, value), do: is_nil(value) or pos_integer?(value)
   defp valid_retention?(:max_count, value), do: is_nil(value) or non_neg_integer?(value)

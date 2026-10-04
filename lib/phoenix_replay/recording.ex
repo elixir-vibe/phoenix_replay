@@ -9,7 +9,7 @@ defmodule PhoenixReplay.Recording do
   `:limit`, keyed by collector name, such as `"my_app.repo.query"` or `"log"`.
 
   `client` describes the browser, when it told PhoenixReplay (see
-  `PhoenixReplay.Capture.Viewport`):
+  `PhoenixReplay.Capture.Client`):
 
     * `:viewport` — `%{width: integer, height: integer, dpr: number}` when
       the LiveView connected; later changes are `:viewport` events
@@ -17,6 +17,11 @@ defmodule PhoenixReplay.Recording do
       lists `:user_agent` in its `:connect_info`
     * `:tab` — an id of the browser tab, shared by the tab's sessions
     * `:referer` — the URL the user came from by live navigation
+    * `:headers` — request headers listed in `:context`, kept by
+      `PhoenixReplay.Plug`
+    * `:landing` — the visit's landing request, when `:context` asks for
+      it: `%{path: String.t(), at: integer, params: map, referrer:
+      String.t() | nil}`
   """
 
   alias PhoenixReplay.Recording.Event
@@ -41,7 +46,16 @@ defmodule PhoenixReplay.Recording do
           viewport: viewport() | nil,
           user_agent: String.t() | nil,
           tab: String.t() | nil,
-          referer: String.t() | nil
+          referer: String.t() | nil,
+          headers: %{String.t() => String.t()},
+          landing: landing() | nil
+        }
+
+  @type landing :: %{
+          path: String.t(),
+          at: integer(),
+          params: %{String.t() => String.t()},
+          referrer: String.t() | nil
         }
 
   @enforce_keys [:id, :view, :connected_at]
@@ -54,7 +68,14 @@ defmodule PhoenixReplay.Recording do
     session: %{},
     events: [],
     dropped: %{},
-    client: %{viewport: nil, user_agent: nil, tab: nil, referer: nil}
+    client: %{
+      viewport: nil,
+      user_agent: nil,
+      tab: nil,
+      referer: nil,
+      headers: %{},
+      landing: nil
+    }
   ]
 
   @doc "Generates a URL-safe random recording id."

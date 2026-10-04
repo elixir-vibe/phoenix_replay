@@ -56,7 +56,9 @@ defmodule PhoenixReplay.RedactorTest do
           viewport: %{width: 1234, height: 5678, dpr: 1},
           user_agent: "Agent 1234-5678",
           tab: "1234-5678",
-          referer: "http://x/1234-5678"
+          referer: "http://x/1234-5678",
+          headers: %{"x-account" => "1234-5678"},
+          landing: %{path: "/", at: 1, params: %{"ref" => "1234-5678"}, referrer: nil}
         }
     }
 
@@ -80,7 +82,9 @@ defmodule PhoenixReplay.RedactorTest do
              viewport: %{width: 1234, height: 5678, dpr: 1},
              user_agent: "Agent [REDACTED]",
              tab: "1234-5678",
-             referer: "http://x/[REDACTED]"
+             referer: "http://x/[REDACTED]",
+             headers: %{"x-account" => "[REDACTED]"},
+             landing: %{path: "/", at: 1, params: %{"ref" => "[REDACTED]"}, referrer: nil}
            }
 
     assert Enum.find(redacted.events, &(&1.type == :log)).data.message == "paid [REDACTED]"

@@ -54,8 +54,9 @@ defmodule PhoenixReplay.Redactor do
 
   @doc """
   Redacts every part of `recording` that holds recorded values: its URL,
-  params, session, the URL the user came from, the user agent and the data
-  of each event. The viewport and tab id are kept as they are.
+  params, session, the URL the user came from, the user agent, captured
+  headers and landing, and the data of each event. The viewport and tab id
+  are kept as they are.
 
   `progress` is called after each event. Without a redactor, the
   recording is returned as it is.
@@ -73,8 +74,16 @@ defmodule PhoenixReplay.Redactor do
          {:ok, session} <- redact_term(recording.session, redactor),
          {:ok, referer} <- redact_term(recording.client[:referer], redactor),
          {:ok, user_agent} <- redact_term(recording.client[:user_agent], redactor),
+         {:ok, headers} <- redact_term(recording.client[:headers], redactor),
+         {:ok, landing} <- redact_term(recording.client[:landing], redactor),
          {:ok, events} <- redact_events(recording.events, redactor, progress, total) do
-      client = %{recording.client | referer: referer, user_agent: user_agent}
+      client =
+        Map.merge(recording.client, %{
+          referer: referer,
+          user_agent: user_agent,
+          headers: headers,
+          landing: landing
+        })
 
       {:ok,
        %{recording | url: url, params: params, session: session, client: client, events: events}}

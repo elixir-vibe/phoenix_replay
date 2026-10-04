@@ -54,6 +54,33 @@ socket "/live", Phoenix.LiveView.Socket,
 - **the tab** — an id kept in the tab's `sessionStorage`. Navigating to another LiveView starts a new recording; the tab id ties them into one journey, and the player links the previous and next sessions of the tab.
 - **the referer** — the URL the user came from by live navigation.
 
+### Visit context
+
+Some context exists only on the HTTP requests of a visit, not on the LiveView socket: headers such as `Accept-Language`, the external `Referer` a visitor arrived from, and the campaign params of the page they landed on, which later LiveViews no longer see. `PhoenixReplay.Plug` keeps what `:context` asks for in the session, and every recording of the visit carries it:
+
+```elixir
+config :phoenix_replay,
+  context: [
+    headers: ["accept-language", "cf-ipcountry"],
+    landing: [params: [:utm, :click_ids, "ref"], referrer: true]
+  ]
+```
+
+```elixir
+pipeline :browser do
+  # after :fetch_session
+  plug PhoenixReplay.Plug
+end
+```
+
+- **`headers`** — an allowlist, refreshed on each request, each value cut to 256 characters. `cookie`, `authorization` and `proxy-authorization` are refused.
+- **`landing`** — the visit's first `GET`: its path, time, tracked query params and `Referer`. `:utm` and `:click_ids` expand to the usual parameter names. The referrer loses its query string unless `referrer: :full`, since query strings often carry tokens.
+- **Attribution** is first-touch: the landing is kept for the whole visit. `attribution: :last` replaces it whenever a request carries tracked params, to see which campaign brought someone back.
+
+A visit lasts as long as the session cookie. The plug rewrites the session only when the kept context changes, and does nothing until `:context` is configured; the installer adds it to the `:browser` pipeline. The player shows the campaign, the referrer's host and the landing page, with the params and headers under "Visit details".
+
+Headers such as `x-forwarded-for` or `cf-connecting-ip` hold IP addresses, which are personal data in many jurisdictions; capture them only when you need them. Captured headers and the landing go through the [redactor](privacy-and-security.md#redacting-values) when a recording is saved.
+
 The client module is `deps/phoenix_replay/priv/static/phoenix_replay.js`, with types; bundlers that resolve packages from `deps`, as Phoenix's esbuild and Volt setups do, import it as `"phoenix_replay"`.
 
 ## Which sessions are kept

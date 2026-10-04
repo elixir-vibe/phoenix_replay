@@ -154,6 +154,18 @@ socket "/live", Phoenix.LiveView.Socket,
   websocket: [connect_info: [:user_agent, session: @session_options]]
 ```
 
+### Visit context
+
+```elixir
+config :phoenix_replay,
+  context: [
+    headers: ["accept-language"],
+    landing: [params: [:utm, :click_ids]]
+  ]
+```
+
+Needs `plug PhoenixReplay.Plug` in the `:browser` pipeline. First-touch by default; `attribution: :last` follows the latest campaign.
+
 ## Live sessions
 {: .col-2}
 

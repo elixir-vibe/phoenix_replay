@@ -1,7 +1,8 @@
-defmodule PhoenixReplay.Capture.Viewport do
+defmodule PhoenixReplay.Capture.Client do
   @moduledoc """
-  Reads the browser's viewport and tab from LiveView's connect params and
-  event metadata.
+  Builds a recording's client context: the browser's viewport and tab from
+  LiveView's connect params and event metadata, the user agent, and the
+  request context `PhoenixReplay.Plug` keeps for the visit.
 
   PhoenixReplay's client module sends them when the host app passes its
   helpers to `LiveSocket`:
@@ -41,21 +42,36 @@ defmodule PhoenixReplay.Capture.Viewport do
 
   @doc """
   Returns the client context of a connecting LiveView, from its connect
-  params and the `User-Agent` in its connect info.
+  params, the `User-Agent` in its connect info, and the request context
+  `PhoenixReplay.Plug` kept for the visit.
   """
-  @spec client(map() | nil, String.t() | nil) :: Recording.client()
-  def client(connect_params, user_agent) do
+  @spec client(map() | nil, String.t() | nil, map() | nil) :: Recording.client()
+  def client(connect_params, user_agent, kept) do
     replay = (connect_params || %{})["_replay"]
     viewport = parse(replay)
     Process.put(@key, viewport)
+    kept = kept || %{}
 
     %{
       viewport: viewport,
       user_agent: user_agent,
       tab: tab(replay),
-      referer: referer((connect_params || %{})["_live_referer"])
+      referer: referer((connect_params || %{})["_live_referer"]),
+      headers: Map.get(kept, "headers", %{}),
+      landing: landing(kept["landing"])
     }
   end
+
+  defp landing(%{"path" => path, "at" => at} = landing) do
+    %{
+      path: path,
+      at: at,
+      params: Map.get(landing, "params", %{}),
+      referrer: landing["referrer"]
+    }
+  end
+
+  defp landing(_landing), do: nil
 
   @doc """
   Records a `:viewport` event when an event's params carry a viewport that

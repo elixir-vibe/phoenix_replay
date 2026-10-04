@@ -77,4 +77,17 @@ defmodule PhoenixReplay.Web.ComponentsTest do
 
     assert Components.path_of("http://www.example.com/tasks?filter=all") == "/tasks?filter=all"
   end
+
+  test "labels campaigns and referrers" do
+    assert Components.campaign_label(%{"utm_source" => "google", "utm_campaign" => "spring"}) ==
+             "google / spring"
+
+    assert Components.campaign_label(%{"ref" => "x"}) == nil
+
+    assert Components.referrer_host("https://news.ycombinator.com/item?id=1") ==
+             "news.ycombinator.com"
+
+    assert Components.referrer_host("not a url") == nil
+    assert Components.referrer_host(nil) == nil
+  end
 end

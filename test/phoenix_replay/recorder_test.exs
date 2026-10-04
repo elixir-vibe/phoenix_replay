@@ -151,7 +151,9 @@ defmodule PhoenixReplay.RecorderTest do
                viewport: %{width: 390, height: 844, dpr: 3},
                user_agent: @iphone,
                tab: "tab-1",
-               referer: "http://www.example.com/form"
+               referer: "http://www.example.com/form",
+               headers: %{},
+               landing: nil
              }
     end
 
@@ -159,7 +161,8 @@ defmodule PhoenixReplay.RecorderTest do
       conn = put_connect_params(build_conn(), %{"_live_referer" => "undefined"})
       {:ok, _view, _html, id} = Sessions.live(sessions, conn, "/counter")
 
-      assert {:ok, %{client: %{viewport: nil, user_agent: nil, tab: nil, referer: nil}}} =
+      assert {:ok,
+              %{client: %{viewport: nil, user_agent: nil, tab: nil, referer: nil, landing: nil}}} =
                Buffer.fetch(id)
     end
 

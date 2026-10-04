@@ -10,6 +10,7 @@ app_config = [
 adapter = [
   "Mix.Tasks.PhoenixReplay.*",
   "PhoenixReplay",
+  "PhoenixReplay.Plug",
   "PhoenixReplay.Recorder",
   "PhoenixReplay.Router",
   "PhoenixReplay.Web.*"

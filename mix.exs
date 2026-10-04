@@ -109,6 +109,7 @@ defmodule PhoenixReplay.MixProject do
         Recording: [
           PhoenixReplay,
           PhoenixReplay.Recorder,
+          PhoenixReplay.Plug,
           PhoenixReplay.Config,
           PhoenixReplay.Telemetry,
           PhoenixReplay.Recording,

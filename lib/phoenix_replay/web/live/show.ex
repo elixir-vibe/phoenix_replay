@@ -292,6 +292,56 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   defp journey(_socket, _recording), do: nil
 
+  attr :client, :map, required: true
+
+  # How the visit started and the request headers kept for it.
+  defp visit(%{client: client} = assigns) do
+    assigns =
+      assign(assigns,
+        landing: client[:landing],
+        headers: client[:headers] || %{}
+      )
+
+    ~H"""
+    <div
+      :if={@landing || @headers != %{}}
+      id="replay-visit"
+      class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-500"
+    >
+      <span
+        :if={@landing && campaign_label(@landing.params)}
+        class="rounded-full bg-neutral-200/70 px-2 py-0.5 text-neutral-800"
+      >
+        {campaign_label(@landing.params)}
+      </span>
+      <span :if={@landing && referrer_host(@landing.referrer)} title={@landing.referrer}>
+        from {referrer_host(@landing.referrer)}
+      </span>
+      <span :if={@landing}>
+        landed on <code class="font-mono text-neutral-600">{@landing.path}</code>
+        at {timestamp(@landing.at)}
+      </span>
+      <details class="basis-full">
+        <summary class="cursor-pointer select-none hover:text-neutral-800">Visit details</summary>
+        <dl class="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 font-mono text-xs">
+          <%= for {name, value} <- Enum.sort(if(@landing, do: @landing.params, else: %{})) do %>
+            <dt class="text-neutral-500">{name}</dt>
+            <dd class="break-all text-neutral-800">{value}</dd>
+          <% end %>
+          <dt :if={@landing && @landing.referrer} class="text-neutral-500">referrer</dt>
+          <dd :if={@landing && @landing.referrer} class="break-all text-neutral-800">
+            {@landing.referrer}
+          </dd>
+          <%= for {name, value} <- Enum.sort(@headers) do %>
+            <dt class="text-neutral-500">{name}</dt>
+            <dd class="break-all text-neutral-800">{value}</dd>
+          <% end %>
+        </dl>
+      </details>
+    </div>
+    """
+  end
+
   attr :context, Context, required: true
   attr :id, :string, required: true
   attr :channel, :string, required: true
@@ -427,6 +477,7 @@ defmodule PhoenixReplay.Web.Live.Show do
             </.link>
           </span>
         </p>
+        <.visit client={@recording.client} />
       </header>
 
       <section class="mb-4 rounded-lg border border-neutral-200 bg-white p-4">

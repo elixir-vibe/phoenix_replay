@@ -187,6 +187,31 @@ defmodule PhoenixReplay.Web.Components do
     end)
   end
 
+  @campaign_keys ~w(utm_source utm_medium utm_campaign)
+
+  @doc """
+  Describes a landing's campaign as `"google / cpc / spring_sale"`, from
+  its UTM source, medium and campaign, or returns `nil` without them.
+  """
+  @spec campaign_label(map()) :: String.t() | nil
+  def campaign_label(params) do
+    case Enum.flat_map(@campaign_keys, &List.wrap(params[&1])) do
+      [] -> nil
+      parts -> Enum.join(parts, " / ")
+    end
+  end
+
+  @doc "The host of a referrer URL, such as `\"news.ycombinator.com\"`, or `nil`."
+  @spec referrer_host(String.t() | nil) :: String.t() | nil
+  def referrer_host(nil), do: nil
+
+  def referrer_host(url) do
+    case URI.parse(url) do
+      %URI{host: host} when is_binary(host) and host != "" -> host
+      _other -> nil
+    end
+  end
+
   @doc "The path and query of a URL, for showing where a user came from."
   @spec path_of(String.t()) :: String.t()
   def path_of(url) do
