@@ -59,6 +59,7 @@ defmodule PhoenixReplay.Recordings.FilterTest do
 
     assert ids(%{}, summaries) == ~w(checkout-1 home-1 old-1)
     assert ids(%{"q" => "CHECKOUT"}, summaries) == ~w(checkout-1)
+    assert ids(%{"q" => "Pa"}, summaries) == ~w(checkout-1)
     assert ids(%{"view" => "MyAppWeb.HomeLive"}, summaries) == ~w(home-1)
     assert ids(%{"event" => "pay"}, summaries) == ~w(checkout-1)
     assert ids(%{"within" => "24h"}, summaries) == ~w(checkout-1 home-1)

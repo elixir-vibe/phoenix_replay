@@ -109,6 +109,26 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     refute has_element?(view, "#recordings-new button")
   end
 
+  test "offers quick filters on phones" do
+    save("one")
+    {:ok, view, _html} = live(build_conn(), "/replay?errors=1")
+
+    assert has_element?(view, ~s(nav[aria-label="Quick filters"] a[href="/replay"]), "All")
+
+    # With errors is on, so its chip turns it off.
+    assert has_element?(
+             view,
+             ~s(nav[aria-label="Quick filters"] a[aria-current="true"][href="/replay"]),
+             "With errors"
+           )
+
+    assert has_element?(
+             view,
+             ~s(nav[aria-label="Quick filters"] a[href="/replay?errors=1&within=24h"]),
+             "Last 24 h"
+           )
+  end
+
   test "shows the first page for page 0, and for a page past the end once emptied" do
     for i <- 1..26, do: save("page-#{i}")
 

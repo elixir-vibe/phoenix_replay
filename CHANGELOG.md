@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.1 - 2026-10-04
+
+The rest of the dashboard redesign.
+
+### Added
+
+- The player's kind filters have an **Errors** chip that narrows the event list to the events that report an error, under the interaction that caused them.
+- `/` focuses the search on the recording list and in the player.
+- On phones, the recording list has All, With errors and Last 24 h quick filters under the search.
+- The replay is labelled "Replayed from recorded assigns", since it re-renders the view rather than capturing the screen.
+
+### Changed
+
+- Text search in the recording list also matches event names. `PhoenixReplay.Storage.Ecto` checks it after the SQL criteria, as it does for the event filter, since event names are stored encoded; it no longer uses an SQL fragment.
+- Errors on the timeline are larger, with a soft ring.
+
 ## 0.5.0 - 2026-10-04
 
 ### Added

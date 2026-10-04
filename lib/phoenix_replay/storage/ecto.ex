@@ -7,9 +7,9 @@ if Code.ensure_loaded?(Ecto.Query) do
     never decodes recordings. `event_names` holds the summary's event names
     in the same encoding as `data`.
 
-    The dashboard's pages are read in SQL, except when filtering by event
-    name: names are stored encoded, so that criterion is checked after
-    reading the rows matching the others.
+    The dashboard's pages are read in SQL, except when filtering by text or
+    event name: event names are stored encoded, so those criteria are
+    checked after reading the rows matching the others.
 
     Tested on PostgreSQL, SQLite (ecto_sqlite3) and DuckDB (QuackDB). MySQL
     is not supported: saving upserts on `id`, and Ecto cannot name a
@@ -111,7 +111,7 @@ if Code.ensure_loaded?(Ecto.Query) do
     end
 
     @impl true
-    def query(%Filter{event: nil} = filter, page_opts, opts) do
+    def query(%Filter{event: nil, query: nil} = filter, page_opts, opts) do
       matching = matching(filter, page_opts)
       total = repo(opts).aggregate(matching, :count)
 
@@ -127,8 +127,10 @@ if Code.ensure_loaded?(Ecto.Query) do
       {summaries, total}
     end
 
+    # Text search and the event filter look at event names, which SQL cannot
+    # read; the other criteria narrow the rows first.
     def query(%Filter{} = filter, page_opts, opts) do
-      %{filter | event: nil}
+      %{filter | event: nil, query: nil}
       |> matching(page_opts)
       |> order_by(desc: :connected_at, desc: :id)
       |> select([r], map(r, ^[:event_names | @summary_fields]))
@@ -137,17 +139,11 @@ if Code.ensure_loaded?(Ecto.Query) do
       |> Filter.page(filter, page_opts)
     end
 
-    # The criteria SQL can check: all but the event name.
+    # The criteria SQL can check: all but text and the event name.
     defp matching(filter, page_opts) do
       now = Keyword.fetch!(page_opts, :now)
 
       [
-        filter.query &&
-          dynamic(
-            [r],
-            fragment("lower(?) LIKE ? ESCAPE '!'", r.id, ^pattern(filter.query)) or
-              fragment("lower(?) LIKE ? ESCAPE '!'", r.url, ^pattern(filter.query))
-          ),
         filter.view && dynamic([r], r.view == ^filter.view),
         (after_ms = Filter.started_after(filter, now)) &&
           dynamic([r], r.connected_at >= ^after_ms),
@@ -161,14 +157,6 @@ if Code.ensure_loaded?(Ecto.Query) do
       ]
       |> Enum.filter(& &1)
       |> Enum.reduce(from(r in @table), &where(&2, ^&1))
-    end
-
-    # Matches text anywhere, taking % and _ in it literally. Ecto's like/2
-    # takes no ESCAPE clause and ilike/2 is Postgres-only, so this is the
-    # one fragment; "!" escapes the same way in every SQL dialect, unlike a
-    # backslash, which MySQL reads as an escape inside the literal itself.
-    defp pattern(text) do
-      "%" <> String.replace(String.downcase(text), ["!", "%", "_"], &("!" <> &1)) <> "%"
     end
 
     # Event names of the most recent recordings only: they are stored encoded.

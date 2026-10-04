@@ -5,7 +5,8 @@ defmodule PhoenixReplay.Web.Components.Player do
   They take the recording, the current position and URLs built by the
   player, never the socket. Events are sent by name: `seek` with an
   `index`, `previous`, `next`, `toggle`, `speed` and `frame_mode` with a
-  `value`, `toggle_kind` with a `kind`, and `search_events` with `q`.
+  `value`, `toggle_kind` with a `kind`, `errors_only`, and `search_events`
+  with `q`.
   """
 
   use Phoenix.Component
@@ -153,6 +154,7 @@ defmodule PhoenixReplay.Web.Components.Player do
         <span class="min-w-0 flex-1 truncate rounded-md border border-line bg-surface px-2.5 py-1 font-mono">
           {@url || "—"}
         </span>
+        <span class="hidden whitespace-nowrap lg:inline">Replayed from recorded assigns</span>
         <span
           :if={@viewport}
           id="replay-viewport-scale"
@@ -284,13 +286,15 @@ defmodule PhoenixReplay.Web.Components.Player do
   defp position(at, duration_ms), do: Float.round(at / duration_ms * 100, 3)
 
   @doc """
-  The recording's events grouped by interaction, with a search and kind
-  filters. The current event's details open under it.
+  The recording's events grouped by interaction, with a search, kind
+  filters and, when there are errors, a filter to them alone. The current
+  event's details open under it.
   """
   attr :recording, Recording, required: true
   attr :index, :integer, required: true
   attr :hidden, :any, required: true, doc: "a `MapSet` of hidden kinds"
   attr :query, :string, default: ""
+  attr :errors_only, :boolean, default: false
 
   @spec event_list(map()) :: Phoenix.LiveView.Rendered.t()
   def event_list(assigns) do
@@ -298,7 +302,8 @@ defmodule PhoenixReplay.Web.Components.Player do
 
     visible? =
       &(not MapSet.member?(assigns.hidden, Events.kind(&1.type)) and
-          Events.matches?(&1, assigns.query))
+          Events.matches?(&1, assigns.query) and
+          (not assigns.errors_only or Event.error?(&1)))
 
     groups =
       Enum.flat_map(Events.interactions(assigns.recording.events), fn {{head, _index} = first,
@@ -313,6 +318,7 @@ defmodule PhoenixReplay.Web.Components.Player do
       assign(assigns,
         kinds: kinds,
         counts: Events.kind_counts(assigns.recording),
+        error_count: Events.error_count(assigns.recording),
         groups: groups
       )
 
@@ -328,11 +334,12 @@ defmodule PhoenixReplay.Web.Components.Player do
             value={@query}
             placeholder="Filter events, SQL, logs"
             phx-debounce="200"
+            data-shortcut="/"
             class="h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-faint"
           />
         </label>
       </form>
-      <div :if={length(@kinds) > 1} class="flex flex-wrap gap-1.5">
+      <div :if={length(@kinds) > 1 or @error_count > 0} class="flex flex-wrap gap-1.5">
         <.chip
           :for={kind <- @kinds}
           pressed={not MapSet.member?(@hidden, kind)}
@@ -342,6 +349,16 @@ defmodule PhoenixReplay.Web.Components.Player do
           <span class={["size-2 rounded-sm", Events.kind_class(kind)]}></span>
           {Events.kind_label(kind)}
           <span class="text-muted">{@counts[kind]}</span>
+        </.chip>
+        <.chip
+          :if={@error_count > 0}
+          mode="only"
+          tone="error"
+          pressed={@errors_only}
+          phx-click="errors_only"
+        >
+          <span class="size-2 rounded-sm bg-error"></span>
+          Errors <span class="opacity-70">{@error_count}</span>
         </.chip>
       </div>
     </div>

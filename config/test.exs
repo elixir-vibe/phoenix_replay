@@ -30,6 +30,8 @@ config :phoenix_replay, PhoenixReplay.Test.SQLiteRepo,
   pool: Ecto.Adapters.SQL.Sandbox,
   # SQLite allows one writer, so more connections only wait on its lock.
   pool_size: 1,
+  # Connections switching a new database to WAL at once lock each other out.
+  journal_mode: :delete,
   log: false
 
 config :phoenix_replay, PhoenixReplay.Test.PostgresRepo,

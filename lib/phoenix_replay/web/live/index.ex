@@ -238,6 +238,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         filter={@filter}
         views={@facets.views}
         event_names={@facets.event_names}
+        path={&index_path(@context, &1, 1)}
       />
 
       <.empty_state :if={@any? and @total == 0} title="No recordings match these filters.">

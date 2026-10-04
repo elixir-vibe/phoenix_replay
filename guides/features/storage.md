@@ -44,7 +44,7 @@ end
 
 The table is versioned, and pinning the version keeps the migration doing the same thing after later releases. When a release changes the table, the changelog says so; add a migration that upgrades from the version you have, such as `up(from: 1, version: 2)` for a table PhoenixReplay 0.4 created.
 
-The dashboard reads one page at a time in SQL, with a count for the total. Text search matches the URL and session id case-insensitively. Event names are stored encoded, so filtering by an event name checks the rows that match the other filters after reading them, and the names the filter suggests come from the 500 most recent recordings.
+The dashboard reads one page at a time in SQL, with a count for the total. Event names are stored encoded, so text search, which also matches event names, and filtering by an event name check the rows that match the other filters after reading them. The names the filter suggests come from the 500 most recent recordings.
 
 ## Running sessions
 
