@@ -22,4 +22,4 @@ jobs:
         npm ci
         npx playwright install --with-deps chromium
       latest-command: mix ci
-      min-command: mix compile --warnings-as-errors && mix test
+      min-command: mix assets.build && mix compile --warnings-as-errors && mix test

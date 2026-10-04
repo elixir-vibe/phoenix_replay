@@ -11,6 +11,10 @@ defmodule PhoenixReplay.Web.Assets do
       (`:phoenix`, `:phoenix_live_view`), read from those dependencies and
       named by version, so the client always matches the server
 
+  The bundle is built by `mix assets.build` into `priv/static`, which the
+  Hex package ships but the repository does not track. Without it, as in a
+  fresh checkout, the dashboard compiles and renders unstyled.
+
   The files are public and contain no secrets, so responses opt out of
   `Plug.CSRFProtection`'s check against cross-origin script inclusion; the
   dashboard is usually mounted behind a pipeline with `:protect_from_forgery`.
@@ -31,11 +35,17 @@ defmodule PhoenixReplay.Web.Assets do
 
   @bundle_files (for {kind, {file, content_type}} <- @bundle, into: %{} do
                    path = Path.join(@static, file)
-                   body = File.read!(path)
-                   digest = :crypto.hash(:md5, body)
-                   hash = digest |> Base.encode16(case: :lower) |> binary_part(0, 8)
-                   name = Path.rootname(file) <> "-" <> hash <> Path.extname(file)
-                   {kind, %{path: path, name: name, body: body, content_type: content_type}}
+
+                   case File.read(path) do
+                     {:ok, body} ->
+                       digest = :crypto.hash(:md5, body)
+                       hash = digest |> Base.encode16(case: :lower) |> binary_part(0, 8)
+                       name = Path.rootname(file) <> "-" <> hash <> Path.extname(file)
+                       {kind, %{path: path, name: name, body: body, content_type: content_type}}
+
+                     {:error, :enoent} ->
+                       {kind, %{path: path, name: file, body: nil, content_type: content_type}}
+                   end
                  end)
 
   # Volt names the fonts by content hash already.
@@ -50,7 +60,10 @@ defmodule PhoenixReplay.Web.Assets do
 
   for %{path: path} <- Map.values(@bundle_files) ++ @fonts, do: @external_resource(path)
 
-  @bundle_by_name Map.new(Map.values(@bundle_files) ++ @fonts, &{&1.name, &1})
+  @bundle_by_name for file <- Map.values(@bundle_files) ++ @fonts,
+                      file.body,
+                      into: %{},
+                      do: {file.name, file}
 
   @clients [
     phoenix: "static/phoenix.min.js",

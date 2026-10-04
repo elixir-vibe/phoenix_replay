@@ -25,7 +25,7 @@ defmodule PhoenixReplay.MixProject do
   end
 
   def cli do
-    [preferred_envs: [ci: :test, "assets.check": :test]]
+    [preferred_envs: [ci: :test]]
   end
 
   def application do
@@ -170,15 +170,16 @@ defmodule PhoenixReplay.MixProject do
         "cmd npx tsc priv/ts/client/phoenix_replay.ts --declaration --emitDeclarationOnly --outDir priv/static --target es2022 --lib es2022,dom",
         "cmd rm -f priv/static/manifest.json"
       ],
-      "assets.check": [
-        "assets.build",
-        "cmd git diff --exit-code -- priv/static"
-      ],
+      # The bundle in priv/static is not tracked, so every package builds it.
+      # The build runs in its own mix process: compiling here would prune the
+      # Hex archive from the code path before the Hex task runs.
+      "hex.build": ["cmd mix assets.build", "hex.build"],
+      "hex.publish": ["cmd mix assets.build", "hex.publish"],
       ci: [
+        "assets.build",
         "compile --warnings-as-errors",
         "format --check-formatted",
         "volt.js.check --type-aware --type-check",
-        "assets.check",
         "test",
         "credo --strict",
         "ex_dna --min-mass 20",
