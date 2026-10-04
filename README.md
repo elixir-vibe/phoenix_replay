@@ -151,8 +151,6 @@ mix assets.build
 mix ci
 ```
 
-The dashboard bundle and client module in `priv/static` are built, not tracked: `mix assets.build` builds them, `mix ci` rebuilds them first, and `mix hex.build` and `mix hex.publish` build them into every package. A Git dependency on PhoenixReplay has no bundle until it is built there.
-
 The Ecto storage tests run on SQLite, on DuckDB through [QuackDB](https://hexdocs.pm/quackdb) (Elixir 1.19+; install its binary once with `MIX_ENV=test mix quackdb.install`), and on PostgreSQL when `PHOENIX_REPLAY_POSTGRES_URL` names a database. Any PostgreSQL works; without Docker or Homebrew, [theseus-rs/postgresql-binaries](https://github.com/theseus-rs/postgresql-binaries) has plain builds:
 
 ```bash
