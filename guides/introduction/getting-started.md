@@ -67,9 +67,9 @@ Recordings can contain business data, so never mount the dashboard on a public r
 
 ## Watch a replay
 
-Start your app, use a recorded page for a while, then navigate away or close the tab. Open `/admin/replay`: the session is listed with its view, start time, event count and duration. Open it to replay it.
+Start your app, use a recorded page for a while, then navigate away or close the tab. Open `/admin/replay`: the session is listed with its view, page, device, start time, duration, event count and errors. Click its row to replay it.
 
-The player re-renders your view inside an iframe with the assigns recorded at each event. Move through it with the timeline, the event list, or the keyboard: with the timeline focused, `←` and `→` step and `Space` plays or pauses.
+The player re-renders your view inside an iframe with the assigns recorded at each event. Move through it with the timeline, the event list, or the keyboard: with the timeline focused, `←` and `→` step and `Space` plays or pauses. The **State** tab shows the assigns at each moment, and **Copy link** shares the moment you are looking at.
 
 ## Testing
 

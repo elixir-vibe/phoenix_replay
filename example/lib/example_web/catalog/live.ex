@@ -10,10 +10,14 @@ defmodule ExampleWeb.Catalog.Live do
 
   use Phoenix.LiveView
 
+  import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.Core
   import PhoenixReplay.Web.Components.Player, only: [event_icon: 1]
+  import PhoenixReplay.Web.Components.Recordings
 
   alias Phoenix.LiveView.JS
+  alias PhoenixReplay.Recording.{Client, Summary}
+  alias PhoenixReplay.Recordings.Filter
 
   @event_types ~w(mount event params info render component telemetry log exit viewport)a
 
@@ -24,8 +28,55 @@ defmodule ExampleWeb.Catalog.Live do
        page_title: "Components",
        mode: "fit",
        pressed: true,
-       event_types: @event_types
+       tab: "events",
+       event_types: @event_types,
+       now: System.system_time(:millisecond),
+       summaries: summaries()
      )}
+  end
+
+  # A live session, a saved one from a phone with a campaign, and a desktop
+  # one with errors.
+  defp summaries do
+    now = System.system_time(:millisecond)
+
+    summary = fn id, attrs ->
+      struct!(
+        %Summary{
+          id: id,
+          view: "ExampleWeb.TaskLive.Index",
+          url: "http://localhost/",
+          connected_at: now
+        },
+        attrs
+      )
+    end
+
+    [
+      summary.("live000000",
+        live?: true,
+        duration_ms: 12_000,
+        event_count: 16,
+        connected_at: now - 12_000
+      ),
+      summary.("phone00000",
+        connected_at: now - 120_000,
+        duration_ms: 41_000,
+        event_count: 25,
+        viewport: Client.decode_viewport("390x844@3"),
+        device: "Mobile Safari 18 on iOS",
+        source: "hackernews / social"
+      ),
+      summary.("desk000000",
+        connected_at: now - 11 * 3_600_000,
+        duration_ms: 10_000,
+        event_count: 95,
+        error_count: 2,
+        url: "http://localhost/tasks/new",
+        viewport: Client.decode_viewport("1440x900@2"),
+        device: "Chrome 141 on Mac OS X"
+      )
+    ]
   end
 
   @impl true
@@ -33,6 +84,12 @@ defmodule ExampleWeb.Catalog.Live do
     do: {:noreply, assign(socket, :mode, mode)}
 
   def handle_event("chip", _params, socket), do: {:noreply, update(socket, :pressed, &(not &1))}
+
+  def handle_event("tab", %{"value" => tab}, socket), do: {:noreply, assign(socket, :tab, tab)}
+
+  # The list components' own events do nothing here.
+  def handle_event(event, _params, socket) when event in ~w(filter show_new delete clear),
+    do: {:noreply, socket}
 
   @impl true
   def render(assigns) do
@@ -95,6 +152,56 @@ defmodule ExampleWeb.Catalog.Live do
           <:item title="utm_source">hackernews</:item>
           <:item title="accept-language">en-US,en;q=0.9</:item>
         </.data_list>
+      </.panel>
+
+      <.panel title="App bar and menu">
+        <.app_bar>
+          <:mark><.icon name="lucide:circle-play" class="size-5 text-accent" /></:mark>
+          <:crumb>PhoenixReplay</:crumb>
+          <:crumb>Recordings</:crumb>
+          <:actions>
+            <.menu id="catalog-menu" label="More actions">
+              <:trigger><.icon name="lucide:ellipsis" class="size-4" /></:trigger>
+              <:item tone="danger">
+                <button type="button" phx-click="clear">
+                  <.icon name="lucide:trash-2" class="size-4" /> Delete all recordings
+                </button>
+              </:item>
+            </.menu>
+          </:actions>
+        </.app_bar>
+      </.panel>
+
+      <.panel title="Tabs">
+        <.tabs
+          id="catalog-tabs"
+          label="Session details"
+          tabs={[{"events", "Events"}, {"state", "State"}, {"visit", "Visit"}]}
+          value={@tab}
+          event="tab"
+        />
+        <p id="catalog-tabs-panel" role="tabpanel" class="p-4 text-sm text-muted">{@tab}</p>
+      </.panel>
+
+      <.panel title="Recording list" padded>
+        <.filter_bar
+          filter={%Filter{errors: true}}
+          views={["ExampleWeb.TaskLive.Index"]}
+          event_names={["save"]}
+        />
+        <.new_recordings count={3} />
+        <.recording_list
+          live
+          recordings={Enum.filter(@summaries, & &1.live?)}
+          now={@now}
+          path={&("#" <> &1.id)}
+        />
+        <.recording_list
+          recordings={Enum.reject(@summaries, & &1.live?)}
+          now={@now}
+          path={&("#" <> &1.id)}
+          delete="delete"
+        />
       </.panel>
 
       <.panel title="Pagination" padded>

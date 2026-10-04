@@ -38,9 +38,15 @@ end
 
 Actions are `:list`, `:view`, `:delete` and `:clear`. The socket's assigns include what your `:on_mount` hooks set. Recordings a viewer may not see respond with 404, the same as missing ones.
 
+Without an `:authorize` module, storage pages the recording list itself. With one, the dashboard reads every summary and checks `:list` for each, so pages and counts show exactly what the viewer may see.
+
 ## Finding recordings
 
-The index lists sessions still running first, marked live, then stored recordings. Filter by:
+The list shows sessions still running under **Live now**, then saved recordings in a table: the view, the page it started on, the device and where the visit came from, how long ago it started, its duration, event count and errors. An icon marks each session as a phone, tablet or desktop. Click anywhere on a row to open it; hover a saved row, or focus it from the keyboard, to delete it. **Delete all recordings** is in the ⋯ menu. A line above the list counts sessions, live ones and ones with errors.
+
+Saved recordings are listed as of when you opened the list or last changed its filters, so rows stay put while sessions end. Newer ones are counted in a **"3 new recordings · Show"** banner; showing them brings the list up to date. The list pages with numbered links, reading one page at a time from storage.
+
+Filter by:
 
 - text in the URL or recording id,
 - view module,
@@ -49,15 +55,27 @@ The index lists sessions still running first, marked live, then stored recording
 - minimum number of events,
 - sessions with an error, such as an error log, a failed query or a crash.
 
-Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&event=pay&within=24h&errors=1`, so a filtered list can be shared or bookmarked. `PhoenixReplay.Recordings.Filter` applies the same criteria in code.
+Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&event=pay&within=24h&errors=1`, so a filtered list can be shared or bookmarked. `?tab=` lists the sessions of one browser tab. On phones, the filters other than search are behind a **Filters** button that counts the active ones. `PhoenixReplay.Recordings.Filter` applies the same criteria in code.
 
 ## Player
 
-The player shows the replayed page, a timeline with a marker per event, the event list and the assigns at the current position. Play at 1×, 2×, 5× or 10×, click or drag the timeline, click an event to jump to it, or focus the timeline and use `←`, `→` and `Space`.
+The header names the view, the page and when the session started, with its duration and event count. When the session had errors, **"2 errors · jump to first"** takes you to the first one. **Copy link to 0:07** copies a link to the current moment: `/admin/replay/<id>?at=<index>` opens the player there.
 
-[Collected](telemetry-and-logs.md) queries, requests and logs are listed under the event that caused them, with their durations, and errors are marked red on the timeline. Hide a kind of event with the **LiveView**, **Telemetry** and **Logs** toggles above the list. Selecting a collected event shows its details next to the assigns; it leaves the replayed page as it was.
+The replayed page sits under a bar showing its URL at that moment. When the browser's viewport was recorded, the page renders at that size, fitted to the window or at 100% in a scrolling box, and the bar shows its size and scale.
+
+Below it, play at 1×, 2×, 5× or 10×, step to the previous or next event, and see the time to the hundredth of a second. The timeline has a lane of markers per kind of event, LiveView, Telemetry and Logs, with errors larger and red. Click or drag it to seek, or focus it and use `←`, `→` and `Space`.
+
+The panel beside it has three tabs:
+
+- **Events** groups events by interaction: a mount, a user event, a navigation or a message, with the renders, component updates, [queries, requests and logs](telemetry-and-logs.md) it caused under it. Filter them by text, or hide a kind with its chip. The selected query, log or crash opens its details under it.
+- **State** lists the assigns at that moment, marking the ones the selected event set. Open one to see its full value.
+- **Visit** shows the device, the other sessions of the same browser tab, the page the user came from, and how the visit started: its campaign, referrer, landing page and kept headers.
 
 Each viewer drives a private frame, so several people can watch the same recording independently.
+
+## Light and dark
+
+The dashboard follows the system's light or dark appearance. To pin one, set `data-theme="light"` or `data-theme="dark"` on its `<html>`. It ships its own fonts, Geist and Geist Mono, and icons, so it looks the same in every app.
 
 ## The replay frame
 
@@ -73,4 +91,4 @@ Interaction in the frame is ignored: recorded templates keep their `phx-click` b
 
 ## Assets
 
-The dashboard serves its own small script and stylesheet at content-hashed paths, and loads your application's own `phoenix` and `phoenix_live_view` client files, so the LiveView client always matches your server version. It needs nothing from your asset pipeline. Responses are public and cacheable, and work behind `:protect_from_forgery`.
+The dashboard serves its own small script, stylesheet and fonts at content-hashed paths, and loads your application's own `phoenix` and `phoenix_live_view` client files, so the LiveView client always matches your server version. It needs nothing from your asset pipeline. Responses are public and cacheable, and work behind `:protect_from_forgery`.

@@ -105,7 +105,7 @@ See the [Privacy and Security guide](https://hexdocs.pm/phoenix_replay/privacy-a
 
 ## Dashboard
 
-Browse, filter and replay recordings with a scrubber, keyboard controls and playback speeds. Filters live in the URL, so `/admin/replay?event=checkout&within=24h` is a shareable link. Restrict who sees what with an authorization module:
+Browse, filter and replay recordings in a dashboard that follows your system's light or dark mode. The list pages through storage and holds its place while new sessions arrive; filters live in the URL, so `/admin/replay?event=checkout&within=24h` is a shareable link. The player has a timeline lane per kind of event, the events grouped by the interaction that caused them, the assigns at every moment, and a link to the moment you are looking at. Restrict who sees what with an authorization module:
 
 ```elixir
 phoenix_replay "/replay",
