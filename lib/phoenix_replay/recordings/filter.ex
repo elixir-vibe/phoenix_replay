@@ -106,8 +106,8 @@ defmodule PhoenixReplay.Recordings.Filter do
       summaries
       |> __MODULE__.apply(filter, Keyword.fetch!(opts, :now))
       |> Enum.filter(fn summary ->
-        (is_nil(until) or summary.connected_at <= until) and
-          (is_nil(since) or summary.connected_at > since)
+        (is_nil(until) or Summary.stored_at(summary) <= until) and
+          (is_nil(since) or Summary.stored_at(summary) > since)
       end)
 
     {Enum.slice(matching, Keyword.get(opts, :offset, 0), Keyword.fetch!(opts, :limit)),

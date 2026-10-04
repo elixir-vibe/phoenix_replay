@@ -103,12 +103,39 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
 
         defp ids({summaries, total}), do: {Enum.map(summaries, & &1.id), total}
 
+        test "bounds pages by when recordings were saved", %{opts: opts} do
+          moment = fn ->
+            Process.sleep(2)
+            at = System.system_time(:millisecond)
+            Process.sleep(2)
+            at
+          end
+
+          # a to d were saved by setup; e started before them all but ends later.
+          saved = moment.()
+          :ok = EctoStorage.save(Fixtures.counter_recording(id: "e", connected_at: 0), opts)
+          query = &ids(EctoStorage.query(%Filter{}, [now: 10, limit: 10] ++ &1, opts))
+
+          assert query.(until: saved) == {~w(d c b a), 4}
+          assert query.(since: saved) == {~w(e), 1}
+        end
+
+        test "orders sessions that started together by id, so pages never repeat", %{
+          opts: opts
+        } do
+          for id <- ~w(t1 t2 t3),
+              do: EctoStorage.save(Fixtures.counter_recording(id: id, connected_at: 99), opts)
+
+          page = &ids(EctoStorage.query(%Filter{}, [now: 100, offset: &1, limit: 1], opts))
+
+          assert Enum.map(0..2, &page.(&1)) == [{~w(t3), 7}, {~w(t2), 7}, {~w(t1), 7}]
+        end
+
         test "pages the most recent first and counts every match", %{opts: opts} do
           query = &EctoStorage.query(%Filter{}, &1, opts)
 
           assert ids(query.(now: 10, limit: 2)) == {~w(d c), 4}
           assert ids(query.(now: 10, offset: 2, limit: 2)) == {~w(b a), 4}
-          assert ids(query.(now: 10, until: 3, since: 1, limit: 10)) == {~w(c b), 2}
           assert ids(query.(now: 10, limit: 0)) == {[], 4}
         end
 

@@ -186,8 +186,9 @@ defmodule PhoenixReplay.MixProject do
       # Hex archive from the code path before the Hex task runs.
       "hex.build": ["cmd mix assets.build", "hex.build"],
       "hex.publish": ["cmd mix assets.build", "hex.publish"],
+      # Built in its own process, so this one compiles Web.Assets with it.
       ci: [
-        "assets.build",
+        "cmd mix assets.build",
         "compile --warnings-as-errors",
         "format --check-formatted",
         "volt.js.check --type-aware --type-check",

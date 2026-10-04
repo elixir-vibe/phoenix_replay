@@ -85,26 +85,39 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     assert html =~ "2 sessions · 1 live · 0 with errors"
   end
 
-  test "lists sessions that started earlier when they end, and counts newer ones" do
+  test "keeps its rows while sessions end, counting them in a banner" do
+    save("listed")
+    Process.sleep(2)
     {:ok, view, _html} = live(build_conn(), "/replay")
     until = :sys.get_state(view.pid).socket.assigns.until
+    Process.sleep(2)
 
-    # A session that started before the list was read ends: it takes its place.
+    # Saved after the list was read, whenever they started: a session that
+    # started earlier would otherwise push the rows down.
     save_at("ended", until - 60_000)
-    # One that started later waits behind the banner, so rows do not shift.
     save_at("fresh", until + 1)
-
     Recordings.broadcast_change()
 
-    assert has_element?(view, "#recording-ended")
+    assert has_element?(view, "#recording-listed")
+    refute has_element?(view, "#recording-ended")
     refute has_element?(view, "#recording-fresh")
-    assert has_element?(view, "#recordings-new button", "1 new recording · Show")
+    assert has_element?(view, "#recordings-new button", "2 new recordings · Show")
 
-    # Showing them reads the list as of now, which must be past "fresh".
-    Process.sleep(2)
     view |> element("#recordings-new button") |> render_click()
+    assert has_element?(view, "#recording-ended")
     assert has_element?(view, "#recording-fresh")
     refute has_element?(view, "#recordings-new button")
+  end
+
+  test "shows the first page for page 0, and for a page past the end once emptied" do
+    for i <- 1..26, do: save("page-#{i}")
+
+    {:ok, view, _html} = live(build_conn(), "/replay?page=0")
+    assert has_element?(view, ~s(a[aria-current="page"]), "1")
+
+    {:ok, view, _html} = live(build_conn(), "/replay?page=2")
+    view |> element("button", "Delete all recordings") |> render_click()
+    assert render(view) =~ "No recordings yet."
   end
 
   test "deletes one or all recordings" do

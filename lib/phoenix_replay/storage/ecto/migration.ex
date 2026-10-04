@@ -9,23 +9,25 @@ if Code.ensure_loaded?(Ecto.Migration) do
         defmodule MyApp.Repo.Migrations.AddPhoenixReplay do
           use Ecto.Migration
 
-          def up, do: PhoenixReplay.Storage.Ecto.Migration.up()
-          def down, do: PhoenixReplay.Storage.Ecto.Migration.down()
+          def up, do: PhoenixReplay.Storage.Ecto.Migration.up(version: 2)
+          def down, do: PhoenixReplay.Storage.Ecto.Migration.down(version: 2)
         end
 
-    The table is versioned, and each PhoenixReplay release that changes it
+    Pin the version, so the migration does the same thing after later
+    releases add versions. The table is versioned, and each PhoenixReplay release that changes it
     adds a version:
 
       1. the table PhoenixReplay 0.4 created
       2. `error_count`, `tab`, `viewport`, `device` and `source`, which
-         the dashboard lists and filters by
+         the dashboard lists and filters by, and `saved_at`, which keeps its
+         pages in place
 
     `up/1` runs every version after `:from` (default `0`), up to
     `:version` (default the latest); `down/1` reverses them. A table made by
     an earlier release is upgraded with a new migration:
 
-        def up, do: PhoenixReplay.Storage.Ecto.Migration.up(from: 1)
-        def down, do: PhoenixReplay.Storage.Ecto.Migration.down(from: 1)
+        def up, do: PhoenixReplay.Storage.Ecto.Migration.up(from: 1, version: 2)
+        def down, do: PhoenixReplay.Storage.Ecto.Migration.down(from: 1, version: 2)
 
     The module is a migration itself, creating the latest table, so tools
     such as `Ecto.Migrator.run/4` can run it directly.
@@ -83,6 +85,7 @@ if Code.ensure_loaded?(Ecto.Migration) do
         add :viewport, :string
         add :device, :string
         add :source, :string
+        add :saved_at, :bigint
       end
     end
 
@@ -93,6 +96,7 @@ if Code.ensure_loaded?(Ecto.Migration) do
         remove :viewport
         remove :device
         remove :source
+        remove :saved_at
       end
     end
   end

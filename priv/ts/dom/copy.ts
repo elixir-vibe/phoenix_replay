@@ -18,7 +18,10 @@ export const copyLinks = (
 
     const url = new URL(element.dataset.copy ?? '', target.location.href).href
 
-    write(url)
+    // A rejection, or a throw where the clipboard is unavailable, such as
+    // on plain HTTP, leaves the element unmarked.
+    Promise.resolve()
+      .then(() => write(url))
       .then(() => {
         element.dataset.copied = ''
         target.setTimeout(() => delete element.dataset.copied, COPIED_MS)

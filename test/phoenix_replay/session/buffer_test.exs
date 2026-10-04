@@ -100,4 +100,43 @@ defmodule PhoenixReplay.Session.BufferTest do
     assert Buffer.fetch(id) == :error
     assert :ets.match(Buffer, {{id, :_}, :_}) == []
   end
+
+  test "counts large binaries in memory, until they are flushed", %{recording: %{id: id}} do
+    before = Buffer.memory()
+    message = String.duplicate("x", 2_000_000)
+    :ok = Buffer.record(self(), :log, %{level: :info, message: message, metadata: %{}})
+
+    # ETS alone counts the binary by reference, a few bytes.
+    assert Buffer.memory() - before >= 2_000_000
+
+    :ok = Buffer.flushed(id, Buffer.pending(id))
+    assert Buffer.memory() - before < 100_000
+  end
+
+  test "a collector writing as its session closes leaves nothing behind", %{
+    recording: %{id: id}
+  } do
+    {:ok, session, _config} = Buffer.attribute([self()])
+    :ok = Buffer.close(id)
+
+    assert :ok =
+             Buffer.collect(
+               session,
+               :log,
+               %{level: :info, message: "late", metadata: %{}},
+               "logs",
+               10
+             )
+
+    assert :ets.match(Buffer, {{:collected, id, :_}, :_, :_}) == []
+    assert :ets.match(Buffer, {{id, :_}, :_}) == []
+  end
+
+  test "leaves sessions being saved out of the ones a restarted monitor watches", %{
+    recording: %{id: id}
+  } do
+    assert {id, self()} in Buffer.sessions()
+    :ok = Buffer.saving(id)
+    refute {id, self()} in Buffer.sessions()
+  end
 end

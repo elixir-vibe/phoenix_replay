@@ -58,8 +58,22 @@ defmodule PhoenixReplay.Storage.FileTest do
     assert {[%{id: "r4"}, %{id: "r3"}], 5} =
              FileStorage.query(filter, [now: 10, offset: 1, limit: 2], opts)
 
-    assert {[%{id: "r3"}], 2} =
-             FileStorage.query(filter, [now: 10, until: 3, since: 1, limit: 1], opts)
+    Process.sleep(2)
+    saved = System.system_time(:millisecond)
+    Process.sleep(2)
+    FileStorage.save(Fixtures.counter_recording(id: "late", connected_at: 0), opts)
+
+    assert {[%{id: "late"}], 1} =
+             FileStorage.query(filter, [now: 10, since: saved, limit: 5], opts)
+
+    assert {_page, 5} = FileStorage.query(filter, [now: 10, until: saved, limit: 0], opts)
+  end
+
+  test "orders sessions that started together by id", %{opts: opts} do
+    for id <- ~w(t1 t2 t3),
+        do: FileStorage.save(Fixtures.counter_recording(id: id, connected_at: 7), opts)
+
+    assert ~w(t3 t2 t1) == Enum.map(FileStorage.list(opts), & &1.id)
   end
 
   test "deletes one or all recordings", %{opts: opts} do

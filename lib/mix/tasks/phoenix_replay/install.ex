@@ -224,9 +224,11 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     # After the last import, so it lands among the others: the greedy match
-    # runs from the start of the file to the end of the last import line.
+    # runs from the start of the file to the last line starting an import,
+    # then on to its module string, which ends the statement even when the
+    # imported names span several lines.
     defp add_client_import(content) do
-      case Regex.run(~r/\A[\s\S]*^import [^\n]*$/m, content) do
+      case Regex.run(~r/\A[\s\S]*^import\b[\s\S]*?["'][^"'\n]+["'];?[^\S\n]*$/m, content) do
         [imports] ->
           imports <>
             "\n" <>

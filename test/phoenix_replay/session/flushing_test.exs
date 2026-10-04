@@ -50,6 +50,24 @@ defmodule PhoenixReplay.Recorder.FlushingTest do
     assert Storage.fetch_partial(Fixtures.storage(), id) == {:error, :not_found}
   end
 
+  test "flushes on a session's own :flush while the global one is off", %{sessions: sessions} do
+    # config/test.exs sets flush: false; the live session sets its own, and
+    # the monitor's timer, not the test, has to notice it.
+    {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/flushed/counter")
+    click(view, 3)
+
+    assert eventually(fn -> Buffer.flushed?(id) end, 3_000)
+    assert Sessions.stop(sessions, view) == :persisted
+  end
+
+  defp eventually(check, timeout) do
+    cond do
+      check.() -> true
+      timeout <= 0 -> false
+      true -> Process.sleep(50) && eventually(check, timeout - 50)
+    end
+  end
+
   test "keeps every chunk when a session is flushed several times", %{sessions: sessions} do
     {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/flushed/counter")
     click(view, 1)

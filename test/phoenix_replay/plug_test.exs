@@ -51,6 +51,28 @@ defmodule PhoenixReplay.PlugTest do
     assert kept(conn)["headers"] == %{"cf-ipcountry" => String.duplicate("é", 256)}
   end
 
+  test "keeps a crafted link from overflowing the session cookie" do
+    configure(headers: ["accept-language"], landing: [params: [:utm, :click_ids]])
+    long = String.duplicate("x", 300)
+
+    query =
+      Enum.map_join(
+        ~w(utm_source utm_medium utm_campaign utm_term utm_content gclid),
+        "&",
+        &"#{&1}=#{long}"
+      )
+
+    conn =
+      request("/" <> String.duplicate("p", 2_000) <> "?" <> query, [{"accept-language", long}])
+
+    kept = kept(conn)
+
+    assert :erlang.external_size(kept) <= 1_024
+    assert String.length(kept["landing"]["path"]) == 256
+    # The campaign params went first, so the landing itself is kept.
+    assert kept["landing"]["params"] == %{}
+  end
+
   test "keeps the first landing of the visit" do
     configure(landing: [params: [:utm]])
 

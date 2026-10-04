@@ -8,7 +8,9 @@ defmodule PhoenixReplay.Recording.Summary do
   holds. `tab` is the browser tab the session ran in, when the client sent
   it, shared by the sessions of one journey. `viewport`, `device` and
   `source` describe the browser and where the visit came from, as
-  `PhoenixReplay.Recording.Client` names them. `live?` is true while the
+  `PhoenixReplay.Recording.Client` names them. `saved_at` is when storage
+  saved the recording, in Unix milliseconds, or `nil` before it is saved and
+  for recordings saved before PhoenixReplay 0.5. `live?` is true while the
   recorded LiveView process is still running.
   """
 
@@ -28,6 +30,7 @@ defmodule PhoenixReplay.Recording.Summary do
           device: String.t() | nil,
           source: String.t() | nil,
           duration_ms: non_neg_integer(),
+          saved_at: integer() | nil,
           live?: boolean()
         }
 
@@ -45,6 +48,7 @@ defmodule PhoenixReplay.Recording.Summary do
     device: nil,
     source: nil,
     duration_ms: 0,
+    saved_at: nil,
     live?: false
   ]
 
@@ -64,9 +68,27 @@ defmodule PhoenixReplay.Recording.Summary do
       device: Client.device(recording.client[:user_agent]),
       source: Client.source(recording.client),
       duration_ms: Timeline.duration_ms(recording),
+      saved_at: Keyword.get(opts, :saved_at),
       live?: Keyword.get(opts, :live?, false)
     }
   end
+
+  @doc """
+  When the recording reached storage: `saved_at`, or `connected_at` for
+  recordings saved before PhoenixReplay 0.5 recorded it. Lists are read
+  as of a moment by this time, so recordings saved later wait instead of
+  shifting the rows.
+  """
+  @spec stored_at(t()) :: integer()
+  def stored_at(%__MODULE__{saved_at: nil, connected_at: connected_at}), do: connected_at
+  def stored_at(%__MODULE__{saved_at: saved_at}), do: saved_at
+
+  @doc """
+  Orders summaries most recent first. Sessions that started in the same
+  millisecond are ordered by id, so pages never repeat or skip them.
+  """
+  @spec sort([t()]) :: [t()]
+  def sort(summaries), do: Enum.sort_by(summaries, &{&1.connected_at, &1.id}, :desc)
 
   @doc "Distinct `handle_event/3` names among `events`, sorted."
   @spec event_names([Event.t()]) :: [String.t()]

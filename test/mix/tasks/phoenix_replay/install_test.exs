@@ -152,6 +152,20 @@ defmodule Mix.Tasks.PhoenixReplay.InstallTest do
     refute app =~ "params: {_csrf_token: csrfToken}"
   end
 
+  test "adds the import after a last import that spans several lines" do
+    app =
+      String.replace(
+        @app_js,
+        ~s(import {LiveSocket} from "phoenix_live_view"\n),
+        ~s(import {LiveSocket} from "phoenix_live_view"\nimport {\n  hooks as colocatedHooks,\n} from "phoenix-colocated/test"\n)
+      )
+
+    content = install(%{"assets/js/app.js" => app}) |> content("assets/js/app.js")
+
+    assert content =~
+             ~s(} from "phoenix-colocated/test"\nimport { replayParams, replayMetadata } from "phoenix_replay"\n)
+  end
+
   test "leaves custom LiveSocket setups alone and explains instead" do
     custom = String.replace(@app_js, "params: {_csrf_token: csrfToken},", "params: myParams,")
     igniter = install(%{"assets/js/app.js" => custom})

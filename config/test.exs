@@ -28,9 +28,8 @@ config :volt, :test,
 config :phoenix_replay, PhoenixReplay.Test.SQLiteRepo,
   database: "tmp/test/replay.sqlite3",
   pool: Ecto.Adapters.SQL.Sandbox,
-  # SQLite allows one writer, so more connections only wait on its lock;
-  # migrating needs two.
-  pool_size: 2,
+  # SQLite allows one writer, so more connections only wait on its lock.
+  pool_size: 1,
   log: false
 
 config :phoenix_replay, PhoenixReplay.Test.PostgresRepo,

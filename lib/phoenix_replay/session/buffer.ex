@@ -12,8 +12,9 @@ defmodule PhoenixReplay.Session.Buffer do
   Rows:
 
     * `{{id, :meta}, pid, config, recording}` — one per session
-    * `{{id, :seq}, seq, live}` — events stored so far, and LiveView events
-      seen so far including those beyond `:max_events`
+    * `{{id, :seq}, seq, live, bytes}` — events stored so far, LiveView
+      events seen so far including those beyond `:max_events`, and the
+      external size of the events still buffered, which `memory/0` counts
     * `{{:process, pid}, id, started_at, config}` — finds the session of the
       calling process
     * `{{:collected, id, name}, count, limit}` — events a collector captured
@@ -23,6 +24,7 @@ defmodule PhoenixReplay.Session.Buffer do
       already flushed to storage, written only by the process flushing it
     * `{{id, seq}, event}` — one per event not yet flushed, `seq` counting
       up from `0`
+    * `{{id, :saving}, true}` — the session ended and a task is saving it
 
   Integer keys sort before atoms, so each session's events precede its
   metadata rows in the ordered set.
@@ -65,7 +67,7 @@ defmodule PhoenixReplay.Session.Buffer do
   def open(%Recording{id: id} = recording, pid, %Config{} = config, draw \\ :rand.uniform()) do
     :ets.insert(@table, [
       {{id, :meta}, pid, config, %{recording | events: []}},
-      {{id, :seq}, 0, 0},
+      {{id, :seq}, 0, 0, 0},
       {{id, :state}, draw, @no_flushed},
       {{:process, pid}, id, System.monotonic_time(:millisecond), config}
     ])
@@ -133,9 +135,16 @@ defmodule PhoenixReplay.Session.Buffer do
       else: :dropped
   end
 
-  @doc "Approximate memory used by every buffered session, in bytes."
+  @doc """
+  Approximate memory used by every buffered session, in bytes: the table
+  itself, and the events' sizes, since ETS counts binaries larger than 64
+  bytes, such as SQL, log messages and long strings, only by reference.
+  """
   @spec memory() :: non_neg_integer()
-  def memory, do: :ets.info(@table, :memory) * :erlang.system_info(:wordsize)
+  def memory do
+    events = :ets.select(@table, fun(do: ({{_id, :seq}, _seq, _live, bytes} -> bytes)))
+    :ets.info(@table, :memory) * :erlang.system_info(:wordsize) + Enum.sum(events)
+  end
 
   @doc "Sets the session's URL. Only the recording process writes its metadata row."
   @spec put_url(Recording.id(), String.t()) :: :ok
@@ -222,6 +231,15 @@ defmodule PhoenixReplay.Session.Buffer do
 
     :ets.insert(@table, {key, draw, totals})
     Enum.each(chunk, fn {seq, _event} -> :ets.delete(@table, {id, seq}) end)
+    bytes = Enum.sum_by(events, &:erlang.external_size/1)
+
+    try do
+      :ets.update_counter(@table, {id, :seq}, {4, -bytes})
+      :ok
+    rescue
+      # The session closed while its chunk was written.
+      ArgumentError -> :ok
+    end
   end
 
   @doc """
@@ -248,10 +266,22 @@ defmodule PhoenixReplay.Session.Buffer do
     end
   end
 
-  @doc "Lists `{id, pid}` for every buffered session."
+  @doc "Lists `{id, pid}` for every buffered session not already being saved."
   @spec sessions() :: [{Recording.id(), pid()}]
   def sessions do
-    :ets.select(@table, fun(do: ({{id, :meta}, pid, _config, _recording} -> {id, pid})))
+    @table
+    |> :ets.select(fun(do: ({{id, :meta}, pid, _config, _recording} -> {id, pid})))
+    |> Enum.reject(fn {id, _pid} -> :ets.member(@table, {id, :saving}) end)
+  end
+
+  @doc """
+  Marks the session as being saved, so a restarted
+  `PhoenixReplay.Session.Monitor` leaves it to the task saving it.
+  """
+  @spec saving(Recording.id()) :: :ok
+  def saving(id) do
+    :ets.insert(@table, {{id, :saving}, true})
+    :ok
   end
 
   @doc "Summarizes every buffered session, most recent first."
@@ -270,7 +300,7 @@ defmodule PhoenixReplay.Session.Buffer do
           duration_ms: max(flushed.duration_ms, duration_ms(recording.id))
       }
     end)
-    |> Enum.sort_by(& &1.connected_at, :desc)
+    |> Summary.sort()
   end
 
   @doc "Removes the session and all of its events."
@@ -280,6 +310,7 @@ defmodule PhoenixReplay.Session.Buffer do
     :ets.match_delete(@table, {{:collected, id, :_}, :_, :_})
     :ets.delete(@table, {id, :seq})
     :ets.delete(@table, {id, :state})
+    :ets.delete(@table, {id, :saving})
     :ets.delete(@table, {id, :meta})
     :ets.select_delete(@table, events_of(id))
     :ok
@@ -293,9 +324,26 @@ defmodule PhoenixReplay.Session.Buffer do
   end
 
   defp write(id, started_at, type, data) do
-    seq = :ets.update_counter(@table, {id, :seq}, {2, 1}) - 1
     at = System.monotonic_time(:millisecond) - started_at
-    append(id, seq, %Event{at: at, type: type, data: data})
+    event = %Event{at: at, type: type, data: data}
+
+    [next, _bytes] =
+      :ets.update_counter(@table, {id, :seq}, [{2, 1}, {4, :erlang.external_size(event)}])
+
+    :ets.insert(@table, {{id, next - 1}, event})
+
+    # The session may close between the counter and the insert; nothing it
+    # leaves behind would ever be removed.
+    if :ets.member(@table, {id, :meta}), do: :ok, else: discard(id, next - 1)
+  rescue
+    # It closed before the counter: its rows are already gone.
+    ArgumentError -> discard(id, nil)
+  end
+
+  defp discard(id, seq) do
+    if seq, do: :ets.delete(@table, {id, seq})
+    :ets.match_delete(@table, {{:collected, id, :_}, :_, :_})
+    :ok
   end
 
   # Rows of the session's buffered events, which have integer sequence keys.

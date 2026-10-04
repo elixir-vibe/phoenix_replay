@@ -21,6 +21,9 @@ defmodule PhoenixReplay.Test.Repos do
   # databases and migrates them with PhoenixReplay.Storage.Ecto.Migration,
   # as `mix ecto.reset` would. Tests check out sandboxed connections.
 
+  # QuackDB is a dependency only on Elixir 1.19 and later; see mix.exs.
+  @compile {:no_warn_undefined, [QuackDB.Server]}
+
   alias Ecto.Adapters.SQL.Sandbox
   alias PhoenixReplay.Test.{DuckDBRepo, PostgresRepo, SQLiteRepo}
 
@@ -32,10 +35,7 @@ defmodule PhoenixReplay.Test.Repos do
       [start_sqlite(), start_postgres(), start_duckdb()]
       |> Enum.reject(&is_nil/1)
 
-    for repo <- started do
-      Ecto.Migrator.run(repo, @migrations, :up, all: true, log: false)
-      Sandbox.mode(repo, :manual)
-    end
+    for repo <- started, do: Sandbox.mode(repo, :manual)
 
     started
   end
@@ -63,6 +63,8 @@ defmodule PhoenixReplay.Test.Repos do
           strategy: :rest_for_one
         )
 
+      Sandbox.mode(DuckDBRepo, :auto)
+      migrate(DuckDBRepo)
       DuckDBRepo
     end
   end
@@ -72,7 +74,13 @@ defmodule PhoenixReplay.Test.Repos do
     config = repo.config()
     _ = adapter.storage_down(config)
     :ok = adapter.storage_up(config)
+
+    {:ok, _result, _apps} =
+      Ecto.Migrator.with_repo(repo, &migrate/1, pool: DBConnection.ConnectionPool)
+
     {:ok, _pid} = repo.start_link()
     repo
   end
+
+  defp migrate(repo), do: Ecto.Migrator.run(repo, @migrations, :up, all: true, log: false)
 end

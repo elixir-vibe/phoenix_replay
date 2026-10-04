@@ -13,10 +13,10 @@ defmodule PhoenixReplay.Session.Monitor do
   When the process exits abnormally, its exit reason is recorded as an
   `:exit` event. The session is then discarded, or saved by
   `PhoenixReplay.Session.Finalizer` in a supervised task, after any flush
-  in flight. The buffer is closed once the task finishes, whether it saved
-  the recording or gave up. Each outcome emits its `PhoenixReplay.Telemetry`
-  event after the buffer is closed, so a handler observes the finished
-  state.
+  in flight. The task closes the buffer once it saved the recording or gave
+  up, and emits its `PhoenixReplay.Telemetry` event after that, so a
+  handler observes the finished state. Sessions being saved are marked in
+  the buffer, so a restarted monitor leaves them to their task.
 
   On shutdown the monitor waits for saves and flushes in flight. On start
   it re-attaches to every session already in
@@ -27,7 +27,7 @@ defmodule PhoenixReplay.Session.Monitor do
 
   require Logger
 
-  alias PhoenixReplay.{Config, Recordings, Storage, Telemetry}
+  alias PhoenixReplay.{Recordings, Storage, Telemetry}
   alias PhoenixReplay.Session.{Buffer, Finalizer, Flusher}
   alias PhoenixReplay.Recording.Keep
 
@@ -51,8 +51,7 @@ defmodule PhoenixReplay.Session.Monitor do
   @impl true
   def init(_opts) do
     Process.flag(:trap_exit, true)
-    state = %{sessions: %{}, tracks: %{}, tasks: %{}, tick: tick(Config.load().flush)}
-    {:ok, schedule_tick(state), {:continue, :recover}}
+    {:ok, %{sessions: %{}, tracks: %{}, tasks: %{}, tick: nil}, {:continue, :recover}}
   end
 
   @impl true
@@ -69,8 +68,12 @@ defmodule PhoenixReplay.Session.Monitor do
 
   @impl true
   def handle_info(:tick, state) do
-    state = schedule_tick(state)
-    {:noreply, Enum.reduce(state.tracks, state, fn {id, track}, acc -> check(acc, id, track) end)}
+    state =
+      Enum.reduce(state.tracks, %{state | tick: nil}, fn {id, track}, acc ->
+        check(acc, id, track)
+      end)
+
+    {:noreply, Enum.reduce(Map.keys(state.tracks), state, &keep_ticking(&2, &1))}
   end
 
   def handle_info({:DOWN, ref, :process, pid, reason}, state) do
@@ -107,12 +110,31 @@ defmodule PhoenixReplay.Session.Monitor do
       ended?: false
     }
 
-    %{
-      state
-      | sessions: Map.put(state.sessions, Process.monitor(pid), id),
-        tracks: Map.put(state.tracks, id, track)
-    }
+    keep_ticking(
+      %{
+        state
+        | sessions: Map.put(state.sessions, Process.monitor(pid), id),
+          tracks: Map.put(state.tracks, id, track)
+      },
+      id
+    )
   end
+
+  # One timer runs while a watched session flushes, at the shortest
+  # interval among them, so each session's own `:flush` applies.
+  defp keep_ticking(state, id) do
+    case Buffer.config(id) do
+      {:ok, %{flush: %{interval: interval}}} -> schedule_tick(state, min(interval, @max_tick))
+      _no_flush -> state
+    end
+  end
+
+  defp schedule_tick(%{tick: nil} = state, period) do
+    Process.send_after(self(), :tick, period)
+    %{state | tick: period}
+  end
+
+  defp schedule_tick(%{tick: tick} = state, period), do: %{state | tick: min(tick, period)}
 
   ## Flushing
 
@@ -179,8 +201,10 @@ defmodule PhoenixReplay.Session.Monitor do
     with {:ok, recording} <- Buffer.fetch(id),
          {:ok, config} <- Buffer.config(id),
          :keep <- keep(id, recording, config) do
+      :ok = Buffer.saving(id)
+
       task =
-        Task.Supervisor.async_nolink(PhoenixReplay.TaskSupervisor, Finalizer, :persist, [
+        Task.Supervisor.async_nolink(PhoenixReplay.TaskSupervisor, Finalizer, :finish, [
           recording,
           config
         ])
@@ -215,16 +239,8 @@ defmodule PhoenixReplay.Session.Monitor do
     flushed(state, id)
   end
 
-  defp completed(state, %{kind: :save, id: id}, result) do
-    close(id)
-
-    case result do
-      {:ok, recording} -> Telemetry.persisted(recording)
-      {:error, reason} -> Telemetry.failed(id, reason)
-    end
-
-    state
-  end
+  # The save task closed the session and reported its outcome itself.
+  defp completed(state, %{kind: :save}, _result), do: state
 
   defp task_crashed(state, ref, %{kind: kind, id: id}, reason) do
     Logger.error(
@@ -272,16 +288,6 @@ defmodule PhoenixReplay.Session.Monitor do
   defp close(id) do
     :ok = Buffer.close(id)
     Recordings.broadcast_change()
-  end
-
-  defp tick(nil), do: nil
-  defp tick(%{interval: interval}), do: min(interval, @max_tick)
-
-  defp schedule_tick(%{tick: nil} = state), do: state
-
-  defp schedule_tick(%{tick: tick} = state) do
-    Process.send_after(self(), :tick, tick)
-    state
   end
 
   defp now, do: System.monotonic_time(:millisecond)

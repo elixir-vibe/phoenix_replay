@@ -28,6 +28,10 @@ defmodule PhoenixReplay.Plug do
 
   A visit lasts as long as the session cookie. The session is rewritten
   only when the kept context changes. Only `GET` requests are landings.
+
+  The kept context stays under 1 KB, so a crafted link cannot overflow a
+  cookie session: past that, the landing's params are dropped, then the
+  headers.
   """
 
   @behaviour Plug
@@ -38,6 +42,7 @@ defmodule PhoenixReplay.Plug do
 
   @key "phoenix_replay"
   @max_value 256
+  @max_kept 1_024
 
   @doc "The session key the context is kept under."
   @spec session_key() :: String.t()
@@ -61,6 +66,7 @@ defmodule PhoenixReplay.Plug do
       kept
       |> put_headers(conn, context.headers)
       |> put_landing(conn, context.landing)
+      |> fit()
 
     if updated == kept, do: conn, else: put_session(conn, @key, updated)
   end
@@ -84,13 +90,22 @@ defmodule PhoenixReplay.Plug do
 
     if landing?(kept, params, landing.attribution) do
       Map.put(kept, "landing", %{
-        "path" => conn.request_path,
+        "path" => cut(conn.request_path),
         "at" => System.system_time(:millisecond),
         "params" => params,
         "referrer" => referrer(conn, landing.referrer)
       })
     else
       kept
+    end
+  end
+
+  defp fit(kept) do
+    cond do
+      :erlang.external_size(kept) <= @max_kept -> kept
+      kept["landing"]["params"] not in [nil, %{}] -> fit(put_in(kept, ["landing", "params"], %{}))
+      Map.has_key?(kept, "headers") -> fit(Map.delete(kept, "headers"))
+      true -> Map.delete(kept, "landing")
     end
   end
 

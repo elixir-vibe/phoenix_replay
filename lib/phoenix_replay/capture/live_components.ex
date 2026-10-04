@@ -26,6 +26,8 @@ defmodule PhoenixReplay.Capture.LiveComponents do
   loosely and ignore shapes they do not expect.
   """
 
+  require Logger
+
   alias PhoenixReplay.Capture.{AsyncResults, Client}
   alias PhoenixReplay.Session.Buffer
 
@@ -54,15 +56,32 @@ defmodule PhoenixReplay.Capture.LiveComponents do
     :ok
   end
 
-  @doc "Handles a LiveComponent telemetry event in the LiveView process."
+  @doc """
+  Handles a LiveComponent telemetry event in the LiveView process. A
+  failure, such as a custom sanitizer raising, is logged instead of
+  raised: `:telemetry` would detach the handler for the whole application.
+  """
   @spec handle_event([atom()], map(), map(), nil) :: :ok
-  def handle_event(
-        [:phoenix, :live_component, :handle_event, :start],
-        _measures,
-        %{component: module, socket: %{assigns: %{id: id}}, event: name, params: params},
-        nil
+  def handle_event(event, measures, metadata, config) do
+    capture(event, measures, metadata, config)
+    :ok
+  catch
+    kind, reason ->
+      Logger.error(
+        "PhoenixReplay: capturing #{inspect(event)} failed: " <>
+          Exception.format(kind, reason, __STACKTRACE__)
       )
-      when is_map(params) do
+
+      :ok
+  end
+
+  defp capture(
+         [:phoenix, :live_component, :handle_event, :start],
+         _measures,
+         %{component: module, socket: %{assigns: %{id: id}}, event: name, params: params},
+         nil
+       )
+       when is_map(params) do
     case Buffer.session(self()) do
       {:ok, _id, config} ->
         params = config.sanitizer.sanitize_params(Client.observe(params))
@@ -73,47 +92,47 @@ defmodule PhoenixReplay.Capture.LiveComponents do
     end
   end
 
-  def handle_event(
-        [:phoenix, :live_component, :update, :stop],
-        _measures,
-        %{component: module, sockets: sockets},
-        nil
-      )
-      when is_list(sockets) do
+  defp capture(
+         [:phoenix, :live_component, :update, :stop],
+         _measures,
+         %{component: module, sockets: sockets},
+         nil
+       )
+       when is_list(sockets) do
     Enum.each(sockets, &record_changes(module, &1))
   end
 
-  def handle_event(
-        [:phoenix, :live_component, callback, :stop],
-        _measures,
-        %{component: module, socket: socket},
-        nil
-      )
-      when callback in [:handle_event, :handle_async] do
+  defp capture(
+         [:phoenix, :live_component, callback, :stop],
+         _measures,
+         %{component: module, socket: socket},
+         nil
+       )
+       when callback in [:handle_event, :handle_async] do
     record_changes(module, socket)
     AsyncResults.explain(socket)
   end
 
-  def handle_event(
-        [:phoenix, :live_view, :render, :stop],
-        _measures,
-        %{component: module, id: id, cid: cid},
-        nil
-      )
-      when is_integer(cid) do
+  defp capture(
+         [:phoenix, :live_view, :render, :stop],
+         _measures,
+         %{component: module, id: id, cid: cid},
+         nil
+       )
+       when is_integer(cid) do
     AsyncResults.rendered(module, id, cid)
   end
 
-  def handle_event(
-        [:phoenix, :live_component, :destroyed],
-        _measures,
-        %{component: module, socket: %{assigns: %{id: id}}},
-        nil
-      ) do
+  defp capture(
+         [:phoenix, :live_component, :destroyed],
+         _measures,
+         %{component: module, socket: %{assigns: %{id: id}}},
+         nil
+       ) do
     record(:component_destroyed, %{module: module, id: id})
   end
 
-  def handle_event(_event, _measures, _metadata, nil), do: :ok
+  defp capture(_event, _measures, _metadata, nil), do: :ok
 
   defp record_changes(module, %{assigns: %{id: id, __changed__: changed} = assigns})
        when map_size(changed) > 0 do

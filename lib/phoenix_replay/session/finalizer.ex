@@ -12,7 +12,29 @@ defmodule PhoenixReplay.Session.Finalizer do
 
   require Logger
 
-  alias PhoenixReplay.{Config, Recording, Recordings, Storage}
+  alias PhoenixReplay.{Config, Recording, Recordings, Storage, Telemetry}
+  alias PhoenixReplay.Session.Buffer
+
+  @doc """
+  Saves the buffered `recording` with `persist/2`, then closes its buffer
+  and emits `[:phoenix_replay, :recording, :persisted]` or `:failed`.
+
+  The task does this itself, so a session is finished even if the monitor
+  that started the task restarts meanwhile.
+  """
+  @spec finish(Recording.t(), Config.t()) :: {:ok, Recording.t()} | {:error, term()}
+  def finish(%Recording{id: id} = recording, %Config{} = config) do
+    result = persist(recording, config)
+    :ok = Buffer.close(id)
+    :ok = Recordings.broadcast_change()
+
+    case result do
+      {:ok, saved} -> Telemetry.persisted(saved)
+      {:error, reason} -> Telemetry.failed(id, reason)
+    end
+
+    result
+  end
 
   @doc """
   Completes and saves the buffered `recording`, retrying the save until it

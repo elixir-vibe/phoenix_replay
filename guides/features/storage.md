@@ -37,12 +37,12 @@ Create the table with a migration that calls `PhoenixReplay.Storage.Ecto.Migrati
 defmodule MyApp.Repo.Migrations.AddPhoenixReplay do
   use Ecto.Migration
 
-  def up, do: PhoenixReplay.Storage.Ecto.Migration.up()
-  def down, do: PhoenixReplay.Storage.Ecto.Migration.down()
+  def up, do: PhoenixReplay.Storage.Ecto.Migration.up(version: 2)
+  def down, do: PhoenixReplay.Storage.Ecto.Migration.down(version: 2)
 end
 ```
 
-The table is versioned. When a release changes it, the changelog says so; add a migration that upgrades from the version you have, such as `up(from: 1)` for a table PhoenixReplay 0.4 created.
+The table is versioned, and pinning the version keeps the migration doing the same thing after later releases. When a release changes the table, the changelog says so; add a migration that upgrades from the version you have, such as `up(from: 1, version: 2)` for a table PhoenixReplay 0.4 created.
 
 The dashboard reads one page at a time in SQL, with a count for the total. Text search matches the URL and session id case-insensitively. Event names are stored encoded, so filtering by an event name checks the rows that match the other filters after reading them, and the names the filter suggests come from the 500 most recent recordings.
 

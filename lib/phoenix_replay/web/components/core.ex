@@ -309,7 +309,13 @@ defmodule PhoenixReplay.Web.Components.Core do
   @spec menu(map()) :: Phoenix.LiveView.Rendered.t()
   def menu(assigns) do
     ~H"""
-    <div class="relative">
+    <%!-- Clicks on the trigger are not "away", so it alone toggles the menu. --%>
+    <div
+      class="relative"
+      phx-click-away={close_menu(@id)}
+      phx-window-keydown={close_menu(@id)}
+      phx-key="Escape"
+    >
       <button
         id={"#{@id}-button"}
         type="button"
@@ -327,9 +333,6 @@ defmodule PhoenixReplay.Web.Components.Core do
         id={"#{@id}-items"}
         role="menu"
         aria-labelledby={"#{@id}-button"}
-        phx-click-away={close_menu(@id)}
-        phx-window-keydown={close_menu(@id)}
-        phx-key="Escape"
         class="absolute right-0 z-20 mt-1 hidden min-w-48 rounded-lg border border-line bg-surface p-1 shadow-lg"
       >
         <div

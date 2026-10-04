@@ -51,7 +51,7 @@ defmodule PhoenixReplay.Web.Live.Index do
 
     {:noreply,
      socket
-     |> assign(page: Params.integer(params["page"], 1), filter: filter, until: until)
+     |> assign(page: max(Params.integer(params["page"], 1), 1), filter: filter, until: until)
      |> load()}
   end
 
@@ -154,8 +154,8 @@ defmodule PhoenixReplay.Web.Live.Index do
       )
 
     case read.(page) do
-      {[], total} when total > 0 and page > 1 ->
-        last = ceil(total / @per_page)
+      {[], total} when page > 1 ->
+        last = max(ceil(total / @per_page), 1)
         {saved, total} = read.(last)
         {saved, total, last}
 

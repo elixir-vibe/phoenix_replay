@@ -11,8 +11,9 @@ defmodule PhoenixReplay.Storage.File do
   While a session runs, its chunks are appended to `<id>.<node>.part` as
   frames (see `PhoenixReplay.Storage.Codec.frame/1`), and saving the
   finished recording deletes the part file. Part files carry a tag of the
-  node that wrote them, so nodes sharing a directory only recover their
-  own.
+  node and host that wrote them, so instances sharing a directory, in a
+  cluster or not, only recover their own. Parts left by an instance that
+  never starts again under the same node and host name are not recovered.
 
   Summaries are kept in an ETS index once read, so listing reads only the
   summary files it has not seen. The directory's file names stay the
@@ -66,7 +67,7 @@ defmodule PhoenixReplay.Storage.File do
          {:ok, summary_path} <- path(recording.id, @summary_ext, opts),
          :ok <- File.mkdir_p(dir(opts)),
          :ok <- write_synced(recording_path, Codec.encode(recording)),
-         summary = Summary.new(recording),
+         summary = Summary.new(recording, saved_at: System.system_time(:millisecond)),
          :ok <- write_synced(summary_path, Codec.encode(summary)) do
       index(dir(opts), [{recording.id, summary}])
       remove_parts(recording.id, opts)
@@ -137,7 +138,7 @@ defmodule PhoenixReplay.Storage.File do
 
     dir
     |> summaries(ids)
-    |> Enum.sort_by(& &1.connected_at, :desc)
+    |> Summary.sort()
   end
 
   @impl true
@@ -257,7 +258,12 @@ defmodule PhoenixReplay.Storage.File do
       else: {:error, :not_found}
   end
 
-  defp node_tag, do: node() |> :erlang.phash2() |> Integer.to_string(36)
+  # Nodes that are not distributed are all :nonode@nohost, so the host
+  # tells instances sharing a directory apart.
+  defp node_tag do
+    {:ok, host} = :inet.gethostname()
+    {node(), host} |> :erlang.phash2() |> Integer.to_string(36)
+  end
 
   defp read_summary(dir, id) do
     path = Path.join(dir, id <> @summary_ext)

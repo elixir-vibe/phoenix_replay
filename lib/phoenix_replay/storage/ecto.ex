@@ -27,8 +27,8 @@ if Code.ensure_loaded?(Ecto.Query) do
         defmodule MyApp.Repo.Migrations.AddPhoenixReplay do
           use Ecto.Migration
 
-          def up, do: PhoenixReplay.Storage.Ecto.Migration.up()
-          def down, do: PhoenixReplay.Storage.Ecto.Migration.down()
+          def up, do: PhoenixReplay.Storage.Ecto.Migration.up(version: 2)
+          def down, do: PhoenixReplay.Storage.Ecto.Migration.down(version: 2)
         end
     """
 
@@ -53,7 +53,8 @@ if Code.ensure_loaded?(Ecto.Query) do
       :tab,
       :viewport,
       :device,
-      :source
+      :source,
+      :saved_at
     ]
     @replaced_fields [
       :view,
@@ -66,13 +67,14 @@ if Code.ensure_loaded?(Ecto.Query) do
       :viewport,
       :device,
       :source,
+      :saved_at,
       :event_names,
       :data
     ]
 
     @impl true
     def save(%Recording{} = recording, opts) do
-      summary = Summary.new(recording)
+      summary = Summary.new(recording, saved_at: System.system_time(:millisecond))
 
       row =
         summary
@@ -101,7 +103,7 @@ if Code.ensure_loaded?(Ecto.Query) do
     def list(opts) do
       query =
         from(r in @table,
-          order_by: [desc: r.connected_at],
+          order_by: [desc: r.connected_at, desc: r.id],
           select: map(r, ^[:event_names | @summary_fields])
         )
 
@@ -115,7 +117,7 @@ if Code.ensure_loaded?(Ecto.Query) do
 
       summaries =
         matching
-        |> order_by(desc: :connected_at)
+        |> order_by(desc: :connected_at, desc: :id)
         |> offset(^Keyword.get(page_opts, :offset, 0))
         |> limit(^Keyword.fetch!(page_opts, :limit))
         |> select([r], map(r, ^[:event_names | @summary_fields]))
@@ -128,7 +130,7 @@ if Code.ensure_loaded?(Ecto.Query) do
     def query(%Filter{} = filter, page_opts, opts) do
       %{filter | event: nil}
       |> matching(page_opts)
-      |> order_by(desc: :connected_at)
+      |> order_by(desc: :connected_at, desc: :id)
       |> select([r], map(r, ^[:event_names | @summary_fields]))
       |> repo(opts).all()
       |> Enum.map(&to_summary/1)
@@ -152,8 +154,10 @@ if Code.ensure_loaded?(Ecto.Query) do
         filter.min_events && dynamic([r], r.event_count >= ^filter.min_events),
         filter.errors && dynamic([r], r.error_count > 0),
         filter.tab && dynamic([r], r.tab == ^filter.tab),
-        (until = page_opts[:until]) && dynamic([r], r.connected_at <= ^until),
-        (since = page_opts[:since]) && dynamic([r], r.connected_at > ^since)
+        (until = page_opts[:until]) &&
+          dynamic([r], coalesce(r.saved_at, r.connected_at) <= ^until),
+        (since = page_opts[:since]) &&
+          dynamic([r], coalesce(r.saved_at, r.connected_at) > ^since)
       ]
       |> Enum.filter(& &1)
       |> Enum.reduce(from(r in @table), &where(&2, ^&1))
