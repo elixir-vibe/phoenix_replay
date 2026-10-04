@@ -3,10 +3,19 @@ import { afterEach, expect, test } from 'volt:test'
 import { html, mountHook } from '../test/hooks'
 import { FrameViewport } from './frame_viewport'
 
-const section = (width?: number, height?: number): HTMLElement =>
+interface Frame {
+  width: number
+  height: number
+  mode?: 'fit' | 'actual'
+  maxHeight?: number
+}
+
+const section = ({ width, height, mode = 'fit', maxHeight = 600 }: Frame): HTMLElement =>
   html(`
-    <section style="width: 600px"${width ? ` data-width="${width}" data-height="${height}"` : ''}>
+    <section style="width: 600px" data-width="${width}" data-height="${height}" data-mode="${mode}" data-max-height="${maxHeight}">
       <style phx-update="ignore"></style>
+      <style>#viewport-box, #viewport-frame { transition: none !important }</style>
+      <span data-scale-label></span>
       <div id="viewport-box"><iframe id="viewport-frame" style="display: block; border: 0"></iframe></div>
     </section>
   `)
@@ -15,42 +24,71 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-const size = (el: HTMLElement): { frame: CSSStyleDeclaration; box: CSSStyleDeclaration } => ({
+const measure = (
+  el: HTMLElement
+): { frame: CSSStyleDeclaration; box: CSSStyleDeclaration; label: string } => ({
   frame: getComputedStyle(el.querySelector('iframe') as HTMLIFrameElement),
-  box: getComputedStyle(el.querySelector('#viewport-box') as HTMLElement)
+  box: getComputedStyle(el.querySelector('#viewport-box') as HTMLElement),
+  label: el.querySelector('[data-scale-label]')?.textContent ?? ''
 })
 
-test('scales a wider recorded viewport down to fit', () => {
-  const el = section(1200, 800)
+test('fits a wide viewport to the width', () => {
+  const el = section({ width: 1200, height: 800 })
   mountHook(FrameViewport, el)
 
-  const { frame, box } = size(el)
+  const { frame, box, label } = measure(el)
   expect(frame.width).toBe('1200px')
   expect(frame.transform).toBe('matrix(0.5, 0, 0, 0.5, 0, 0)')
   expect(box.height).toBe('400px')
+  expect(label).toBe('1200 × 800 · 50%')
 })
 
-test('keeps a narrower recorded viewport at its size', () => {
-  const el = section(390, 844)
+test('fits a tall viewport to the height, keeping its aspect ratio and centring it', () => {
+  const el = section({ width: 390, height: 844, maxHeight: 422 })
   mountHook(FrameViewport, el)
 
-  const { frame, box } = size(el)
-  expect(frame.width).toBe('390px')
-  expect(frame.marginLeft).toBe('105px')
-  expect(box.height).toBe('844px')
+  const { frame, box, label } = measure(el)
+  expect(frame.transform).toBe('matrix(0.5, 0, 0, 0.5, 0, 0)')
+  expect(box.height).toBe('422px')
+  // 600 wide, 195 shown: centred.
+  expect(frame.marginLeft).toBe('203px')
+  expect(label).toBe('390 × 844 · 50%')
 })
 
-test('follows a new viewport, and clears the sizes without one', () => {
-  const el = section(390, 844)
+test('never scales up a viewport that fits', () => {
+  const el = section({ width: 390, height: 500 })
+  mountHook(FrameViewport, el)
+
+  expect(measure(el).label).toBe('390 × 500 · 100%')
+})
+
+test('renders at 100% in a scrolling box in actual mode', () => {
+  const el = section({ width: 390, height: 844, mode: 'actual', maxHeight: 422 })
+  mountHook(FrameViewport, el)
+
+  const { frame, box, label } = measure(el)
+  expect(frame.transform).toBe('matrix(1, 0, 0, 1, 0, 0)')
+  expect(box.height).toBe('422px')
+  expect(box.overflowY).toBe('auto')
+  expect(label).toBe('390 × 844 · 100%')
+})
+
+test('follows a new viewport and mode, and clears the sizes without one', () => {
+  const el = section({ width: 390, height: 844, maxHeight: 422 })
   const { hook } = mountHook(FrameViewport, el)
 
-  el.dataset.width = '1200'
-  el.dataset.height = '600'
+  el.dataset.width = '844'
+  el.dataset.height = '390'
   hook.updated?.()
-  expect(size(el).box.height).toBe('300px')
+  expect(measure(el).label).toBe('844 × 390 · 71%')
+
+  el.dataset.mode = 'actual'
+  hook.updated?.()
+  expect(measure(el).label).toBe('844 × 390 · 100%')
 
   delete el.dataset.width
   delete el.dataset.height
   hook.updated?.()
   expect(el.querySelector('style')?.textContent).toBe('')
+  expect(measure(el).label).toBe('')
 })

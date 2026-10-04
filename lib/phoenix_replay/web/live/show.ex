@@ -51,7 +51,8 @@ defmodule PhoenixReplay.Web.Live.Show do
         speed: 1,
         playing: nil,
         speeds: @speeds,
-        hidden: MapSet.new()
+        hidden: MapSet.new(),
+        frame_mode: "fit"
       )
 
     cond do
@@ -145,6 +146,10 @@ defmodule PhoenixReplay.Web.Live.Show do
     speed = if speed in @speeds, do: speed, else: 1
     socket = assign(socket, :speed, speed)
     {:noreply, if(socket.assigns.playing, do: socket |> pause() |> play(), else: socket)}
+  end
+
+  def handle_event("frame_mode", %{"mode" => mode}, socket) when mode in ~w(fit actual) do
+    {:noreply, assign(socket, :frame_mode, mode)}
   end
 
   def handle_event("toggle_kind", %{"kind" => kind}, socket) do
@@ -346,10 +351,12 @@ defmodule PhoenixReplay.Web.Live.Show do
   attr :id, :string, required: true
   attr :channel, :string, required: true
   attr :viewport, :map, default: nil
+  attr :mode, :string, default: "fit"
 
-  # The frame renders at the recorded viewport, scaled down to fit: the
-  # FrameViewport hook writes the sizes into the ignored style element, so
-  # the frame itself stays server-rendered.
+  # The frame renders at the recorded viewport, keeping its aspect ratio:
+  # fitted to the window, or at 100% in a scrolling box. The FrameViewport
+  # hook writes the sizes into the ignored style element and the scale into
+  # the ignored label, so the frame itself stays server-rendered.
   defp frame(assigns) do
     ~H"""
     <section
@@ -357,11 +364,44 @@ defmodule PhoenixReplay.Web.Live.Show do
       phx-hook="FrameViewport"
       data-width={@viewport && @viewport.width}
       data-height={@viewport && @viewport.height}
+      data-mode={@mode}
       class="mb-4 overflow-hidden rounded-lg border border-neutral-200 bg-white"
     >
       <style id="replay-viewport-style" phx-update="ignore">
       </style>
-      <div id="replay-viewport-box">
+      <div
+        :if={@viewport}
+        class="flex items-center gap-2 border-b border-neutral-100 px-3 py-1.5 text-xs text-neutral-500"
+      >
+        <span
+          id="replay-viewport-scale"
+          phx-update="ignore"
+          data-scale-label
+          class="font-mono tabular-nums"
+        ></span>
+        <span class="flex-1"></span>
+        <div
+          role="group"
+          aria-label="Frame size"
+          class="inline-flex overflow-hidden rounded-md border border-neutral-200"
+        >
+          <button
+            :for={{mode, label} <- [{"fit", "Fit"}, {"actual", "100%"}]}
+            type="button"
+            phx-click="frame_mode"
+            phx-value-mode={mode}
+            aria-pressed={to_string(mode == @mode)}
+            class={[
+              "px-2.5 py-1",
+              mode == @mode && "bg-neutral-900 text-white",
+              mode != @mode && "hover:bg-neutral-50"
+            ]}
+          >
+            {label}
+          </button>
+        </div>
+      </div>
+      <div id="replay-viewport-box" class="bg-neutral-100">
         <iframe
           id="replay-frame"
           title="Replay"
@@ -549,7 +589,13 @@ defmodule PhoenixReplay.Web.Live.Show do
         </div>
       </section>
 
-      <.frame context={@context} id={@recording.id} channel={@channel} viewport={@viewport} />
+      <.frame
+        context={@context}
+        id={@recording.id}
+        channel={@channel}
+        viewport={@viewport}
+        mode={@frame_mode}
+      />
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section class="flex min-w-0 flex-col rounded-lg border border-neutral-200 bg-white">

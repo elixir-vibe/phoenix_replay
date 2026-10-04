@@ -170,7 +170,14 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       Storage.save(Fixtures.storage(), recording)
       {:ok, view, _html} = live(build_conn(), "/replay/phone")
 
-      assert has_element?(view, ~s(#replay-viewport[data-width="390"][data-height="844"]))
+      assert has_element?(
+               view,
+               ~s(#replay-viewport[data-width="390"][data-height="844"][data-mode="fit"])
+             )
+
+      view |> element(~s(button[phx-value-mode="actual"])) |> render_click()
+      assert has_element?(view, ~s(#replay-viewport[data-mode="actual"]))
+      assert has_element?(view, ~s(button[phx-value-mode="actual"][aria-pressed="true"]))
       device = view |> element("#replay-device") |> render()
       assert device =~ "390 × 844 @3x"
       assert device =~ "· Safari on iOS"

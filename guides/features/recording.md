@@ -48,7 +48,7 @@ socket "/live", Phoenix.LiveView.Socket,
 
 `mix igniter.install phoenix_replay` makes both changes for the setup Phoenix generates. With them, `PhoenixReplay.Recording` `client` holds:
 
-- **the viewport** — width, height and pixel ratio when the LiveView connected. The player renders the replay at that size, scaled to fit, so a phone session shows the phone layout.
+- **the viewport** — width, height and pixel ratio when the LiveView connected. The player renders the replay at that size, keeping its aspect ratio: **Fit** scales it down until the whole viewport fits the window, centring a phone on a neutral stage, and **100%** shows it at true size in a scrolling box. A rotated phone eases into its new size, unless the viewer prefers reduced motion.
 - **resizes** — the viewport also travels with each click and key press, and a change is recorded as a `:viewport` event, so the replay follows a rotated phone or a resized window. Your `handle_event/3` receives the extra `"_replay"` param; recorded params leave it out.
 - **the user agent** — shown in the player as, for example, "Safari on iOS".
 - **the tab** — an id kept in the tab's `sessionStorage`. Navigating to another LiveView starts a new recording; the tab id ties them into one journey, and the player links the previous and next sessions of the tab.
