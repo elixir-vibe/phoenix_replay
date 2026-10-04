@@ -79,37 +79,72 @@ defmodule PhoenixReplay.Web.Live.Index do
   end
 
   defp load(socket) do
-    all =
-      socket.assigns.context.config
-      |> Recordings.list()
-      |> Enum.filter(&Context.allowed?(socket, :list, &1))
-
+    %{context: %{config: config}, filter: filter} = socket.assigns
     now = System.system_time(:millisecond)
-    summaries = Filter.apply(all, socket.assigns.filter, now)
-    total = length(summaries)
-    total_pages = max(1, ceil(total / @per_page))
-    page = min(socket.assigns.page, total_pages)
-    recordings = Enum.slice(summaries, (page - 1) * @per_page, @per_page)
+    allow = allow(socket)
+    count = &(config |> Recordings.query(&1, now: now, limit: 0, allow: allow) |> elem(1))
+
+    # Sessions still in the buffer: running, or ended and being saved.
+    {live, ending} =
+      Recordings.live(%Filter{}, now)
+      |> Enum.filter(allow || fn _summary -> true end)
+      |> Enum.split_with(& &1.live?)
+
+    stored = count.(%Filter{})
+    {saved, total, page} = saved_page(socket, now, allow)
+    buffered = MapSet.new(live ++ ending, & &1.id)
+    shown = Filter.apply(live ++ ending, filter, now)
 
     socket
     |> assign(
       page: page,
-      total_pages: total_pages,
-      total: total,
-      any?: all != [],
+      total_pages: max(1, ceil(total / @per_page)),
+      total: total + length(shown),
+      any?: stored + length(live) + length(ending) > 0,
       now: now,
-      live: Enum.filter(recordings, & &1.live?),
-      saved: Enum.reject(recordings, & &1.live?),
+      live: if(page == 1, do: Enum.filter(shown, & &1.live?), else: []),
+      saved:
+        if(page == 1, do: Enum.reject(shown, & &1.live?), else: []) ++
+          Enum.reject(saved, &MapSet.member?(buffered, &1.id)),
       counts: %{
-        all: length(all),
-        live: Enum.count(all, & &1.live?),
-        errors: Enum.count(all, &(&1.error_count > 0))
+        all: stored + length(live) + length(ending),
+        live: length(live),
+        errors: count.(%Filter{errors: true}) + Enum.count(live ++ ending, &(&1.error_count > 0))
       },
-      views: all |> Enum.map(& &1.view) |> Enum.uniq() |> Enum.sort(),
-      event_names: all |> Enum.flat_map(& &1.event_names) |> Enum.uniq() |> Enum.sort(),
-      can_clear?: all != [] and Context.allowed?(socket, :clear, nil)
+      facets: Recordings.facets(config, allow),
+      can_clear?: stored > 0 and Context.allowed?(socket, :clear, nil)
     )
-    |> schedule_refresh(Enum.any?(recordings, & &1.live?))
+    |> schedule_refresh(live != [])
+  end
+
+  # A page of stored recordings, the last one when the requested page is
+  # past the end.
+  defp saved_page(socket, now, allow) do
+    %{context: %{config: config}, filter: filter, page: page} = socket.assigns
+
+    read =
+      &Recordings.query(config, filter,
+        now: now,
+        offset: (&1 - 1) * @per_page,
+        limit: @per_page,
+        allow: allow
+      )
+
+    case read.(page) do
+      {[], total} when total > 0 and page > 1 ->
+        last = ceil(total / @per_page)
+        {saved, total} = read.(last)
+        {saved, total, last}
+
+      {saved, total} ->
+        {saved, total, page}
+    end
+  end
+
+  # Without an authorization module every recording is listed, and storage
+  # pages them; with one, each is checked.
+  defp allow(socket) do
+    if socket.assigns.context.authorize, do: &Context.allowed?(socket, :list, &1)
   end
 
   defp schedule_refresh(%{assigns: %{refresh_timer: timer}} = socket, live?) do
@@ -165,7 +200,12 @@ defmodule PhoenixReplay.Web.Live.Index do
         </p>
       </header>
 
-      <.filter_bar :if={@any?} filter={@filter} views={@views} event_names={@event_names} />
+      <.filter_bar
+        :if={@any?}
+        filter={@filter}
+        views={@facets.views}
+        event_names={@facets.event_names}
+      />
 
       <.empty_state :if={@any? and @total == 0} title="No recordings match these filters.">
         <:icon><.icon name="lucide:search-x" class="size-8" /></:icon>

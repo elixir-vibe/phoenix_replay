@@ -7,6 +7,10 @@ if Code.ensure_loaded?(Ecto.Query) do
     never decodes recordings. `event_names` holds the summary's event names
     in the same encoding as `data`.
 
+    The dashboard's pages are read in SQL, except when filtering by event
+    name: names are stored encoded, so that criterion is checked after
+    reading the rows matching the others.
+
     ## Options
 
       * `:repo` — the Ecto repo module (required)
@@ -41,6 +45,7 @@ if Code.ensure_loaded?(Ecto.Query) do
 
     alias PhoenixReplay.Recording
     alias PhoenixReplay.Recording.Summary
+    alias PhoenixReplay.Recordings.Filter
     alias PhoenixReplay.Storage.Codec
 
     @table "phoenix_replay_recordings"
@@ -101,6 +106,83 @@ if Code.ensure_loaded?(Ecto.Query) do
         )
 
       Enum.map(repo(opts).all(query), &to_summary/1)
+    end
+
+    @impl true
+    def query(%Filter{event: nil} = filter, page_opts, opts) do
+      matching = matching(filter, page_opts)
+      total = repo(opts).aggregate(matching, :count)
+
+      summaries =
+        matching
+        |> order_by(desc: :connected_at)
+        |> offset(^Keyword.get(page_opts, :offset, 0))
+        |> limit(^Keyword.fetch!(page_opts, :limit))
+        |> select([r], map(r, ^[:event_names | @summary_fields]))
+        |> repo(opts).all()
+        |> Enum.map(&to_summary/1)
+
+      {summaries, total}
+    end
+
+    def query(%Filter{} = filter, page_opts, opts) do
+      %{filter | event: nil}
+      |> matching(page_opts)
+      |> order_by(desc: :connected_at)
+      |> select([r], map(r, ^[:event_names | @summary_fields]))
+      |> repo(opts).all()
+      |> Enum.map(&to_summary/1)
+      |> Filter.page(filter, page_opts)
+    end
+
+    # The criteria SQL can check: all but the event name.
+    defp matching(filter, page_opts) do
+      now = Keyword.fetch!(page_opts, :now)
+
+      [
+        filter.query &&
+          dynamic(
+            [r],
+            fragment("lower(?) LIKE ? ESCAPE '\\'", r.id, ^pattern(filter.query)) or
+              fragment("lower(coalesce(?, '')) LIKE ? ESCAPE '\\'", r.url, ^pattern(filter.query))
+          ),
+        filter.view && dynamic([r], r.view == ^filter.view),
+        (after_ms = Filter.started_after(filter, now)) &&
+          dynamic([r], r.connected_at >= ^after_ms),
+        filter.min_events && dynamic([r], r.event_count >= ^filter.min_events),
+        filter.errors && dynamic([r], r.error_count > 0),
+        filter.tab && dynamic([r], r.tab == ^filter.tab),
+        (until = page_opts[:until]) && dynamic([r], r.connected_at <= ^until),
+        (since = page_opts[:since]) && dynamic([r], r.connected_at > ^since)
+      ]
+      |> Enum.filter(& &1)
+      |> Enum.reduce(from(r in @table), &where(&2, ^&1))
+    end
+
+    # Matches text anywhere, taking %, _ and \ in it literally.
+    defp pattern(text) do
+      "%" <> String.replace(String.downcase(text), ["\\", "%", "_"], &("\\" <> &1)) <> "%"
+    end
+
+    # Event names of the most recent recordings only: they are stored encoded.
+    @facet_rows 500
+
+    @impl true
+    def facets(opts) do
+      views = repo(opts).all(from(r in @table, distinct: true, order_by: r.view, select: r.view))
+
+      names =
+        from(r in @table,
+          order_by: [desc: r.connected_at],
+          limit: @facet_rows,
+          select: r.event_names
+        )
+        |> repo(opts).all()
+        |> Enum.flat_map(fn encoded -> elem(Codec.decode(encoded, :list), 1) end)
+        |> Enum.uniq()
+        |> Enum.sort()
+
+      %{views: views, event_names: names}
     end
 
     @impl true

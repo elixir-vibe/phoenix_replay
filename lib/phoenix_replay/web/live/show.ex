@@ -26,10 +26,13 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   alias PhoenixReplay.Recording.Timeline
   alias PhoenixReplay.Recordings
+  alias PhoenixReplay.Recordings.Filter
   alias PhoenixReplay.Web.{Context, Layouts, Params, Playback}
   alias PhoenixReplay.Web.Player.Events
 
   @speeds [1, 2, 5, 10]
+  # The most sessions of one browser tab the player links between.
+  @journey_limit 200
   @progress_every 25
 
   @impl true
@@ -277,10 +280,16 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   # The sessions of the recording's browser tab, oldest first, when it has more than one.
   defp journey(socket, %{id: id, client: %{tab: tab}}) when is_binary(tab) do
+    %{config: config} = socket.assigns.context
+    filter = %Filter{tab: tab}
+    now = System.system_time(:millisecond)
+    allowed? = &Context.allowed?(socket, :list, &1)
+    {stored, _total} = Recordings.query(config, filter, now: now, limit: @journey_limit)
+
     sessions =
-      socket.assigns.context.config
-      |> Recordings.list()
-      |> Enum.filter(&(&1.tab == tab and Context.allowed?(socket, :list, &1)))
+      (Recordings.live(filter, now) ++ stored)
+      |> Enum.uniq_by(& &1.id)
+      |> Enum.filter(allowed?)
       |> Enum.sort_by(& &1.connected_at)
 
     case {Enum.find_index(sessions, &(&1.id == id)), sessions} do

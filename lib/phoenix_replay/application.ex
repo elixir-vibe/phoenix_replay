@@ -15,6 +15,7 @@ defmodule PhoenixReplay.Application do
   def start(_type, _args) do
     :ok = PhoenixReplay.Storage.File.remember_root()
     :ok = PhoenixReplay.Session.Buffer.create_table()
+    :ok = PhoenixReplay.Storage.File.create_index()
 
     children = [
       {Phoenix.PubSub, name: PhoenixReplay.PubSub},

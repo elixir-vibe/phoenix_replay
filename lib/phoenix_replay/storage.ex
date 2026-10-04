@@ -29,10 +29,15 @@ defmodule PhoenixReplay.Storage do
   Callbacks receive the options from the `{module, opts}` tuple as their last
   argument. `list/1` must return summaries without decoding full recordings,
   ordered most recent first.
+
+  The dashboard reads pages through the optional `query/3`, and the views
+  and event names its filters suggest through the optional `facets/1`.
+  Without them, both are worked out from `list/1`.
   """
 
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.Summary
+  alias PhoenixReplay.Recordings.Filter
 
   @type t :: PhoenixReplay.Config.storage()
 
@@ -60,7 +65,23 @@ defmodule PhoenixReplay.Storage do
   @doc "Lists the ids of sessions with appended chunks this node did not finish."
   @callback partials(keyword()) :: [Recording.id()]
 
-  @optional_callbacks append: 3, fetch_partial: 2, partials: 1
+  @doc """
+  Reads a page of summaries matching `filter`, most recent first, and counts
+  every match. See `t:PhoenixReplay.Recordings.Filter.page_opts/0`.
+  """
+  @callback query(Filter.t(), Filter.page_opts(), keyword()) ::
+              {[Summary.t()], non_neg_integer()}
+
+  @typedoc "Values the dashboard's filters suggest."
+  @type facets :: %{views: [String.t()], event_names: [String.t()]}
+
+  @doc """
+  Suggestions for the dashboard's view and event filters, sorted. A
+  backend may draw them from recent recordings only.
+  """
+  @callback facets(keyword()) :: facets()
+
+  @optional_callbacks append: 3, fetch_partial: 2, partials: 1, query: 3, facets: 1
 
   @doc "Persists a finished recording."
   @spec save(t(), Recording.t()) :: :ok | {:error, term()}
@@ -74,6 +95,31 @@ defmodule PhoenixReplay.Storage do
   @spec list(t()) :: [Summary.t()]
   def list({module, opts}), do: module.list(opts)
 
+  @doc "Reads a page of summaries. See `c:query/3`."
+  @spec query(t(), Filter.t(), Filter.page_opts()) :: {[Summary.t()], non_neg_integer()}
+  def query({module, opts} = storage, %Filter{} = filter, page_opts) do
+    if exports?(module, :query, 3),
+      do: module.query(filter, page_opts, opts),
+      else: storage |> list() |> Filter.page(filter, page_opts)
+  end
+
+  @doc "The views and event names filters suggest. See `c:facets/1`."
+  @spec facets(t()) :: facets()
+  def facets({module, opts} = storage) do
+    if exports?(module, :facets, 1),
+      do: module.facets(opts),
+      else: storage |> list() |> facets_of()
+  end
+
+  @doc "The views and event names of `summaries`, sorted."
+  @spec facets_of([Summary.t()]) :: facets()
+  def facets_of(summaries) do
+    %{
+      views: summaries |> Enum.map(& &1.view) |> Enum.uniq() |> Enum.sort(),
+      event_names: summaries |> Enum.flat_map(& &1.event_names) |> Enum.uniq() |> Enum.sort()
+    }
+  end
+
   @doc "Deletes a recording by id."
   @spec delete(t(), Recording.id()) :: :ok | {:error, term()}
   def delete({module, opts}, id), do: module.delete(id, opts)
@@ -84,9 +130,10 @@ defmodule PhoenixReplay.Storage do
 
   @doc "Returns true when the backend takes running sessions in chunks."
   @spec chunked?(t()) :: boolean()
-  def chunked?({module, _opts}) do
-    Code.ensure_loaded?(module) and function_exported?(module, :append, 3)
-  end
+  def chunked?({module, _opts}), do: exports?(module, :append, 3)
+
+  defp exports?(module, function, arity),
+    do: Code.ensure_loaded?(module) and function_exported?(module, function, arity)
 
   @doc "Appends a chunk of a running session. See `c:append/3`."
   @spec append(t(), Recording.t(), chunk()) :: :ok | {:error, term()}

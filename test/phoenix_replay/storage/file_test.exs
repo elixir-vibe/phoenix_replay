@@ -22,6 +22,46 @@ defmodule PhoenixReplay.Storage.FileTest do
     assert [%{id: "newer", event_count: 6}, %{id: "older"}] = FileStorage.list(opts)
   end
 
+  test "keeps read summaries indexed and follows files other nodes write", %{
+    opts: opts,
+    tmp_dir: tmp_dir
+  } do
+    dir = opts[:path]
+    FileStorage.save(Fixtures.counter_recording(id: "mine", connected_at: 2), opts)
+    assert [%{id: "mine"}] = FileStorage.list(opts)
+
+    # An indexed summary is not read again.
+    File.write!(Path.join(dir, "mine.summary"), "unreadable")
+    assert [%{id: "mine"}] = FileStorage.list(opts)
+
+    # Another node saves into the same directory.
+    elsewhere = [path: Path.join(tmp_dir, "elsewhere")]
+    FileStorage.save(Fixtures.counter_recording(id: "theirs", connected_at: 1), elsewhere)
+
+    for ext <- ~w(.recording .summary),
+        do:
+          File.cp!(Path.join(elsewhere[:path], "theirs" <> ext), Path.join(dir, "theirs" <> ext))
+
+    assert [%{id: "mine"}, %{id: "theirs"}] = FileStorage.list(opts)
+
+    # And deletes one.
+    File.rm!(Path.join(dir, "mine.summary"))
+    assert [%{id: "theirs"}] = FileStorage.list(opts)
+  end
+
+  test "pages summaries matching a filter", %{opts: opts} do
+    for i <- 1..5,
+        do: FileStorage.save(Fixtures.counter_recording(id: "r#{i}", connected_at: i), opts)
+
+    filter = %PhoenixReplay.Recordings.Filter{}
+
+    assert {[%{id: "r4"}, %{id: "r3"}], 5} =
+             FileStorage.query(filter, [now: 10, offset: 1, limit: 2], opts)
+
+    assert {[%{id: "r3"}], 2} =
+             FileStorage.query(filter, [now: 10, until: 3, since: 1, limit: 1], opts)
+  end
+
   test "deletes one or all recordings", %{opts: opts} do
     for id <- ~w(a b), do: FileStorage.save(Fixtures.counter_recording(id: id), opts)
 

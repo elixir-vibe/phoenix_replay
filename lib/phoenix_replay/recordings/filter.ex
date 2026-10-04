@@ -77,11 +77,56 @@ defmodule PhoenixReplay.Recordings.Filter do
     Enum.filter(summaries, &matches?(&1, filter, now))
   end
 
+  @typedoc """
+  Which page of matching summaries to read:
+
+    * `:now` — the current time in Unix milliseconds, for `"within"`
+    * `:until` — only sessions that started at or before this time, so pages
+      stay put while new sessions arrive
+    * `:since` — only sessions that started after this time
+    * `:offset` and `:limit` — the slice to return
+  """
+  @type page_opts :: [
+          now: integer(),
+          until: integer() | nil,
+          since: integer() | nil,
+          offset: non_neg_integer(),
+          limit: non_neg_integer()
+        ]
+
+  @doc """
+  Reads a page of `summaries`, which are ordered most recent first, and
+  counts every summary that matches. See `t:page_opts/0`.
+  """
+  @spec page([Summary.t()], t(), page_opts()) :: {[Summary.t()], non_neg_integer()}
+  def page(summaries, %__MODULE__{} = filter, opts) do
+    {until, since} = {opts[:until], opts[:since]}
+
+    matching =
+      summaries
+      |> __MODULE__.apply(filter, Keyword.fetch!(opts, :now))
+      |> Enum.filter(fn summary ->
+        (is_nil(until) or summary.connected_at <= until) and
+          (is_nil(since) or summary.connected_at > since)
+      end)
+
+    {Enum.slice(matching, Keyword.get(opts, :offset, 0), Keyword.fetch!(opts, :limit)),
+     length(matching)}
+  end
+
+  @doc """
+  The earliest start time `"within"` allows at `now`, in Unix milliseconds,
+  or `nil` without it.
+  """
+  @spec started_after(t(), integer()) :: integer() | nil
+  def started_after(%__MODULE__{within: nil}, _now), do: nil
+  def started_after(%__MODULE__{within: within}, now), do: now - @windows[within]
+
   defp matches?(summary, filter, now) do
     query?(summary, filter.query) and
       (is_nil(filter.view) or summary.view == filter.view) and
       (is_nil(filter.event) or filter.event in summary.event_names) and
-      (is_nil(filter.within) or now - summary.connected_at <= @windows[filter.within]) and
+      (is_nil(filter.within) or summary.connected_at >= started_after(filter, now)) and
       (is_nil(filter.min_events) or summary.event_count >= filter.min_events) and
       (not filter.errors or summary.error_count > 0) and
       (is_nil(filter.tab) or summary.tab == filter.tab)

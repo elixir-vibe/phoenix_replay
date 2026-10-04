@@ -69,4 +69,22 @@ defmodule PhoenixReplay.Recordings.FilterTest do
     assert ids(%{"min_events" => "30", "within" => "7d", "event" => "save"}, summaries) ==
              ~w(checkout-1)
   end
+
+  test "pages matches within a time range and counts them all" do
+    summaries =
+      for at <- 5..1//-1, do: summary("s#{at}", connected_at: at, error_count: rem(at, 2))
+
+    page = &Filter.page(summaries, Filter.from_params(&1), [now: @now] ++ &2)
+    ids = fn {matches, total} -> {Enum.map(matches, & &1.id), total} end
+
+    assert ids.(page.(%{}, offset: 1, limit: 2)) == {~w(s4 s3), 5}
+    assert ids.(page.(%{"errors" => "1"}, limit: 10)) == {~w(s5 s3 s1), 3}
+    assert ids.(page.(%{}, until: 4, since: 2, limit: 10)) == {~w(s4 s3), 2}
+    assert ids.(page.(%{}, limit: 0)) == {[], 5}
+  end
+
+  test "names the earliest start a window allows" do
+    assert Filter.started_after(Filter.from_params(%{"within" => "1h"}), @now) == @now - 3_600_000
+    assert Filter.started_after(%Filter{}, @now) == nil
+  end
 end

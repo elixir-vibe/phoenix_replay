@@ -15,6 +15,7 @@ defmodule PhoenixReplay.Recordings do
   alias PhoenixReplay.{Config, Recording, Redactor, Storage}
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Recording.Summary
+  alias PhoenixReplay.Recordings.Filter
 
   @topic "phoenix_replay:recordings"
 
@@ -25,6 +26,45 @@ defmodule PhoenixReplay.Recordings do
     buffered_ids = MapSet.new(buffered, & &1.id)
     buffered ++ Enum.reject(Storage.list(storage), &MapSet.member?(buffered_ids, &1.id))
   end
+
+  @doc "Summaries of the sessions still recording that match `filter`, most recent first."
+  @spec live(Filter.t(), integer()) :: [Summary.t()]
+  def live(%Filter{} = filter, now) do
+    Buffer.summaries() |> Enum.map(&redact_url/1) |> Filter.apply(filter, now)
+  end
+
+  @doc """
+  Reads a page of stored recordings matching `filter`, most recent first,
+  and counts every match. See `t:PhoenixReplay.Recordings.Filter.page_opts/0`.
+
+  Storage pages the recordings itself, unless `:allow` is given: a function
+  that decides which summaries the reader may see. Every summary is then
+  read and checked, so the count stays exact.
+  """
+  @spec query(Config.t(), Filter.t(), keyword()) :: {[Summary.t()], non_neg_integer()}
+  def query(%Config{storage: storage}, %Filter{} = filter, opts) do
+    case Keyword.pop(opts, :allow) do
+      {nil, page_opts} ->
+        Storage.query(storage, filter, page_opts)
+
+      {allow, page_opts} ->
+        storage |> Storage.list() |> Enum.filter(allow) |> Filter.page(filter, page_opts)
+    end
+  end
+
+  @doc """
+  The views and event names of recordings, for suggesting filter values.
+  `allow` limits them to the summaries the reader may see.
+  """
+  @spec facets(Config.t(), (Summary.t() -> boolean()) | nil) :: Storage.facets()
+  def facets(%Config{storage: storage}, nil) do
+    live = Storage.facets_of(Buffer.summaries())
+    stored = Storage.facets(storage)
+    Map.merge(live, stored, fn _key, a, b -> Enum.sort(Enum.uniq(a ++ b)) end)
+  end
+
+  def facets(%Config{} = config, allow),
+    do: config |> list() |> Enum.filter(allow) |> Storage.facets_of()
 
   @doc """
   Fetches a recording from the buffer or storage.

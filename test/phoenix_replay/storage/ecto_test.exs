@@ -62,4 +62,65 @@ defmodule PhoenixReplay.Storage.EctoTest do
     assert :ok = EctoStorage.clear(opts)
     assert EctoStorage.list(opts) == []
   end
+
+  describe "query/3" do
+    alias PhoenixReplay.Recording.Event
+    alias PhoenixReplay.Recordings.Filter
+
+    setup %{opts: opts} do
+      error = %Event{at: 9, type: :log, data: %{level: :error, message: "x", metadata: %{}}}
+
+      for {id, at, extra} <- [
+            {"a", 1, []},
+            {"b", 2, [url: "http://x/sale/100%_off", tab: "t1"]},
+            {"c", 3, [view: Other, error: error]},
+            {"d", 4, [tab: "t1"]}
+          ] do
+        recording = Fixtures.counter_recording(id: id, connected_at: at)
+
+        recording = %{
+          recording
+          | url: extra[:url] || recording.url,
+            view: extra[:view] || recording.view,
+            events: recording.events ++ List.wrap(extra[:error]),
+            client: Map.put(recording.client, :tab, extra[:tab])
+        }
+
+        :ok = EctoStorage.save(recording, opts)
+      end
+
+      :ok
+    end
+
+    defp ids({summaries, total}), do: {Enum.map(summaries, & &1.id), total}
+
+    test "pages the most recent first and counts every match", %{opts: opts} do
+      query = &EctoStorage.query(%Filter{}, &1, opts)
+
+      assert ids(query.(now: 10, limit: 2)) == {~w(d c), 4}
+      assert ids(query.(now: 10, offset: 2, limit: 2)) == {~w(b a), 4}
+      assert ids(query.(now: 10, until: 3, since: 1, limit: 10)) == {~w(c b), 2}
+      assert ids(query.(now: 10, limit: 0)) == {[], 4}
+    end
+
+    test "checks each criterion in SQL", %{opts: opts} do
+      query = &ids(EctoStorage.query(Filter.from_params(&1), [now: 10, limit: 10], opts))
+
+      assert query.(%{"q" => "100%_OFF"}) == {~w(b), 1}
+      assert query.(%{"q" => "%"}) == {~w(b), 1}
+      assert query.(%{"view" => "Other"}) == {~w(c), 1}
+      assert query.(%{"errors" => "1"}) == {~w(c), 1}
+      assert query.(%{"tab" => "t1"}) == {~w(d b), 2}
+      assert query.(%{"min_events" => "7"}) == {~w(c), 1}
+      assert query.(%{"event" => "inc", "tab" => "t1"}) == {~w(d b), 2}
+      assert query.(%{"event" => "nothing"}) == {[], 0}
+    end
+
+    test "suggests views and event names", %{opts: opts} do
+      assert EctoStorage.facets(opts) == %{
+               views: ["Other", "PhoenixReplay.Test.Live.Counter"],
+               event_names: ["inc"]
+             }
+    end
+  end
 end

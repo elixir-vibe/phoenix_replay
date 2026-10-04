@@ -14,6 +14,11 @@ defmodule PhoenixReplay.Storage.File do
   node that wrote them, so nodes sharing a directory only recover their
   own.
 
+  Summaries are kept in an ETS index once read, so listing reads only the
+  summary files it has not seen. The directory's file names stay the
+  source of truth: files another node wrote or deleted are picked up on
+  the next list.
+
   ## Options
 
     * `:path` — directory for recording files (default: `"priv/replay_recordings"`).
@@ -29,16 +34,31 @@ defmodule PhoenixReplay.Storage.File do
 
   @behaviour PhoenixReplay.Storage
 
+  import Ex2ms
+
   require Logger
 
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.Summary
+  alias PhoenixReplay.Recordings.Filter
   alias PhoenixReplay.Storage.Codec
 
   @recording_ext ".recording"
   @summary_ext ".summary"
   @part_ext ".part"
   @tmp_ext ".tmp"
+  @index __MODULE__.Index
+
+  @doc """
+  Creates the summary index. `PhoenixReplay.Application` calls it at start,
+  so the table lives as long as the application; without it, every list
+  reads the summary files.
+  """
+  @spec create_index() :: :ok
+  def create_index do
+    :ets.new(@index, [:named_table, :public, :set, read_concurrency: true])
+    :ok
+  end
 
   @impl true
   def save(%Recording{} = recording, opts) do
@@ -46,7 +66,9 @@ defmodule PhoenixReplay.Storage.File do
          {:ok, summary_path} <- path(recording.id, @summary_ext, opts),
          :ok <- File.mkdir_p(dir(opts)),
          :ok <- write_synced(recording_path, Codec.encode(recording)),
-         :ok <- write_synced(summary_path, Codec.encode(Summary.new(recording))) do
+         summary = Summary.new(recording),
+         :ok <- write_synced(summary_path, Codec.encode(summary)) do
+      index(dir(opts), [{recording.id, summary}])
       remove_parts(recording.id, opts)
     end
   end
@@ -102,16 +124,65 @@ defmodule PhoenixReplay.Storage.File do
 
   @impl true
   def list(opts) do
-    case File.ls(dir(opts)) do
-      {:ok, files} ->
-        files
-        |> Enum.filter(&(Path.extname(&1) == @summary_ext))
-        |> Enum.flat_map(&read_summary(Path.join(dir(opts), &1)))
-        |> Enum.sort_by(& &1.connected_at, :desc)
+    dir = dir(opts)
 
-      {:error, :enoent} ->
-        []
+    ids =
+      case File.ls(dir) do
+        {:ok, files} ->
+          for file <- files, Path.extname(file) == @summary_ext, do: Path.rootname(file)
+
+        {:error, :enoent} ->
+          []
+      end
+
+    dir
+    |> summaries(ids)
+    |> Enum.sort_by(& &1.connected_at, :desc)
+  end
+
+  @impl true
+  def query(filter, page_opts, opts), do: opts |> list() |> Filter.page(filter, page_opts)
+
+  # Reads the summaries of `ids`, from the index where it has them.
+  defp summaries(dir, ids) do
+    if not indexed?() do
+      Enum.flat_map(ids, &read_summary(dir, &1))
+    else
+      known = :ets.select(@index, fun(do: ({{^dir, id}, _summary} -> id)))
+      listed = MapSet.new(ids)
+
+      for id <- known, not MapSet.member?(listed, id), do: unindex(dir, id)
+
+      known = MapSet.new(known)
+
+      index(
+        dir,
+        for(
+          id <- ids,
+          not MapSet.member?(known, id),
+          [summary] <- [read_summary(dir, id)],
+          do: {id, summary}
+        )
+      )
+
+      :ets.select(@index, fun(do: ({{^dir, _id}, summary} -> summary)))
     end
+  end
+
+  defp index(dir, entries) do
+    if indexed?(),
+      do: :ets.insert(@index, for({id, summary} <- entries, do: {{dir, id}, summary}))
+
+    :ok
+  end
+
+  # The index lives with the application; without it, summaries are read
+  # from disk every time.
+  defp indexed?, do: :ets.whereis(@index) != :undefined
+
+  defp unindex(dir, id) do
+    if indexed?(), do: :ets.delete(@index, {dir, id})
+    :ok
   end
 
   @impl true
@@ -119,6 +190,7 @@ defmodule PhoenixReplay.Storage.File do
     with {:ok, summary_path} <- path(id, @summary_ext, opts),
          {:ok, recording_path} <- path(id, @recording_ext, opts),
          :ok <- remove(summary_path),
+         :ok = unindex(dir(opts), id),
          :ok <- remove(recording_path) do
       remove_parts(id, opts)
     end
@@ -126,11 +198,14 @@ defmodule PhoenixReplay.Storage.File do
 
   @impl true
   def clear(opts) do
-    case File.ls(dir(opts)) do
+    dir = dir(opts)
+    if indexed?(), do: :ets.match_delete(@index, {{dir, :_}, :_})
+
+    case File.ls(dir) do
       {:ok, files} ->
         files
         |> Enum.filter(&(Path.extname(&1) in [@summary_ext, @recording_ext, @part_ext]))
-        |> Enum.each(&remove(Path.join(dir(opts), &1)))
+        |> Enum.each(&remove(Path.join(dir, &1)))
 
       {:error, :enoent} ->
         :ok
@@ -184,7 +259,9 @@ defmodule PhoenixReplay.Storage.File do
 
   defp node_tag, do: node() |> :erlang.phash2() |> Integer.to_string(36)
 
-  defp read_summary(path) do
+  defp read_summary(dir, id) do
+    path = Path.join(dir, id <> @summary_ext)
+
     with {:ok, binary} <- File.read(path),
          {:ok, summary} <- Codec.decode(binary, Summary) do
       [summary]
@@ -215,7 +292,10 @@ defmodule PhoenixReplay.Storage.File do
       else: {:error, :not_found}
   end
 
-  @doc false
+  @doc """
+  Remembers the directory relative `:path`s are resolved against.
+  `PhoenixReplay.Application` calls it at start; see the `:path` option.
+  """
   @spec remember_root(Path.t()) :: :ok
   def remember_root(dir \\ File.cwd!()), do: :persistent_term.put({__MODULE__, :root}, dir)
 
