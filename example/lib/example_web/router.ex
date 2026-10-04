@@ -9,6 +9,7 @@ defmodule ExampleWeb.Router do
     plug :put_root_layout, html: {ExampleWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug PhoenixReplay.Plug
   end
 
   scope "/", ExampleWeb do

@@ -85,7 +85,9 @@ config :phoenix, :json_library, Jason
 config :phoenix_replay,
   collect: [{PhoenixReplay.Collector.Ecto, repo: Example.Repo}],
   logs: [level: :info],
-  keep: [errors: true]
+  keep: [errors: true],
+  # Which language visitors browse in and which campaign brought them.
+  context: [headers: ["accept-language"], landing: [params: [:utm, :click_ids]]]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
