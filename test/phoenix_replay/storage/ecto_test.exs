@@ -72,7 +72,7 @@ defmodule PhoenixReplay.Storage.EctoTest do
 
       for {id, at, extra} <- [
             {"a", 1, []},
-            {"b", 2, [url: "http://x/sale/100%_off", tab: "t1"]},
+            {"b", 2, [url: "http://x/sale/100%_off!", tab: "t1"]},
             {"c", 3, [view: Other, error: error]},
             {"d", 4, [tab: "t1"]}
           ] do
@@ -108,6 +108,8 @@ defmodule PhoenixReplay.Storage.EctoTest do
 
       assert query.(%{"q" => "100%_OFF"}) == {~w(b), 1}
       assert query.(%{"q" => "%"}) == {~w(b), 1}
+      assert query.(%{"q" => "off!"}) == {~w(b), 1}
+      assert query.(%{"q" => "_"}) == {~w(b), 1}
       assert query.(%{"view" => "Other"}) == {~w(c), 1}
       assert query.(%{"errors" => "1"}) == {~w(c), 1}
       assert query.(%{"tab" => "t1"}) == {~w(d b), 2}
