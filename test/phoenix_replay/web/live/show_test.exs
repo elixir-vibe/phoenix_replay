@@ -5,7 +5,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Config, Storage}
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
   alias PhoenixReplay.Web.Playback
 

@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Retention do
+defmodule PhoenixReplay.Recordings.Retention do
   @moduledoc """
   Deletes stored recordings beyond the configured age or count.
 

@@ -1,10 +1,10 @@
-defmodule PhoenixReplay.Recorder.PersisterTest do
+defmodule PhoenixReplay.Session.FinalizerTest do
   use ExUnit.Case, async: true
 
   import ExUnit.CaptureLog
 
   alias PhoenixReplay.Config
-  alias PhoenixReplay.Recorder.Persister
+  alias PhoenixReplay.Session.Finalizer
   alias PhoenixReplay.Test.Fixtures
 
   @moduletag :tmp_dir
@@ -13,7 +13,7 @@ defmodule PhoenixReplay.Recorder.PersisterTest do
     recording = Fixtures.counter_recording()
     config = Config.new(storage: {PhoenixReplay.Storage.File, path: tmp_dir})
 
-    assert Persister.persist(recording, config) == {:ok, recording}
+    assert Finalizer.persist(recording, config) == {:ok, recording}
     assert PhoenixReplay.Storage.fetch(config.storage, recording.id) == {:ok, recording}
   end
 
@@ -31,7 +31,7 @@ defmodule PhoenixReplay.Recorder.PersisterTest do
     config =
       Config.new(storage: {PhoenixReplay.Storage.File, path: tmp_dir}, redact: [~r/\d{4}$/])
 
-    assert {:ok, _recording} = Persister.persist(recording, config)
+    assert {:ok, _recording} = Finalizer.persist(recording, config)
 
     assert {:ok, %{url: "http://localhost/cards/[REDACTED]"}} =
              PhoenixReplay.Storage.fetch(config.storage, recording.id)
@@ -48,7 +48,7 @@ defmodule PhoenixReplay.Recorder.PersisterTest do
 
     log =
       capture_log(fn ->
-        assert Persister.persist(recording, config) == {:error, :redaction_failed}
+        assert Finalizer.persist(recording, config) == {:error, :redaction_failed}
       end)
 
     refute_received {:save_attempt, _id}
@@ -65,7 +65,7 @@ defmodule PhoenixReplay.Recorder.PersisterTest do
       )
 
     log =
-      capture_log(fn -> assert Persister.persist(recording, config) == {:error, :unavailable} end)
+      capture_log(fn -> assert Finalizer.persist(recording, config) == {:error, :unavailable} end)
 
     for _ <- 1..3, do: assert_received({:save_attempt, _id})
     refute_received {:save_attempt, _id}

@@ -71,7 +71,7 @@ When the application stops, it waits for recordings being saved or written.
 
 ## Retention
 
-`PhoenixReplay.Retention` deletes stored recordings older than `:max_age` milliseconds or beyond the newest `:max_count`, every `:interval` milliseconds:
+`PhoenixReplay.Recordings.Retention` deletes stored recordings older than `:max_age` milliseconds or beyond the newest `:max_count`, every `:interval` milliseconds:
 
 ```elixir
 config :phoenix_replay,

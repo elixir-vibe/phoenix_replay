@@ -1,10 +1,11 @@
-defmodule PhoenixReplay.Recorder.HandlersTest do
+defmodule PhoenixReplay.Capture.HandlersTest do
   use ExUnit.Case, async: false
 
-  alias PhoenixReplay.Recorder.{Components, Handlers}
+  alias PhoenixReplay.Capture.{Handlers, LiveComponents}
 
   defp attached do
-    for %{id: Components} <- :telemetry.list_handlers([:phoenix, :live_component]), do: Components
+    for %{id: LiveComponents} <- :telemetry.list_handlers([:phoenix, :live_component]),
+        do: LiveComponents
   end
 
   test "detaches handlers when stopped and attaches them when started" do

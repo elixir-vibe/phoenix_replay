@@ -135,8 +135,8 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
 
   test "waits for a live session from the player instead of reading the buffer" do
     recording = Fixtures.counter_recording(id: "live-frame", clicks: 1)
-    :ok = PhoenixReplay.Recorder.Buffer.open(recording, self(), PhoenixReplay.Config.load())
-    on_exit(fn -> PhoenixReplay.Recorder.Buffer.close("live-frame") end)
+    :ok = PhoenixReplay.Session.Buffer.open(recording, self(), PhoenixReplay.Config.load())
+    on_exit(fn -> PhoenixReplay.Session.Buffer.close("live-frame") end)
 
     {:ok, view, html} = live(build_conn(), "/replay/live-frame/frame?channel=c9")
     assert html =~ "Redacting the session"

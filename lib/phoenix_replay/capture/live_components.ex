@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recorder.Components do
+defmodule PhoenixReplay.Capture.LiveComponents do
   @moduledoc """
   Records LiveComponent state from LiveView's telemetry events.
 
@@ -6,7 +6,7 @@ defmodule PhoenixReplay.Recorder.Components do
   `[:phoenix, :live_component, :update | :handle_event, :stop]` and
   `[:phoenix, :live_component, :destroyed]` from the LiveView process with
   the component's socket. The handlers attached here run in that process,
-  find its session in `PhoenixReplay.Recorder.Buffer`, and record:
+  find its session in `PhoenixReplay.Session.Buffer`, and record:
 
     * `:event` — `%{name: String.t(), params: map, target: {module, id}}`,
       an event handled by a component, which the view's own hooks never see
@@ -15,7 +15,7 @@ defmodule PhoenixReplay.Recorder.Components do
     * `:component_destroyed` — `%{module: module, id: term}`
 
   LiveView does not yet emit telemetry for async results applied to a
-  component; `PhoenixReplay.Recorder.AsyncComponents` covers them until it
+  component; `PhoenixReplay.Capture.AsyncResults` covers them until it
   does.
 
   Components of LiveViews that are not recorded cost one ETS lookup per
@@ -26,7 +26,8 @@ defmodule PhoenixReplay.Recorder.Components do
   loosely and ignore shapes they do not expect.
   """
 
-  alias PhoenixReplay.Recorder.{AsyncComponents, Buffer}
+  alias PhoenixReplay.Capture.AsyncResults
+  alias PhoenixReplay.Session.Buffer
 
   @handler __MODULE__
   @unreplayable [:myself, :flash]
@@ -37,12 +38,12 @@ defmodule PhoenixReplay.Recorder.Components do
     [:phoenix, :live_component, :handle_event, :stop],
     [:phoenix, :live_component, :destroyed],
     # Proposed in https://github.com/phoenixframework/phoenix_live_view/pull/4463.
-    # Until LiveView emits it, AsyncComponents records async results instead.
+    # Until LiveView emits it, AsyncResults records async results instead.
     [:phoenix, :live_component, :handle_async, :stop],
     [:phoenix, :live_view, :render, :stop]
   ]
 
-  @doc "Attaches the telemetry handlers. Called by `PhoenixReplay.Recorder.Handlers`."
+  @doc "Attaches the telemetry handlers. Called by `PhoenixReplay.Capture.Handlers`."
   @spec attach() :: :ok | {:error, :already_exists}
   def attach, do: :telemetry.attach_many(@handler, @events, &__MODULE__.handle_event/4, nil)
 
@@ -90,7 +91,7 @@ defmodule PhoenixReplay.Recorder.Components do
       )
       when callback in [:handle_event, :handle_async] do
     record_changes(module, socket)
-    AsyncComponents.explain(socket)
+    AsyncResults.explain(socket)
   end
 
   def handle_event(
@@ -100,7 +101,7 @@ defmodule PhoenixReplay.Recorder.Components do
         nil
       )
       when is_integer(cid) do
-    AsyncComponents.rendered(module, id, cid)
+    AsyncResults.rendered(module, id, cid)
   end
 
   def handle_event(

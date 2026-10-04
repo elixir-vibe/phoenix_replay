@@ -15,13 +15,13 @@ config :phoenix_replay,
   ]
 ```
 
-Each entry is a `PhoenixReplay.Collector`, or an event name for the generic `PhoenixReplay.Collector.Telemetry`:
+Each entry is a `PhoenixReplay.Collector`, or an event name for the generic `PhoenixReplay.Collector.Generic`:
 
 | Collector | Records |
 |---|---|
 | `PhoenixReplay.Collector.Ecto` | SQL, source, total, query, queue and decode times; failed queries as errors. Parameters only with `params: true`. |
 | `PhoenixReplay.Collector.Finch` | Method and URL without the query string, status and duration; failed requests as errors. Covers Req, which uses Finch. |
-| `PhoenixReplay.Collector.Telemetry` | Any event: its measurements and the metadata keys you choose. `:exception` events are errors. |
+| `PhoenixReplay.Collector.Generic` | Any event: its measurements and the metadata keys you choose. `:exception` events are errors. |
 
 Collectors are attached when the application starts, so changing `:collect` takes a restart.
 

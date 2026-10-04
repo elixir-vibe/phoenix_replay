@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recorder.Recovery do
+defmodule PhoenixReplay.Session.Recovery do
   @moduledoc """
   Saves sessions whose node stopped before they ended.
 

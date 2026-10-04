@@ -5,7 +5,7 @@ defmodule PhoenixReplay.Recorder.FlushingTest do
   import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Config, Recordings, Storage}
-  alias PhoenixReplay.Recorder.{Buffer, Monitor, Recovery}
+  alias PhoenixReplay.Session.{Buffer, Monitor, Recovery}
   alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Test.{Fixtures, Sessions, Tasks}
 

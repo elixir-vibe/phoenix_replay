@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Web.Replay do
+defmodule PhoenixReplay.Web.Rendering do
   @moduledoc """
   Renders recorded views and LiveComponents with recorded assigns.
 

@@ -1,10 +1,10 @@
-defmodule PhoenixReplay.Recorder.Monitor do
+defmodule PhoenixReplay.Session.Monitor do
   @moduledoc """
   Follows each recorded session from its first event to storage.
 
   Each recorded process is monitored. While it runs, the monitor checks
   its sessions periodically and writes a session's buffered events to
-  storage as a chunk, with `PhoenixReplay.Recorder.Flusher`, once
+  storage as a chunk, with `PhoenixReplay.Session.Flusher`, once
   `PhoenixReplay.Recording.Keep` decides to keep it and `:flush` says a
   chunk is due. Keeping is decided from the events seen so far, which are
   observed incrementally, and never turns back, so nothing is written that
@@ -12,7 +12,7 @@ defmodule PhoenixReplay.Recorder.Monitor do
 
   When the process exits abnormally, its exit reason is recorded as an
   `:exit` event. The session is then discarded, or saved by
-  `PhoenixReplay.Recorder.Persister` in a supervised task, after any flush
+  `PhoenixReplay.Session.Finalizer` in a supervised task, after any flush
   in flight. The buffer is closed once the task finishes, whether it saved
   the recording or gave up. Each outcome emits its `PhoenixReplay.Telemetry`
   event after the buffer is closed, so a handler observes the finished
@@ -20,7 +20,7 @@ defmodule PhoenixReplay.Recorder.Monitor do
 
   On shutdown the monitor waits for saves and flushes in flight. On start
   it re-attaches to every session already in
-  `PhoenixReplay.Recorder.Buffer`, so a restart loses no recordings.
+  `PhoenixReplay.Session.Buffer`, so a restart loses no recordings.
   """
 
   use GenServer
@@ -28,7 +28,7 @@ defmodule PhoenixReplay.Recorder.Monitor do
   require Logger
 
   alias PhoenixReplay.{Config, Recordings, Storage, Telemetry}
-  alias PhoenixReplay.Recorder.{Buffer, Flusher, Persister}
+  alias PhoenixReplay.Session.{Buffer, Finalizer, Flusher}
   alias PhoenixReplay.Recording.Keep
 
   @max_reason 4_000
@@ -180,7 +180,7 @@ defmodule PhoenixReplay.Recorder.Monitor do
          {:ok, config} <- Buffer.config(id),
          :keep <- keep(id, recording, config) do
       task =
-        Task.Supervisor.async_nolink(PhoenixReplay.TaskSupervisor, Persister, :persist, [
+        Task.Supervisor.async_nolink(PhoenixReplay.TaskSupervisor, Finalizer, :persist, [
           recording,
           config
         ])

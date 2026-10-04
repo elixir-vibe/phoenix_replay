@@ -9,7 +9,7 @@ defmodule PhoenixReplay.Recording.Keep do
 
   The decision only ever turns from discard to keep as events arrive: once
   a session is kept, later events cannot discard it. That lets
-  `PhoenixReplay.Recorder.Monitor` start writing a running session to
+  `PhoenixReplay.Session.Monitor` start writing a running session to
   storage as soon as it is kept, observing its events incrementally with
   `observe/3` and `decision/3`.
   """

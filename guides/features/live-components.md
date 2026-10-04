@@ -4,7 +4,7 @@ LiveComponents are recorded and replayed with no changes to the components.
 
 ## Recording
 
-LiveComponents have no `on_mount` hook, so the recorder cannot attach to them the way it attaches to views. Instead, `PhoenixReplay.Recorder.Components` listens to LiveView's documented component telemetry:
+LiveComponents have no `on_mount` hook, so the recorder cannot attach to them the way it attaches to views. Instead, `PhoenixReplay.Capture.LiveComponents` listens to LiveView's documented component telemetry:
 
 - `[:phoenix, :live_component, :handle_event, :start]` records the event, with `target: {module, id}`,
 - `[:phoenix, :live_component, :update, :stop]` and `[:phoenix, :live_component, :handle_event, :stop]` record the component assigns that changed,
@@ -25,7 +25,7 @@ Nested components are swapped the same way. When you seek, the frame refreshes e
 
 ## Async results
 
-LiveView emits no telemetry when a `start_async/3`, `assign_async/3` or `stream_async/4` result is applied to a component. Until it does — proposed in [phoenix_live_view#4463](https://github.com/phoenixframework/phoenix_live_view/pull/4463) — `PhoenixReplay.Recorder.AsyncComponents` covers them: a component render that no recorded event explains is treated as an async result, and the component's assigns are read with `Phoenix.LiveView.Debug.live_components/1` from a supervised task and recorded.
+LiveView emits no telemetry when a `start_async/3`, `assign_async/3` or `stream_async/4` result is applied to a component. Until it does — proposed in [phoenix_live_view#4463](https://github.com/phoenixframework/phoenix_live_view/pull/4463) — `PhoenixReplay.Capture.AsyncResults` covers them: a component render that no recorded event explains is treated as an async result, and the component's assigns are read with `Phoenix.LiveView.Debug.live_components/1` from a supervised task and recorded.
 
 Two consequences follow from reading the state after the fact:
 

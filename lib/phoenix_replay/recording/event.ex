@@ -20,7 +20,7 @@ defmodule PhoenixReplay.Recording.Event do
       measurements: map, metadata: map, error: String.t() | nil}`, a
       telemetry event captured by a `PhoenixReplay.Collector`
     * `:log` — `%{level: Logger.level(), message: String.t(), metadata: map}`,
-      a log message, see `PhoenixReplay.Recorder.Logs`
+      a log message, see `PhoenixReplay.Capture.Logs`
     * `:exit` — `%{reason: String.t()}`, the LiveView process exited
       abnormally
 

@@ -1,11 +1,12 @@
-defmodule PhoenixReplay.Recorder.CollectorsTest do
+defmodule PhoenixReplay.Capture.CollectorsTest do
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Config, Recordings}
-  alias PhoenixReplay.Recorder.{Buffer, Collectors}
+  alias PhoenixReplay.Capture.Collectors
+  alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Storage
   alias PhoenixReplay.Test.{Fixtures, Sessions}

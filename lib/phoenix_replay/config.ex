@@ -25,10 +25,10 @@ defmodule PhoenixReplay.Config do
     * `:collect` — telemetry events to record alongside LiveView events.
       Each entry is a `PhoenixReplay.Collector` module, `{module, opts}`,
       an event name, or `{event_name, opts}` for
-      `PhoenixReplay.Collector.Telemetry`. Every entry accepts `:limit`,
+      `PhoenixReplay.Collector.Generic`. Every entry accepts `:limit`,
       the events recorded per session (default `1_000`). Defaults to `[]`.
     * `:logs` — keyword list enabling `Logger` collection, or `nil` (the
-      default) to leave logs out. See `PhoenixReplay.Recorder.Logs`.
+      default) to leave logs out. See `PhoenixReplay.Capture.Logs`.
     * `:redact` — a `PhoenixReplay.Redactor` that masks sensitive values
       when a recording is saved: a list of regexes, or regex sources as
       strings, for `PhoenixReplay.Redactor.Patterns`, or `{module, opts}`.
@@ -42,11 +42,11 @@ defmodule PhoenixReplay.Config do
         anyway (default `5_000`)
     * `:max_memory` — bytes of buffered recordings above which new
       sessions are not recorded, or `nil` (the default) for no limit.
-    * `:retention` — keyword list controlling `PhoenixReplay.Retention`:
+    * `:retention` — keyword list controlling `PhoenixReplay.Recordings.Retention`:
       * `:max_age` — milliseconds after which recordings are deleted
       * `:max_count` — number of most recent recordings to keep
       * `:interval` — milliseconds between pruning runs (default `60_000`)
-    * `:persist` — keyword list controlling `PhoenixReplay.Recorder.Persister`:
+    * `:persist` — keyword list controlling `PhoenixReplay.Session.Finalizer`:
       * `:attempts` — save attempts before giving up (default `3`)
       * `:backoff` — base delay in milliseconds, multiplied by the attempt
         number (default `1_000`)
@@ -223,10 +223,10 @@ defmodule PhoenixReplay.Config do
   end
 
   defp collector([name | _rest] = event) when is_atom(name),
-    do: {PhoenixReplay.Collector.Telemetry, [event: event]}
+    do: {PhoenixReplay.Collector.Generic, [event: event]}
 
   defp collector({[name | _rest] = event, opts}) when is_atom(name) and is_list(opts),
-    do: {PhoenixReplay.Collector.Telemetry, [{:event, event} | opts]}
+    do: {PhoenixReplay.Collector.Generic, [{:event, event} | opts]}
 
   defp collector({module, opts}) when is_atom(module) and is_list(opts), do: {module, opts}
   defp collector(module) when is_atom(module), do: {module, []}

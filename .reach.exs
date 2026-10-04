@@ -15,48 +15,37 @@ adapter = [
   "PhoenixReplay.Web.*"
 ]
 
+# Session modules follow a recording until it is stored; its buffer is
+# infrastructure that capture writes to.
 orchestrator = [
   "PhoenixReplay.Recordings",
-  "PhoenixReplay.Retention",
-  "PhoenixReplay.Recorder.Flusher",
-  "PhoenixReplay.Recorder.Monitor",
-  "PhoenixReplay.Recorder.Persister",
-  "PhoenixReplay.Recorder.Recovery"
+  "PhoenixReplay.Recordings.Retention",
+  "PhoenixReplay.Session.Finalizer",
+  "PhoenixReplay.Session.Flusher",
+  "PhoenixReplay.Session.Monitor",
+  "PhoenixReplay.Session.Recovery"
 ]
 
 model = [
   "PhoenixReplay.Config",
   "PhoenixReplay.Recording",
-  "PhoenixReplay.Recording.Event",
-  "PhoenixReplay.Recording.Keep",
-  "PhoenixReplay.Recording.Summary",
-  "PhoenixReplay.Recording.Timeline",
+  "PhoenixReplay.Recording.*",
   "PhoenixReplay.Recordings.Filter"
 ]
 
+# Behaviours and their built-in implementations.
 logic = [
   "PhoenixReplay.Authorization",
-  "PhoenixReplay.Collector",
-  "PhoenixReplay.Collector.Captured",
-  "PhoenixReplay.Collector.Ecto",
-  "PhoenixReplay.Collector.Finch",
-  "PhoenixReplay.Collector.Telemetry",
-  "PhoenixReplay.Redactor",
-  "PhoenixReplay.Redactor.Obscura",
-  "PhoenixReplay.Redactor.Patterns",
-  "PhoenixReplay.Sanitizer",
-  "PhoenixReplay.Sanitizer.Default",
+  "PhoenixReplay.Collector*",
+  "PhoenixReplay.Redactor*",
+  "PhoenixReplay.Sanitizer*",
   "PhoenixReplay.Storage.Codec"
 ]
 
 infrastructure = [
   "PhoenixReplay.Application",
-  "PhoenixReplay.Recorder.AsyncComponents",
-  "PhoenixReplay.Recorder.Buffer",
-  "PhoenixReplay.Recorder.Collectors",
-  "PhoenixReplay.Recorder.Components",
-  "PhoenixReplay.Recorder.Handlers",
-  "PhoenixReplay.Recorder.Logs",
+  "PhoenixReplay.Capture.*",
+  "PhoenixReplay.Session.Buffer",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",
   "PhoenixReplay.Storage.File",

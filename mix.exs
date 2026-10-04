@@ -106,20 +106,18 @@ defmodule PhoenixReplay.MixProject do
         Recording: [
           PhoenixReplay,
           PhoenixReplay.Recorder,
+          PhoenixReplay.Config,
+          PhoenixReplay.Telemetry,
           PhoenixReplay.Recording,
           PhoenixReplay.Recording.Event,
           PhoenixReplay.Recording.Keep,
           PhoenixReplay.Recording.Summary,
           PhoenixReplay.Recording.Timeline,
-          PhoenixReplay.Recordings.Filter
+          PhoenixReplay.Recordings,
+          PhoenixReplay.Recordings.Filter,
+          PhoenixReplay.Recordings.Retention
         ],
-        Collectors: [
-          PhoenixReplay.Collector,
-          PhoenixReplay.Collector.Captured,
-          PhoenixReplay.Collector.Ecto,
-          PhoenixReplay.Collector.Finch,
-          PhoenixReplay.Collector.Telemetry
-        ],
+        Collectors: ~r/^PhoenixReplay\.Collector/,
         Extension: [
           PhoenixReplay.Authorization,
           PhoenixReplay.Sanitizer,
@@ -133,35 +131,10 @@ defmodule PhoenixReplay.MixProject do
         ],
         Dashboard: [PhoenixReplay.Router],
         "Mix Tasks": [Mix.Tasks.PhoenixReplay.Install],
-        Internals: [
-          PhoenixReplay.Application,
-          PhoenixReplay.Config,
-          PhoenixReplay.Recorder.AsyncComponents,
-          PhoenixReplay.Recorder.Buffer,
-          PhoenixReplay.Recorder.Collectors,
-          PhoenixReplay.Recorder.Components,
-          PhoenixReplay.Recorder.Flusher,
-          PhoenixReplay.Recorder.Handlers,
-          PhoenixReplay.Recorder.Logs,
-          PhoenixReplay.Recorder.Monitor,
-          PhoenixReplay.Recorder.Persister,
-          PhoenixReplay.Recorder.Recovery,
-          PhoenixReplay.Recordings,
-          PhoenixReplay.Retention,
-          PhoenixReplay.Storage.Codec,
-          PhoenixReplay.Telemetry,
-          PhoenixReplay.Web.Assets,
-          PhoenixReplay.Web.Components,
-          PhoenixReplay.Web.Context,
-          PhoenixReplay.Web.Layouts,
-          PhoenixReplay.Web.Live.Frame,
-          PhoenixReplay.Web.Live.Index,
-          PhoenixReplay.Web.Live.Show,
-          PhoenixReplay.Web.Live.ReplayComponent,
-          PhoenixReplay.Web.NotFoundError,
-          PhoenixReplay.Web.Playback,
-          PhoenixReplay.Web.Replay
-        ]
+        Capture: ~r/^PhoenixReplay\.Capture\./,
+        Session: ~r/^PhoenixReplay\.Session\./,
+        "Dashboard Internals": ~r/^PhoenixReplay\.Web\./,
+        Internals: [PhoenixReplay.Application, PhoenixReplay.Storage.Codec]
       ]
     ]
   end

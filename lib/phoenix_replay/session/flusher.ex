@@ -1,8 +1,8 @@
-defmodule PhoenixReplay.Recorder.Flusher do
+defmodule PhoenixReplay.Session.Flusher do
   @moduledoc """
   Writes a running session's buffered events to storage as one chunk.
 
-  Runs in a task started by `PhoenixReplay.Recorder.Monitor`, which flushes
+  Runs in a task started by `PhoenixReplay.Session.Monitor`, which flushes
   each session at most once at a time, so a session's chunks are written in
   order by one process. The chunk is redacted with the session's
   `PhoenixReplay.Redactor` before it is written, then its events leave the
@@ -10,7 +10,7 @@ defmodule PhoenixReplay.Recorder.Flusher do
   """
 
   alias PhoenixReplay.{Redactor, Storage}
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Session.Buffer
 
   @doc "Flushes the buffered events of session `id`."
   @spec flush(PhoenixReplay.Recording.id()) :: :ok | {:error, term()}

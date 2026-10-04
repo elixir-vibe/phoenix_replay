@@ -2,7 +2,7 @@ defmodule PhoenixReplay.Recordings do
   @moduledoc """
   Reads and deletes recordings across the live buffer and storage.
 
-  A recording is in exactly one place: `PhoenixReplay.Recorder.Buffer`
+  A recording is in exactly one place: `PhoenixReplay.Session.Buffer`
   while its session runs and until it is saved, storage afterwards.
   Changes are broadcast on `PhoenixReplay.PubSub` so the dashboard can
   refresh without polling.
@@ -13,7 +13,7 @@ defmodule PhoenixReplay.Recordings do
   """
 
   alias PhoenixReplay.{Config, Recording, Redactor, Storage}
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Recording.Summary
 
   @topic "phoenix_replay:recordings"

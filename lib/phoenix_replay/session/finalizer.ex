@@ -1,8 +1,8 @@
-defmodule PhoenixReplay.Recorder.Persister do
+defmodule PhoenixReplay.Session.Finalizer do
   @moduledoc """
   Completes a finished recording and saves it with retries.
 
-  Runs inside a task started by `PhoenixReplay.Recorder.Monitor`, so
+  Runs inside a task started by `PhoenixReplay.Session.Monitor`, so
   redaction and the backoff sleeps block only that task. The events still
   in the buffer are redacted with the session's `PhoenixReplay.Redactor`
   and joined to the chunks already flushed to storage, see

@@ -5,7 +5,7 @@ defmodule PhoenixReplay.RecorderTest do
   import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Recorder, Recording, Storage}
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Recording.{Event, Timeline}
   alias PhoenixReplay.Test.{Fixtures, Sessions}
 

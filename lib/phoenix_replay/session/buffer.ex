@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recorder.Buffer do
+defmodule PhoenixReplay.Session.Buffer do
   @moduledoc """
   ETS buffer for in-progress recordings.
 
@@ -7,7 +7,7 @@ defmodule PhoenixReplay.Recorder.Buffer do
   its LiveComponents and its collectors share one counter, so they stay in
   order. The
   table is created by `PhoenixReplay.Application` and outlives every worker,
-  which lets `PhoenixReplay.Recorder.Monitor` recover sessions after a restart.
+  which lets `PhoenixReplay.Session.Monitor` recover sessions after a restart.
 
   Rows:
 

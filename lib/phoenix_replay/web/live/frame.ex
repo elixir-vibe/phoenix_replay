@@ -10,7 +10,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   LiveComponents in the template render through
   `PhoenixReplay.Web.Live.ReplayComponent` with their recorded assigns; see
-  `PhoenixReplay.Web.Replay`. A template that fails with the recorded
+  `PhoenixReplay.Web.Rendering`. A template that fails with the recorded
   assigns shows a placeholder instead of crashing the frame.
 
   A session that is still running is never read from the buffer here: the
@@ -22,7 +22,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   alias PhoenixReplay.Recording.Timeline
   alias PhoenixReplay.Recordings
-  alias PhoenixReplay.Web.{Context, Layouts, Playback, Replay}
+  alias PhoenixReplay.Web.{Context, Layouts, Playback, Rendering}
   alias PhoenixReplay.Web.Live.ReplayComponent
 
   @private :phoenix_replay_frame
@@ -92,7 +92,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
   end
 
   def render(%{@private => %{error: nil, view: view, components: states}} = assigns),
-    do: assigns |> view.render() |> Replay.rewrite(states)
+    do: assigns |> view.render() |> Rendering.rewrite(states)
 
   def render(assigns) do
     ~H"""
@@ -141,6 +141,6 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   defp check_render(socket) do
     frame = socket.assigns[@private]
-    assign(socket, @private, %{frame | error: Replay.render_error(frame.view, socket.assigns)})
+    assign(socket, @private, %{frame | error: Rendering.render_error(frame.view, socket.assigns)})
   end
 end

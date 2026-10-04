@@ -1,10 +1,10 @@
-defmodule PhoenixReplay.Recorder.ComponentsTest do
+defmodule PhoenixReplay.Capture.LiveComponentsTest do
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Recording.{Event, Timeline}
   alias PhoenixReplay.Storage
   alias PhoenixReplay.Test.{Fixtures, Sessions}
@@ -90,7 +90,7 @@ defmodule PhoenixReplay.Recorder.ComponentsTest do
     :telemetry.execute([:phoenix, :live_component, :destroyed], %{}, %{socket: nil})
 
     handlers = :telemetry.list_handlers([:phoenix, :live_component])
-    assert Enum.any?(handlers, &(&1.id == PhoenixReplay.Recorder.Components))
+    assert Enum.any?(handlers, &(&1.id == PhoenixReplay.Capture.LiveComponents))
   end
 
   test "ignores components of views that are not recorded" do

@@ -20,7 +20,7 @@ defmodule PhoenixReplay.Recorder do
   each render, all passed through the configured `PhoenixReplay.Sanitizer`.
   While `:max_memory` is exceeded, new sessions are not recorded.
   Events are written by the LiveView process itself into
-  `PhoenixReplay.Recorder.Buffer`; `PhoenixReplay.Recorder.Monitor` saves the
+  `PhoenixReplay.Session.Buffer`; `PhoenixReplay.Session.Monitor` saves the
   recording once the process exits.
 
   Recorder state lives in `socket.private`, so the view's assigns are left
@@ -30,7 +30,7 @@ defmodule PhoenixReplay.Recorder do
   import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, put_private: 3]
 
   alias PhoenixReplay.{Config, Recording}
-  alias PhoenixReplay.Recorder.{Buffer, Monitor}
+  alias PhoenixReplay.Session.{Buffer, Monitor}
 
   @private :phoenix_replay
   @session_options [:sample_rate, :keep, :max_events, :sanitizer, :redact, :flush]

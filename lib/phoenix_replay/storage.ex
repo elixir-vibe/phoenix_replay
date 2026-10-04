@@ -3,7 +3,7 @@ defmodule PhoenixReplay.Storage do
   @moduledoc """
   Behaviour for finished-recording storage, and the facade used to call it.
 
-  In-progress recordings live in `PhoenixReplay.Recorder.Buffer`. When the
+  In-progress recordings live in `PhoenixReplay.Session.Buffer`. When the
   recorded LiveView exits, the recording is saved through the configured
   backend.
 

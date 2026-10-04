@@ -1,8 +1,8 @@
-defmodule PhoenixReplay.Recorder.BufferTest do
+defmodule PhoenixReplay.Session.BufferTest do
   use ExUnit.Case, async: true
 
   alias PhoenixReplay.Config
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Recording.{Event, Summary}
   alias PhoenixReplay.Test.Fixtures
 

@@ -44,8 +44,8 @@ defmodule PhoenixReplay.ConfigTest do
            ).collect == [
              {MyCollector, []},
              {MyCollector, limit: 5},
-             {PhoenixReplay.Collector.Telemetry, event: [:my_app, :checkout, :stop]},
-             {PhoenixReplay.Collector.Telemetry,
+             {PhoenixReplay.Collector.Generic, event: [:my_app, :checkout, :stop]},
+             {PhoenixReplay.Collector.Generic,
               event: [:my_app, :search, :stop], metadata: [:query]}
            ]
 

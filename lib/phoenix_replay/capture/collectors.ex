@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recorder.Collectors do
+defmodule PhoenixReplay.Capture.Collectors do
   @moduledoc """
   Records telemetry events captured by the configured `PhoenixReplay.Collector`s.
 
@@ -25,12 +25,12 @@ defmodule PhoenixReplay.Recorder.Collectors do
 
   alias PhoenixReplay.{Collector, Config, Telemetry}
   alias PhoenixReplay.Collector.Captured
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Session.Buffer
 
   @default_limit 1_000
 
   @doc """
-  Attaches the configured collectors. Called by `PhoenixReplay.Recorder.Handlers`.
+  Attaches the configured collectors. Called by `PhoenixReplay.Capture.Handlers`.
 
   Handlers are identified by `{prefix, index}`.
   """

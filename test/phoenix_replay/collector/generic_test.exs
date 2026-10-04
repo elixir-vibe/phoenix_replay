@@ -1,12 +1,12 @@
-defmodule PhoenixReplay.Collector.TelemetryTest do
+defmodule PhoenixReplay.Collector.GenericTest do
   use ExUnit.Case, async: true
 
-  alias PhoenixReplay.Collector.Telemetry
+  alias PhoenixReplay.Collector.Generic
 
   @event [:my_app, :search, :stop]
 
   test "keeps measurements and only the chosen metadata" do
-    assert Telemetry.events(event: @event) == [@event]
+    assert Generic.events(event: @event) == [@event]
 
     assert {:ok,
             %{
@@ -15,7 +15,7 @@ defmodule PhoenixReplay.Collector.TelemetryTest do
               metadata: %{query: "shoes"},
               error: nil
             }} =
-             Telemetry.capture(@event, %{results: 3}, %{query: "shoes", socket: :big},
+             Generic.capture(@event, %{results: 3}, %{query: "shoes", socket: :big},
                event: @event,
                metadata: [:query]
              )
@@ -25,9 +25,9 @@ defmodule PhoenixReplay.Collector.TelemetryTest do
     opts = [event: @event, keep: &(&1.query != ""), summary: &"search #{&1.query}"]
 
     assert {:ok, %{summary: "search shoes", metadata: %{}}} =
-             Telemetry.capture(@event, %{}, %{query: "shoes"}, opts)
+             Generic.capture(@event, %{}, %{query: "shoes"}, opts)
 
-    assert Telemetry.capture(@event, %{}, %{query: ""}, opts) == :skip
+    assert Generic.capture(@event, %{}, %{query: ""}, opts) == :skip
   end
 
   test "records :exception events as errors" do
@@ -35,6 +35,6 @@ defmodule PhoenixReplay.Collector.TelemetryTest do
     metadata = %{kind: :error, reason: %RuntimeError{message: "boom"}}
 
     assert {:ok, %{error: "** (RuntimeError) boom"}} =
-             Telemetry.capture(event, %{}, metadata, event: event)
+             Generic.capture(event, %{}, metadata, event: event)
   end
 end

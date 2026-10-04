@@ -2,7 +2,7 @@ defmodule PhoenixReplay.RecordingsTest do
   use ExUnit.Case, async: false
 
   alias PhoenixReplay.{Config, Recordings, Storage}
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
 
   setup do

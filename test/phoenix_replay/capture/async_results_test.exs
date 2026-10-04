@@ -1,10 +1,10 @@
-defmodule PhoenixReplay.Recorder.AsyncComponentsTest do
+defmodule PhoenixReplay.Capture.AsyncResultsTest do
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Recording.Timeline
   alias PhoenixReplay.Storage
   alias PhoenixReplay.Test.{Fixtures, Sessions, Tasks}

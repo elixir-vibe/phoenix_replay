@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recorder.Logs do
+defmodule PhoenixReplay.Capture.Logs do
   @moduledoc """
   Records log messages in the session of the process that logged them.
 
@@ -14,7 +14,7 @@ defmodule PhoenixReplay.Recorder.Logs do
   This is a `:logger` handler. `:logger` calls handlers in the process that
   logs, so a message belongs to the session of that process, or of the
   first of its `$callers` that has one, as for
-  `PhoenixReplay.Recorder.Collectors`. Messages are formatted on one line,
+  `PhoenixReplay.Capture.Collectors`. Messages are formatted on one line,
   their metadata goes through the session's `PhoenixReplay.Sanitizer`, and
   each is recorded as a `:log` event. Their text is masked when the
   recording is saved, by the session's `PhoenixReplay.Redactor`.
@@ -24,13 +24,14 @@ defmodule PhoenixReplay.Recorder.Logs do
   """
 
   alias PhoenixReplay.{Config, Telemetry}
-  alias PhoenixReplay.Recorder.{Buffer, Collectors}
+  alias PhoenixReplay.Capture.Collectors
+  alias PhoenixReplay.Session.Buffer
 
   @formatter %{template: [:msg], single_line: true}
 
   @doc """
   Adds the `:logger` handler when `:logs` is configured. Called by
-  `PhoenixReplay.Recorder.Handlers`.
+  `PhoenixReplay.Capture.Handlers`.
   """
   @spec attach(Config.t(), atom()) :: :ok | {:error, term()}
   def attach(config, id \\ __MODULE__)

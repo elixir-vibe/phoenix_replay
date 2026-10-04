@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Collector.Telemetry do
+defmodule PhoenixReplay.Collector.Generic do
   @moduledoc """
   Collects any telemetry event.
 
