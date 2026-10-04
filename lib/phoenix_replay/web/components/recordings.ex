@@ -13,6 +13,7 @@ defmodule PhoenixReplay.Web.Components.Recordings do
   import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.Core, only: [badge: 1]
 
+  alias Phoenix.LiveView.JS
   alias PhoenixReplay.Recording.Summary
   alias PhoenixReplay.Recordings.Filter
   alias PhoenixReplay.Web.Format
@@ -83,7 +84,7 @@ defmodule PhoenixReplay.Web.Components.Recordings do
         </div>
         <ul class="divide-y divide-line">
           <.row :for={recording <- @recordings} recording={recording} path={@path.(recording)}>
-            <:mark><.icon name="lucide:circle-play" class="size-4 text-muted" /></:mark>
+            <:mark><.device_icon viewport={recording.viewport} /></:mark>
             <:meta>
               {Format.relative(recording.connected_at, @now)} · {Format.count(
                 recording.event_count,
@@ -159,7 +160,8 @@ defmodule PhoenixReplay.Web.Components.Recordings do
       assign(assigns,
         field:
           "flex h-10 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 focus-within:outline-2 focus-within:outline-accent pointer-coarse:h-11",
-        select: "cursor-pointer bg-transparent font-medium outline-none"
+        select: "cursor-pointer bg-transparent font-medium outline-none",
+        active: Enum.count(Map.delete(Filter.to_params(assigns.filter), "q"))
       )
 
     ~H"""
@@ -182,56 +184,81 @@ defmodule PhoenixReplay.Web.Components.Recordings do
           class="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-faint"
         />
       </label>
-      <label class={@field}>
-        <span class="text-muted">View</span>
-        <select name="view" class={[@select, "max-w-44 truncate"]}>
-          <option value="">All</option>
-          <option :for={view <- @views} value={view} selected={view == @filter.view}>{view}</option>
-        </select>
-      </label>
-      <label class={@field}>
-        <span class="text-muted">Started</span>
-        <select name="within" class={@select}>
-          <option value="">Any time</option>
-          <option :for={window <- Filter.windows()} value={window} selected={window == @filter.within}>
-            Last {window}
-          </option>
-        </select>
-      </label>
-      <label class={@field}>
-        <span class="text-muted">Event</span>
-        <input
-          type="text"
-          name="event"
-          value={@filter.event}
-          list="recording-filter-events"
-          placeholder="Any"
-          phx-debounce="300"
-          class="w-24 bg-transparent font-medium outline-none placeholder:text-ink"
-        />
-        <datalist id="recording-filter-events">
-          <option :for={name <- @event_names} value={name} />
-        </datalist>
-      </label>
-      <label class={@field}>
-        <span class="text-muted">Min events</span>
-        <input
-          type="number"
-          name="min_events"
-          min="1"
-          value={@filter.min_events}
-          placeholder="Any"
-          phx-debounce="300"
-          class="w-14 bg-transparent font-medium outline-none placeholder:text-ink"
-        />
-      </label>
-      <label class={[
-        @field,
-        "cursor-pointer font-medium has-checked:border-error has-checked:bg-error-soft has-checked:text-error"
-      ]}>
-        <input type="checkbox" name="errors" value="1" checked={@filter.errors} class="sr-only" />
-        <.icon name="lucide:triangle-alert" class="size-4" /> With errors
-      </label>
+      <button
+        id="recording-filter-toggle"
+        type="button"
+        aria-controls="recording-filter-more"
+        aria-expanded="false"
+        phx-click={
+          %JS{}
+          |> JS.toggle_attribute({"data-open", "true"}, to: "#recording-filter-more")
+          |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+        }
+        class={[@field, "font-medium sm:hidden"]}
+      >
+        <.icon name="lucide:sliders-horizontal" class="size-4" /> Filters
+        <span :if={@active > 0} class="rounded-full bg-ink px-1.5 text-xs text-on-ink">{@active}</span>
+      </button>
+      <%!-- Phones show these behind the button; wider screens lay them out in the bar. --%>
+      <div
+        id="recording-filter-more"
+        class="hidden w-full flex-wrap gap-2 data-open:flex sm:contents sm:data-open:contents"
+      >
+        <label class={@field}>
+          <span class="text-muted">View</span>
+          <select name="view" class={[@select, "max-w-44 truncate"]}>
+            <option value="">All</option>
+            <option :for={view <- @views} value={view} selected={view == @filter.view}>{view}</option>
+          </select>
+        </label>
+        <label class={@field}>
+          <span class="text-muted">Started</span>
+          <select name="within" class={@select}>
+            <option value="">Any time</option>
+            <option
+              :for={window <- Filter.windows()}
+              value={window}
+              selected={window == @filter.within}
+            >
+              Last {window}
+            </option>
+          </select>
+        </label>
+        <label class={@field}>
+          <span class="text-muted">Event</span>
+          <input
+            type="text"
+            name="event"
+            value={@filter.event}
+            list="recording-filter-events"
+            placeholder="Any"
+            phx-debounce="300"
+            class="w-24 bg-transparent font-medium outline-none placeholder:text-ink"
+          />
+          <datalist id="recording-filter-events">
+            <option :for={name <- @event_names} value={name} />
+          </datalist>
+        </label>
+        <label class={@field}>
+          <span class="text-muted">Min events</span>
+          <input
+            type="number"
+            name="min_events"
+            min="1"
+            value={@filter.min_events}
+            placeholder="Any"
+            phx-debounce="300"
+            class="w-14 bg-transparent font-medium outline-none placeholder:text-ink"
+          />
+        </label>
+        <label class={[
+          @field,
+          "cursor-pointer font-medium has-checked:border-error has-checked:bg-error-soft has-checked:text-error"
+        ]}>
+          <input type="checkbox" name="errors" value="1" checked={@filter.errors} class="sr-only" />
+          <.icon name="lucide:triangle-alert" class="size-4" /> With errors
+        </label>
+      </div>
     </form>
     """
   end
@@ -266,7 +293,10 @@ defmodule PhoenixReplay.Web.Components.Recordings do
         <p class="mt-0.5 truncate font-mono text-xs text-muted">
           <span class="sm:hidden">{render_slot(@meta)}</span>
           <span class="hidden sm:inline">
-            {page(@recording)} · {short_id(@recording)}
+            {page(@recording)}<span :if={@recording.device}> · {@recording.device}</span><span :if={
+              @recording.source
+            }> · from {@recording.source}</span>
+            · {short_id(@recording)}
           </span>
         </p>
       </div>
@@ -278,6 +308,24 @@ defmodule PhoenixReplay.Web.Components.Recordings do
       <span class="justify-self-end text-sm sm:justify-self-start">{render_slot(@status)}</span>
       <span class="hidden justify-center sm:flex">{render_slot(@action)}</span>
     </li>
+    """
+  end
+
+  attr :viewport, :map, default: nil
+
+  # The kind of screen the session ran on, by its width in CSS pixels.
+  defp device_icon(assigns) do
+    ~H"""
+    <%= cond do %>
+      <% is_nil(@viewport) -> %>
+        <.icon name="lucide:circle-play" class="size-4 text-muted" />
+      <% @viewport.width < 640 -> %>
+        <.icon name="lucide:smartphone" class="size-4 text-muted" label="Phone" />
+      <% @viewport.width < 1024 -> %>
+        <.icon name="lucide:tablet" class="size-4 text-muted" label="Tablet" />
+      <% true -> %>
+        <.icon name="lucide:monitor" class="size-4 text-muted" label="Desktop" />
+    <% end %>
     """
   end
 

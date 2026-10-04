@@ -35,30 +35,6 @@ defmodule PhoenixReplay.Web.FormatTest do
     assert Format.viewport(%{width: 1440, height: 900, dpr: 1}) == "1440 × 900"
     assert Format.viewport(%{width: 412, height: 915, dpr: 2.625}) == "412 × 915 @2.6x"
 
-    assert Format.device(
-             "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile/15E148 Safari/604.1"
-           ) == "Safari on iOS"
-
-    assert Format.device(
-             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/141.0 Safari/537.36"
-           ) == "Chrome on macOS"
-
-    assert Format.device("curl/8.0") == nil
-    assert Format.device(nil) == nil
-
     assert Format.path_of("http://www.example.com/tasks?filter=all") == "/tasks?filter=all"
-  end
-
-  test "labels campaigns and referrers" do
-    assert Format.campaign(%{"utm_source" => "google", "utm_campaign" => "spring"}) ==
-             "google / spring"
-
-    assert Format.campaign(%{"ref" => "x"}) == nil
-
-    assert Format.referrer_host("https://news.ycombinator.com/item?id=1") ==
-             "news.ycombinator.com"
-
-    assert Format.referrer_host("not a url") == nil
-    assert Format.referrer_host(nil) == nil
   end
 end

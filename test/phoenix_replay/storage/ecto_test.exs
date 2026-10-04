@@ -23,12 +23,39 @@ defmodule PhoenixReplay.Storage.EctoTest do
       duration_ms INTEGER NOT NULL,
       error_count INTEGER NOT NULL DEFAULT 0,
       tab TEXT,
+      viewport TEXT,
+      device TEXT,
+      source TEXT,
       event_names BLOB NOT NULL,
       data BLOB NOT NULL
     )
     """)
 
     %{opts: [repo: Repo]}
+  end
+
+  test "stores the device, viewport and source with the summary", %{opts: opts} do
+    recording = Fixtures.counter_recording(id: "phone")
+
+    client =
+      Map.merge(recording.client, %{
+        viewport: %{width: 390, height: 844, dpr: 3},
+        user_agent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 " <>
+            "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+        landing: %{path: "/", at: 0, params: %{"utm_source" => "hn"}, referrer: nil}
+      })
+
+    :ok = EctoStorage.save(%{recording | client: client}, opts)
+
+    assert [
+             %{
+               viewport: %{width: 390, height: 844, dpr: 3},
+               device: "Mobile Safari 18 on iOS",
+               source: "hn"
+             }
+           ] =
+             EctoStorage.list(opts)
   end
 
   test "saves, fetches and lists summaries newest first", %{opts: opts} do

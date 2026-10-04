@@ -88,66 +88,6 @@ defmodule PhoenixReplay.Web.Format do
   defp format_dpr(dpr) when dpr == trunc(dpr), do: dpr |> trunc() |> Integer.to_string()
   defp format_dpr(dpr), do: :erlang.float_to_binary(dpr / 1, decimals: 1)
 
-  @browsers [
-    {"Edg/", "Edge"},
-    {"Firefox/", "Firefox"},
-    {"Chrome/", "Chrome"},
-    {"Safari/", "Safari"}
-  ]
-  @systems [
-    {"iPhone", "iOS"},
-    {"iPad", "iPadOS"},
-    {"Android", "Android"},
-    {"Mac OS X", "macOS"},
-    {"Windows", "Windows"},
-    {"Linux", "Linux"}
-  ]
-
-  @doc """
-  Names the browser and system in a user agent, such as `"Safari on iOS"`,
-  or returns `nil` when neither is recognized.
-  """
-  @spec device(String.t() | nil) :: String.t() | nil
-  def device(nil), do: nil
-
-  def device(user_agent) do
-    case Enum.reject([known(user_agent, @browsers), known(user_agent, @systems)], &is_nil/1) do
-      [] -> nil
-      parts -> Enum.join(parts, " on ")
-    end
-  end
-
-  defp known(user_agent, names) do
-    Enum.find_value(names, fn {marker, name} ->
-      if String.contains?(user_agent, marker), do: name
-    end)
-  end
-
-  @campaign_keys ~w(utm_source utm_medium utm_campaign)
-
-  @doc """
-  Describes a landing's campaign as `"google / cpc / spring_sale"`, from
-  its UTM source, medium and campaign, or returns `nil` without them.
-  """
-  @spec campaign(map()) :: String.t() | nil
-  def campaign(params) do
-    case Enum.flat_map(@campaign_keys, &List.wrap(params[&1])) do
-      [] -> nil
-      parts -> Enum.join(parts, " / ")
-    end
-  end
-
-  @doc "The host of a referrer URL, such as `\"news.ycombinator.com\"`, or `nil`."
-  @spec referrer_host(String.t() | nil) :: String.t() | nil
-  def referrer_host(nil), do: nil
-
-  def referrer_host(url) do
-    case URI.parse(url) do
-      %URI{host: host} when is_binary(host) and host != "" -> host
-      _other -> nil
-    end
-  end
-
   @doc "The path and query of a URL, for showing where a user came from."
   @spec path_of(String.t()) :: String.t()
   def path_of(url) do

@@ -6,12 +6,14 @@ defmodule PhoenixReplay.Recording.Summary do
   `event_names` are the distinct `handle_event/3` names, sorted.
   `error_count` counts the events for which `PhoenixReplay.Recording.Event.error?/1`
   holds. `tab` is the browser tab the session ran in, when the client sent
-  it, shared by the sessions of one journey. `live?` is true while the
+  it, shared by the sessions of one journey. `viewport`, `device` and
+  `source` describe the browser and where the visit came from, as
+  `PhoenixReplay.Recording.Client` names them. `live?` is true while the
   recorded LiveView process is still running.
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Event, Timeline}
+  alias PhoenixReplay.Recording.{Client, Event, Timeline}
 
   @type t :: %__MODULE__{
           id: Recording.id(),
@@ -22,6 +24,9 @@ defmodule PhoenixReplay.Recording.Summary do
           event_names: [String.t()],
           error_count: non_neg_integer(),
           tab: String.t() | nil,
+          viewport: Recording.viewport() | nil,
+          device: String.t() | nil,
+          source: String.t() | nil,
           duration_ms: non_neg_integer(),
           live?: boolean()
         }
@@ -36,6 +41,9 @@ defmodule PhoenixReplay.Recording.Summary do
     event_names: [],
     error_count: 0,
     tab: nil,
+    viewport: nil,
+    device: nil,
+    source: nil,
     duration_ms: 0,
     live?: false
   ]
@@ -52,6 +60,9 @@ defmodule PhoenixReplay.Recording.Summary do
       event_names: event_names(recording.events),
       error_count: Enum.count(recording.events, &Event.error?/1),
       tab: recording.client[:tab],
+      viewport: recording.client[:viewport],
+      device: Client.device(recording.client[:user_agent]),
+      source: Client.source(recording.client),
       duration_ms: Timeline.duration_ms(recording),
       live?: Keyword.get(opts, :live?, false)
     }

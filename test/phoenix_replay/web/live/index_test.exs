@@ -47,6 +47,29 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     refute html =~ "Open"
   end
 
+  test "shows the device and source of each session" do
+    recording = Fixtures.counter_recording(id: "phone")
+
+    client =
+      Map.merge(recording.client, %{
+        viewport: %{width: 390, height: 844, dpr: 3},
+        user_agent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 " <>
+            "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+        landing: %{path: "/", at: 0, params: %{"utm_source" => "hn"}, referrer: nil}
+      })
+
+    Storage.save(Fixtures.storage(), %{recording | client: client})
+    {:ok, view, _html} = live(build_conn(), "/replay?errors=1&view=X")
+    assert has_element?(view, "#recording-filter-toggle", "2")
+
+    {:ok, view, _html} = live(build_conn(), "/replay")
+    row = view |> element("#recording-phone") |> render()
+    assert row =~ "Mobile Safari 18 on iOS"
+    assert row =~ "from hn"
+    assert row =~ ~s(aria-label="Phone")
+  end
+
   test "lists running sessions apart, without delete, and counts sessions" do
     save("stored")
     recording = Fixtures.counter_recording(id: "running")

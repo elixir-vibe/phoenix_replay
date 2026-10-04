@@ -227,7 +227,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       open_tab(view, "Visit")
       device = view |> element("#replay-device") |> render()
       assert device =~ "390 × 844 @3x"
-      assert device =~ "· Safari on iOS"
+      assert device =~ "· Mobile Safari on iOS"
     end
 
     test "shows how the visit started" do

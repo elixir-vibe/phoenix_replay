@@ -30,6 +30,9 @@ if Code.ensure_loaded?(Ecto.Query) do
               add :duration_ms, :integer, null: false
               add :error_count, :integer, null: false, default: 0
               add :tab, :string
+              add :viewport, :string
+              add :device, :string
+              add :source, :string
               add :event_names, :binary, null: false
               add :data, :binary, null: false
             end
@@ -44,7 +47,7 @@ if Code.ensure_loaded?(Ecto.Query) do
     import Ecto.Query
 
     alias PhoenixReplay.Recording
-    alias PhoenixReplay.Recording.Summary
+    alias PhoenixReplay.Recording.{Client, Summary}
     alias PhoenixReplay.Recordings.Filter
     alias PhoenixReplay.Storage.Codec
 
@@ -57,7 +60,10 @@ if Code.ensure_loaded?(Ecto.Query) do
       :event_count,
       :error_count,
       :duration_ms,
-      :tab
+      :tab,
+      :viewport,
+      :device,
+      :source
     ]
     @replaced_fields [
       :view,
@@ -67,6 +73,9 @@ if Code.ensure_loaded?(Ecto.Query) do
       :error_count,
       :duration_ms,
       :tab,
+      :viewport,
+      :device,
+      :source,
       :event_names,
       :data
     ]
@@ -78,6 +87,7 @@ if Code.ensure_loaded?(Ecto.Query) do
       row =
         summary
         |> Map.take(@summary_fields)
+        |> Map.update!(:viewport, &Client.encode_viewport/1)
         |> Map.put(:event_names, Codec.encode(summary.event_names))
         |> Map.put(:data, Codec.encode(recording))
 
@@ -199,7 +209,8 @@ if Code.ensure_loaded?(Ecto.Query) do
 
     defp to_summary(%{event_names: encoded} = row) do
       {:ok, names} = Codec.decode(encoded, :list)
-      struct!(Summary, %{row | event_names: names})
+
+      struct!(Summary, %{row | event_names: names, viewport: Client.decode_viewport(row.viewport)})
     end
 
     defp repo(opts), do: Keyword.fetch!(opts, :repo)

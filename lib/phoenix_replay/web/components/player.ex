@@ -14,7 +14,7 @@ defmodule PhoenixReplay.Web.Components.Player do
   import PhoenixReplay.Web.Components.Core
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.Event
+  alias PhoenixReplay.Recording.{Client, Event}
   alias PhoenixReplay.Web.Format
   alias PhoenixReplay.Web.Player.Events
 
@@ -473,10 +473,10 @@ defmodule PhoenixReplay.Web.Components.Player do
       <section :if={@viewport || @user_agent} aria-labelledby="replay-device-heading">
         <h3 id="replay-device-heading" class={heading()}>Device</h3>
         <p :if={@viewport} id="replay-device" title={@user_agent}>
-          {Format.viewport(@viewport)}<span :if={label = Format.device(@user_agent)}> · {label}</span>
+          {Format.viewport(@viewport)}<span :if={label = Client.device(@user_agent)}> · {label}</span>
         </p>
         <p :if={!@viewport} title={@user_agent}>
-          {Format.device(@user_agent) || "Unknown browser"}
+          {Client.device(@user_agent) || "Unknown browser"}
         </p>
       </section>
 
@@ -515,9 +515,9 @@ defmodule PhoenixReplay.Web.Components.Player do
       >
         <h3 id="replay-visit-heading" class={heading()}>Visit</h3>
         <div :if={@landing} class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted">
-          <.badge :if={Format.campaign(@landing.params)}>{Format.campaign(@landing.params)}</.badge>
-          <span :if={Format.referrer_host(@landing.referrer)} title={@landing.referrer}>
-            from {Format.referrer_host(@landing.referrer)}
+          <.badge :if={Client.campaign(@landing.params)}>{Client.campaign(@landing.params)}</.badge>
+          <span :if={Client.referrer_host(@landing.referrer)} title={@landing.referrer}>
+            from {Client.referrer_host(@landing.referrer)}
           </span>
           <span>
             landed on <code class="font-mono text-ink">{@landing.path}</code>
