@@ -1,6 +1,7 @@
 import { Socket } from 'phoenix'
 import { LiveSocket } from 'phoenix_live_view'
 
+import { confirmClicks } from './dom/confirm'
 import { EventList } from './hooks/event_list'
 import { Scrubber } from './hooks/scrubber'
 
@@ -12,4 +13,5 @@ const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Sock
   hooks: { EventList, Scrubber }
 })
 
+confirmClicks(window)
 liveSocket.connect()

@@ -261,6 +261,7 @@ defmodule PhoenixReplay.Web.Live.Index do
               variant="danger"
               phx-click="delete"
               phx-value-id={recording.id}
+              data-confirm="Delete this recording?"
             >
               Delete
             </.button>
