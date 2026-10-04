@@ -11,7 +11,10 @@ config :volt,
   entry: "assets/js/app.ts",
   outdir: "priv/static/assets",
   # LiveView writes colocated hooks under the build path ("phoenix-colocated/example").
-  resolve_dirs: ["deps", Mix.Project.build_path()],
+  # PhoenixReplay is a path dependency here, so its client module resolves
+  # from the directory holding the library; apps installing it from Hex
+  # resolve it from deps.
+  resolve_dirs: ["deps", Mix.Project.build_path(), Path.expand("../../..", __DIR__)],
   target: :es2020,
   sourcemap: :hidden,
   tailwind: [

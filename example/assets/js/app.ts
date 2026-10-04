@@ -4,6 +4,7 @@ import 'phoenix_html'
 import { Socket } from 'phoenix'
 import { hooks as colocatedHooks } from 'phoenix-colocated/example'
 import { LiveSocket } from 'phoenix_live_view'
+import { replayMetadata, replayParams } from 'phoenix_replay'
 
 import topbar from '../vendor/topbar'
 
@@ -13,7 +14,8 @@ const csrfToken = document
 
 const liveSocket = new LiveSocket('/live', Socket, {
   longPollFallbackMs: 2500,
-  params: { _csrf_token: csrfToken },
+  params: () => ({ _csrf_token: csrfToken, ...replayParams() }),
+  metadata: replayMetadata,
   hooks: { ...colocatedHooks }
 })
 
