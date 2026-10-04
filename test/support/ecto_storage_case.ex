@@ -1,16 +1,19 @@
 defmodule PhoenixReplay.Test.EctoStorageCase do
   @moduledoc false
-  # The PhoenixReplay.Storage.Ecto tests, shared by one module per database.
-  # The using module's setup_all starts its repo, runs
-  # PhoenixReplay.Test.EctoMigration and returns `opts: [repo: Repo]`.
+  # The PhoenixReplay.Storage.Ecto tests, shared by one module per database:
+  # `use PhoenixReplay.Test.EctoStorageCase, repo: Repo`. Each test runs in
+  # a sandboxed transaction on a repo PhoenixReplay.Test.Repos started.
 
-  defmacro __using__(_opts) do
+  defmacro __using__(opts) do
+    repo = Keyword.fetch!(opts, :repo)
+
     quote do
       alias PhoenixReplay.Storage.Ecto, as: EctoStorage
       alias PhoenixReplay.Test.Fixtures
 
-      setup %{opts: opts} do
-        :ok = EctoStorage.clear(opts)
+      setup do
+        :ok = Ecto.Adapters.SQL.Sandbox.checkout(unquote(repo))
+        %{opts: [repo: unquote(repo)]}
       end
 
       test "stores the device, viewport and source with the summary", %{opts: opts} do

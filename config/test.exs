@@ -22,3 +22,22 @@ config :volt, :test,
   root: "priv/ts",
   include: ["**/*.test.ts"],
   bundle: [resolve_dirs: ["deps"]]
+
+# Repos the Ecto storage is tested on; see test/support/repos.ex. Each test
+# runs in a sandboxed transaction.
+config :phoenix_replay, PhoenixReplay.Test.SQLiteRepo,
+  database: "tmp/test/replay.sqlite3",
+  pool: Ecto.Adapters.SQL.Sandbox,
+  # SQLite allows one writer, so more connections only wait on its lock;
+  # migrating needs two.
+  pool_size: 2,
+  log: false
+
+config :phoenix_replay, PhoenixReplay.Test.PostgresRepo,
+  url: System.get_env("PHOENIX_REPLAY_POSTGRES_URL"),
+  pool: Ecto.Adapters.SQL.Sandbox,
+  log: false
+
+config :phoenix_replay, PhoenixReplay.Test.DuckDBRepo,
+  pool: Ecto.Adapters.SQL.Sandbox,
+  log: false
