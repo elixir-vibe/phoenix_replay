@@ -16,7 +16,7 @@ Add the dependency:
 
 ```elixir
 def deps do
-  [{:phoenix_replay, "~> 0.4"}]
+  [{:phoenix_replay, "~> 0.5"}]
 end
 ```
 
