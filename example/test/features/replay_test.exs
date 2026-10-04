@@ -142,7 +142,7 @@ defmodule ExampleWeb.Features.ReplayTest do
 
     # Navigate away to finalize the recording
     conn = conn |> visit(~p"/replay") |> assert_has("body .phx-connected")
-    conn = conn |> assert_has("h1", text: "PhoenixReplay")
+    conn = conn |> assert_has("h1", text: "Recordings")
 
     # --- Verify what was recorded ---
     assert_receive {:persisted, id}, 5_000
@@ -170,8 +170,8 @@ defmodule ExampleWeb.Features.ReplayTest do
     # --- Verify the recording is listed ---
     conn = conn |> assert_has("li", text: "ExampleWeb.TaskLive.Index")
 
-    # Open it
-    conn = conn |> click_link("Open")
+    # Open it: the whole row links to the recording
+    conn = conn |> click_link("ExampleWeb.TaskLive.Index")
     conn = conn |> assert_has("h1", text: "ExampleWeb.TaskLive.Index")
 
     # Player controls are present
