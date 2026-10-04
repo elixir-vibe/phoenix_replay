@@ -123,6 +123,29 @@ defmodule PhoenixReplay.Web.Components.Recordings do
   end
 
   @doc """
+  Says how many recordings ended since the list was read, with a button
+  that sends `show_new` to bring it up to date.
+  """
+  attr :count, :integer, required: true
+
+  @spec new_recordings(map()) :: Phoenix.LiveView.Rendered.t()
+  def new_recordings(assigns) do
+    ~H"""
+    <div id="recordings-new" role="status" aria-live="polite">
+      <button
+        :if={@count > 0}
+        type="button"
+        phx-click="show_new"
+        class="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent-soft px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-accent/60 pointer-coarse:py-3"
+      >
+        <.icon name="lucide:arrow-up" class="size-4 text-accent" />
+        {Format.count(@count, "new recording")} · Show
+      </button>
+    </div>
+    """
+  end
+
+  @doc """
   Narrows the list. Changes are sent as `filter` with the fields of
   `PhoenixReplay.Recordings.Filter.from_params/1`.
   """

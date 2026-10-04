@@ -39,6 +39,18 @@
     },
     {
       "hidden": false,
+      "name": "lucide:arrow-up",
+      "left": 0,
+      "width": 24,
+      "body": "<path fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"m5 12l7-7l7 7m-7 7V5\"/>",
+      "height": 24,
+      "top": 0,
+      "rotate": 0,
+      "h_flip": false,
+      "v_flip": false
+    },
+    {
+      "hidden": false,
       "name": "lucide:chevron-left",
       "left": 0,
       "width": 24,

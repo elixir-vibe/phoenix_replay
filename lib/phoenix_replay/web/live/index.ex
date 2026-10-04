@@ -5,6 +5,10 @@ defmodule PhoenixReplay.Web.Live.Index do
 
   Refreshes when `PhoenixReplay.Recordings` broadcasts a change, and every
   few seconds while live sessions are shown so their counters advance.
+
+  Saved recordings are listed as of a moment, `until`, taken when the list
+  opens or its filter changes, so pages stay put while sessions end. Newer
+  ones are counted in a banner that brings the list up to date.
   """
 
   use Phoenix.LiveView
@@ -31,15 +35,23 @@ defmodule PhoenixReplay.Web.Live.Index do
        context: context,
        page: 1,
        filter: %Filter{},
+       until: nil,
        refresh_timer: nil
      )}
   end
 
   @impl true
   def handle_params(params, _uri, socket) do
+    filter = Filter.from_params(params)
+
+    until =
+      if filter == socket.assigns.filter and socket.assigns.until,
+        do: socket.assigns.until,
+        else: System.system_time(:millisecond)
+
     {:noreply,
      socket
-     |> assign(page: Params.integer(params["page"], 1), filter: Filter.from_params(params))
+     |> assign(page: Params.integer(params["page"], 1), filter: filter, until: until)
      |> load()}
   end
 
@@ -59,6 +71,15 @@ defmodule PhoenixReplay.Web.Live.Index do
   def handle_event("filter", params, socket) do
     path = index_path(socket.assigns.context, Filter.from_params(params), 1)
     {:noreply, push_patch(socket, to: path, replace: true)}
+  end
+
+  def handle_event("show_new", _params, socket) do
+    %{context: context, filter: filter} = socket.assigns
+    socket = assign(socket, :until, System.system_time(:millisecond))
+
+    if socket.assigns.page == 1,
+      do: {:noreply, load(socket)},
+      else: {:noreply, push_patch(socket, to: index_path(context, filter, 1))}
   end
 
   def handle_event("clear", _params, socket) do
@@ -111,6 +132,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         live: length(live),
         errors: count.(%Filter{errors: true}) + Enum.count(live ++ ending, &(&1.error_count > 0))
       },
+      newer: newer(socket, now, allow),
       facets: Recordings.facets(config, allow),
       can_clear?: stored > 0 and Context.allowed?(socket, :clear, nil)
     )
@@ -125,6 +147,7 @@ defmodule PhoenixReplay.Web.Live.Index do
     read =
       &Recordings.query(config, filter,
         now: now,
+        until: socket.assigns.until,
         offset: (&1 - 1) * @per_page,
         limit: @per_page,
         allow: allow
@@ -139,6 +162,16 @@ defmodule PhoenixReplay.Web.Live.Index do
       {saved, total} ->
         {saved, total, page}
     end
+  end
+
+  # Saved recordings that started after the list's moment.
+  defp newer(socket, now, allow) do
+    %{context: %{config: config}, filter: filter, until: until} = socket.assigns
+
+    {_none, count} =
+      Recordings.query(config, filter, now: now, since: until, limit: 0, allow: allow)
+
+    count
   end
 
   # Without an authorization module every recording is listed, and storage
@@ -226,6 +259,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         and use your app.
       </.empty_state>
 
+      <.new_recordings count={@newer} />
       <.recording_list live recordings={@live} now={@now} path={&Context.path(@context, [&1.id])} />
       <.recording_list
         recordings={@saved}

@@ -17,6 +17,13 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
   defp save(id), do: Storage.save(Fixtures.storage(), Fixtures.counter_recording(id: id))
 
+  defp save_at(id, connected_at) do
+    Storage.save(
+      Fixtures.storage(),
+      Fixtures.counter_recording(id: id, connected_at: connected_at)
+    )
+  end
+
   test "shows an empty state" do
     {:ok, _view, html} = live(build_conn(), "/replay")
     assert html =~ "No recordings yet."
@@ -55,12 +62,26 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     assert html =~ "2 sessions · 1 live · 0 with errors"
   end
 
-  test "refreshes when recordings change" do
+  test "lists sessions that started earlier when they end, and counts newer ones" do
     {:ok, view, _html} = live(build_conn(), "/replay")
-    save("fresh")
+    until = :sys.get_state(view.pid).socket.assigns.until
+
+    # A session that started before the list was read ends: it takes its place.
+    save_at("ended", until - 60_000)
+    # One that started later waits behind the banner, so rows do not shift.
+    save_at("fresh", until + 1)
+
     Recordings.broadcast_change()
 
-    assert render(view) =~ "recording-fresh"
+    assert has_element?(view, "#recording-ended")
+    refute has_element?(view, "#recording-fresh")
+    assert has_element?(view, "#recordings-new button", "1 new recording · Show")
+
+    # Showing them reads the list as of now, which must be past "fresh".
+    Process.sleep(2)
+    view |> element("#recordings-new button") |> render_click()
+    assert has_element?(view, "#recording-fresh")
+    refute has_element?(view, "#recordings-new button")
   end
 
   test "deletes one or all recordings" do
