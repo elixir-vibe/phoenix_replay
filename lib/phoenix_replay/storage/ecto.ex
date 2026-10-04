@@ -11,6 +11,10 @@ if Code.ensure_loaded?(Ecto.Query) do
     name: names are stored encoded, so that criterion is checked after
     reading the rows matching the others.
 
+    Tested on PostgreSQL, SQLite (ecto_sqlite3) and DuckDB (QuackDB). MySQL
+    is not supported: saving upserts on `id`, and Ecto cannot name a
+    conflict target there.
+
     ## Options
 
       * `:repo` — the Ecto repo module (required)

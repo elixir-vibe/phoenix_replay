@@ -153,6 +153,16 @@ mix ci
 
 The dashboard bundle and client module in `priv/static` are built, not tracked: `mix assets.build` builds them, `mix ci` rebuilds them first, and `mix hex.build` and `mix hex.publish` build them into every package. A Git dependency on PhoenixReplay has no bundle until it is built there.
 
+The Ecto storage tests run on SQLite, on DuckDB through [QuackDB](https://hexdocs.pm/quackdb) (Elixir 1.19+; install its binary once with `MIX_ENV=test mix quackdb.install`), and on PostgreSQL when `PHOENIX_REPLAY_POSTGRES_URL` names a database. Any PostgreSQL works; without Docker or Homebrew, [theseus-rs/postgresql-binaries](https://github.com/theseus-rs/postgresql-binaries) has plain builds:
+
+```bash
+curl -sL https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.0/postgresql-18.6.0-aarch64-apple-darwin.tar.gz | tar xz -C _build
+pg=_build/postgresql-18.6.0-aarch64-apple-darwin/bin
+$pg/initdb -D _build/pgdata -U postgres --auth=trust
+$pg/pg_ctl -D _build/pgdata -o "-p 54330 -k /tmp" -l _build/pg.log start
+PHOENIX_REPLAY_POSTGRES_URL=postgres://postgres@127.0.0.1:54330/phoenix_replay_test mix test
+```
+
 ## Part of Elixir Vibe
 
 PhoenixReplay records LiveView sessions as assigns timelines, making every session replayable and every bug reproducible.

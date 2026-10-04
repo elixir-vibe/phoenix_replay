@@ -17,9 +17,14 @@ jobs:
       latest-otp: "29"
       min-elixir: "1.18"
       min-otp: "27"
+      # The Ecto storage tests also run on DuckDB, through QuackDB's managed
+      # binary, and on the PostgreSQL the runner image ships, disabled.
       deps-command: |
         mix deps.get
         npm ci
         npx playwright install --with-deps chromium
-      latest-command: mix ci
-      min-command: mix assets.build && mix compile --warnings-as-errors && mix test
+        if mix help quackdb.install > /dev/null 2>&1; then mix quackdb.install; fi
+        sudo systemctl start postgresql.service
+        sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+      latest-command: PHOENIX_REPLAY_POSTGRES_URL=postgres://postgres:postgres@localhost:5432/phoenix_replay_test mix ci
+      min-command: mix assets.build && mix compile --warnings-as-errors && PHOENIX_REPLAY_POSTGRES_URL=postgres://postgres:postgres@localhost:5432/phoenix_replay_test mix test

@@ -13,9 +13,19 @@ config :phoenix_replay,
 
 The default `:path` is `"priv/replay_recordings"`, relative to the working directory. In a release, point it at a writable directory.
 
+Summaries are kept in memory once read, so the dashboard's list reads only the summary files it has not seen. Files other nodes write to a shared directory still show up: each list compares the index with the directory.
+
 ## Ecto
 
-Store recordings in a table through your repo:
+Store recordings in a table through your repo. The backend is tested on:
+
+| Database | Adapter |
+| --- | --- |
+| PostgreSQL | `Ecto.Adapters.Postgres` (Postgrex) |
+| SQLite | `Ecto.Adapters.SQLite3` (ecto_sqlite3) |
+| DuckDB | `Ecto.Adapters.QuackDB` ([QuackDB](https://hexdocs.pm/quackdb)) |
+
+MySQL is not supported: saving a recording upserts it on its `id`, and Ecto cannot name the conflict target on MySQL.
 
 ```elixir
 config :phoenix_replay, storage: {PhoenixReplay.Storage.Ecto, repo: MyApp.Repo}
@@ -37,6 +47,9 @@ defmodule MyApp.Repo.Migrations.CreatePhoenixReplayRecordings do
       add :duration_ms, :integer, null: false
       add :error_count, :integer, null: false, default: 0
       add :tab, :string
+      add :viewport, :string
+      add :device, :string
+      add :source, :string
       add :event_names, :binary, null: false
       add :data, :binary, null: false
     end
@@ -45,6 +58,8 @@ defmodule MyApp.Repo.Migrations.CreatePhoenixReplayRecordings do
   end
 end
 ```
+
+The dashboard reads one page at a time in SQL, with a count for the total. Text search matches the URL and session id case-insensitively. Event names are stored encoded, so filtering by an event name checks the rows that match the other filters after reading them, and the names the filter suggests come from the 500 most recent recordings.
 
 ## Running sessions
 
@@ -88,3 +103,10 @@ Recordings are stored as compressed Erlang External Term Format, which keeps str
 ## Custom backends
 
 Implement `PhoenixReplay.Storage`: `save/2`, `fetch/2`, `list/1`, `delete/2` and `clear/1`. `list/1` returns `PhoenixReplay.Recording.Summary` structs, most recent first, and should not decode full recordings. `PhoenixReplay.Storage.Codec` provides the encoding the built-in backends use.
+
+Two optional callbacks let a backend serve the dashboard without listing everything:
+
+  * `query/3` reads a page of summaries matching a `PhoenixReplay.Recordings.Filter`, with an offset, a limit and start-time bounds, and counts every match
+  * `facets/1` returns the views and event names the dashboard's filters suggest
+
+Without them, both are worked out from `list/1`. The optional `append/3`, `fetch_partial/2` and `partials/1` take running sessions in chunks.

@@ -39,28 +39,42 @@ defmodule PhoenixReplay.MixProject do
   defp elixirc_paths(_env), do: ["lib"]
 
   defp deps do
-    [
-      {:phoenix_live_view, "~> 1.1"},
-      {:telemetry, "~> 1.0"},
-      {:ex2ms, "~> 1.7"},
-      {:phoenix_iconify, "~> 0.3.7"},
-      {:ua_parser, "~> 1.10"},
-      {:ecto, "~> 3.12", optional: true},
-      {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
-      {:ecto_sql, "~> 3.12", only: :test},
-      {:ecto_sqlite3, "~> 0.22", only: :test},
-      {:jason, "~> 1.4", optional: true},
-      {:obscura, "~> 0.2", optional: true},
-      {:lazy_html, ">= 0.1.0", only: :test},
-      {:playwright_ex, "~> 0.14", only: :test},
-      {:volt, "~> 0.20", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.35", only: :dev, runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
-      {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
-      {:reach, "~> 2.8", only: [:dev, :test], runtime: false}
-    ]
+    duckdb() ++
+      [
+        {:phoenix_live_view, "~> 1.1"},
+        {:telemetry, "~> 1.0"},
+        {:ex2ms, "~> 1.7"},
+        {:phoenix_iconify, "~> 0.3.7"},
+        {:ua_parser, "~> 1.10"},
+        {:ecto, "~> 3.12", optional: true},
+        {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
+        {:ecto_sql, "~> 3.12", only: :test},
+        {:ecto_sqlite3, "~> 0.22", only: :test},
+        {:postgrex, "~> 0.22", only: :test},
+        {:jason, "~> 1.4", optional: true},
+        {:obscura, "~> 0.2", optional: true},
+        {:lazy_html, ">= 0.1.0", only: :test},
+        {:playwright_ex, "~> 0.14", only: :test},
+        {:volt, "~> 0.20", only: [:dev, :test], runtime: false},
+        {:ex_doc, "~> 0.35", only: :dev, runtime: false},
+        {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+        {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+        {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
+        {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
+        {:reach, "~> 2.8", only: [:dev, :test], runtime: false}
+      ]
+  end
+
+  # The Ecto storage tests also run on DuckDB through QuackDB, which needs
+  # Elixir 1.19; the minimum-version CI job skips them.
+  # The branch requires json_codec 0.3, which iconify needs; switch to the
+  # Hex release that includes it (elixir-vibe/quackdb#5).
+  defp duckdb do
+    if Version.match?(System.version(), "~> 1.19"),
+      do: [
+        {:quackdb, github: "elixir-vibe/quackdb", branch: "chore/json-codec-0.3", only: :test}
+      ],
+      else: []
   end
 
   defp package do
