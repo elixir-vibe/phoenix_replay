@@ -74,7 +74,14 @@ defmodule Example.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
+      # PhoenixReplay's own bundle and client module are not tracked; build them first.
+      setup: [
+        "cmd --cd .. mix assets.build",
+        "deps.get",
+        "ecto.setup",
+        "assets.setup",
+        "assets.build"
+      ],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       # Browser tests load assets through Volt's build manifest.

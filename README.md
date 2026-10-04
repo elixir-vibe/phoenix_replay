@@ -44,7 +44,38 @@ live_session :checkout,
 end
 ```
 
+Optionally, the browser sends its viewport, user agent and tab, so a phone session replays at phone size and sessions across LiveViews link into one journey:
+
+```javascript
+import { replayParams, replayMetadata } from "phoenix_replay"
+
+new LiveSocket("/live", Socket, {
+  params: () => ({_csrf_token: csrfToken, ...replayParams()}),
+  metadata: replayMetadata
+})
+```
+
 See the [Recording guide](https://hexdocs.pm/phoenix_replay/recording.html) and [LiveComponents guide](https://hexdocs.pm/phoenix_replay/live-components.html).
+
+## Telemetry and logs
+
+See the queries, HTTP calls and log messages behind each click, listed under the event that caused them — including those from `start_async` and `assign_async` tasks:
+
+```elixir
+config :phoenix_replay,
+  collect: [{PhoenixReplay.Collector.Ecto, repo: MyApp.Repo}, PhoenixReplay.Collector.Finch],
+  logs: [level: :info]
+```
+
+Then record every session and keep the ones that matter — every session with an error or a slow query, and a sample of the rest:
+
+```elixir
+config :phoenix_replay,
+  keep: [rate: 0.05, errors: true, slower_than: 1_000],
+  max_memory: 256 * 1024 * 1024
+```
+
+Any telemetry event can be collected, and collectors are a small behaviour. See the [Telemetry and Logs guide](https://hexdocs.pm/phoenix_replay/telemetry-and-logs.html).
 
 ## Privacy
 
@@ -64,11 +95,17 @@ defmodule MyApp.ReplaySanitizer do
 end
 ```
 
+Values that only detection can find, such as an email address typed into a form or a card number in a log message, are masked when a session is saved, off your users' path. Use your own patterns or [Obscura](https://hexdocs.pm/obscura), an optional dependency:
+
+```elixir
+config :phoenix_replay, redact: {PhoenixReplay.Redactor.Obscura, []}
+```
+
 See the [Privacy and Security guide](https://hexdocs.pm/phoenix_replay/privacy-and-security.html).
 
 ## Dashboard
 
-Browse, filter and replay recordings with a scrubber, keyboard controls and playback speeds. Filters live in the URL, so `/admin/replay?event=checkout&within=24h` is a shareable link. Restrict who sees what with an authorization module:
+Browse, filter and replay recordings in a dashboard that follows your system's light or dark mode. The list pages through storage and holds its place while new sessions arrive; filters live in the URL, so `/admin/replay?event=checkout&within=24h` is a shareable link. The player has a timeline lane per kind of event, the events grouped by the interaction that caused them, the assigns at every moment, and a link to the moment you are looking at. Restrict who sees what with an authorization module:
 
 ```elixir
 phoenix_replay "/replay",
@@ -110,7 +147,18 @@ Full documentation, guides and cheatsheets are available on [HexDocs](https://he
 mix deps.get
 npm ci
 npx playwright install chromium
+mix assets.build
 mix ci
+```
+
+The Ecto storage tests run on SQLite, on DuckDB through [QuackDB](https://hexdocs.pm/quackdb) (Elixir 1.19+; install its binary once with `MIX_ENV=test mix quackdb.install`), and on PostgreSQL when `PHOENIX_REPLAY_POSTGRES_URL` names a database. Any PostgreSQL works; without Docker or Homebrew, [theseus-rs/postgresql-binaries](https://github.com/theseus-rs/postgresql-binaries) has plain builds:
+
+```bash
+curl -sL https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.0/postgresql-18.6.0-aarch64-apple-darwin.tar.gz | tar xz -C _build
+pg=_build/postgresql-18.6.0-aarch64-apple-darwin/bin
+$pg/initdb -D _build/pgdata -U postgres --auth=trust
+$pg/pg_ctl -D _build/pgdata -o "-p 54330 -k /tmp" -l _build/pg.log start
+PHOENIX_REPLAY_POSTGRES_URL=postgres://postgres@127.0.0.1:54330/phoenix_replay_test mix test
 ```
 
 ## Part of Elixir Vibe

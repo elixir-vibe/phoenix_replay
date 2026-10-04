@@ -41,7 +41,62 @@ Share of sessions recorded, `0.0` to `1.0`. Default: `1.0`.
 config :phoenix_replay, max_events: 10_000
 ```
 
-Events kept per session. Default: `10_000`.
+LiveView events kept per session. Default: `10_000`.
+
+### Tail sampling
+
+```elixir
+config :phoenix_replay,
+  keep: [rate: 0.05, errors: true, slower_than: 1_000],
+  max_memory: 256 * 1024 * 1024
+```
+
+Decides when a session ends whether it is saved. Default: `rate: 1.0`, no error or slowness rules, no memory limit.
+
+### Telemetry
+
+```elixir
+config :phoenix_replay,
+  collect: [
+    {PhoenixReplay.Collector.Ecto, repo: MyApp.Repo, slower_than: 5},
+    PhoenixReplay.Collector.Finch,
+    {[:my_app, :checkout, :stop], metadata: [:order_id], limit: 100}
+  ]
+```
+
+Default: `[]`. Each collector keeps `1_000` events per session unless `:limit` is set.
+
+### Logs
+
+```elixir
+config :phoenix_replay, logs: [level: :info, metadata: [:request_id]]
+```
+
+Off by default.
+
+### Redaction
+
+```elixir
+config :phoenix_replay, redact: [~r/\b\d{13,19}\b/]
+```
+
+Masks matches in every recorded string when a session is saved.
+
+### Obscura
+
+```elixir
+config :phoenix_replay, redact: {PhoenixReplay.Redactor.Obscura, []}
+```
+
+Detects personal data. Needs `{:obscura, "~> 0.2"}`.
+
+### Writing running sessions
+
+```elixir
+config :phoenix_replay, flush: [events: 200, interval: 5_000]
+```
+
+Writes kept sessions to storage in chunks while they run. `flush: false` saves them only when they end.
 
 ### Retention
 
@@ -76,6 +131,41 @@ mix igniter.install phoenix_replay
 config :phoenix_replay, sample_rate: 0.0
 ```
 
+## Browser context
+{: .col-2}
+
+### LiveSocket
+
+```javascript
+import { replayParams, replayMetadata } from "phoenix_replay"
+
+new LiveSocket("/live", Socket, {
+  params: () => ({_csrf_token: csrfToken, ...replayParams()}),
+  metadata: replayMetadata
+})
+```
+
+Viewport, resizes and tab for each recording.
+
+### User agent
+
+```elixir
+socket "/live", Phoenix.LiveView.Socket,
+  websocket: [connect_info: [:user_agent, session: @session_options]]
+```
+
+### Visit context
+
+```elixir
+config :phoenix_replay,
+  context: [
+    headers: ["accept-language"],
+    landing: [params: [:utm, :click_ids]]
+  ]
+```
+
+Needs `plug PhoenixReplay.Plug` in the `:browser` pipeline. First-touch by default; `attribution: :last` follows the latest campaign.
+
 ## Live sessions
 {: .col-2}
 
@@ -96,7 +186,7 @@ live_session :checkout,
 end
 ```
 
-Accepts `:sample_rate`, `:max_events` and `:sanitizer`.
+Accepts `:sample_rate`, `:keep`, `:max_events`, `:sanitizer` and `:redact`.
 
 ## Router
 {: .col-2}
@@ -154,6 +244,7 @@ phoenix_replay "/replay", as: :staff_replay
 | `event` | Triggered event name |
 | `within` | `1h`, `24h` or `7d` |
 | `min_events` | Minimum event count |
+| `errors` | `1` for sessions with an error |
 
 ### In code
 

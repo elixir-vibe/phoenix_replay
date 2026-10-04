@@ -10,41 +10,46 @@ app_config = [
 adapter = [
   "Mix.Tasks.PhoenixReplay.*",
   "PhoenixReplay",
+  "PhoenixReplay.Plug",
   "PhoenixReplay.Recorder",
   "PhoenixReplay.Router",
   "PhoenixReplay.Web.*"
 ]
 
+# Session modules follow a recording until it is stored; its buffer is
+# infrastructure that capture writes to.
 orchestrator = [
   "PhoenixReplay.Recordings",
-  "PhoenixReplay.Retention",
-  "PhoenixReplay.Recorder.Monitor",
-  "PhoenixReplay.Recorder.Persister"
+  "PhoenixReplay.Recordings.Retention",
+  "PhoenixReplay.Session.Finalizer",
+  "PhoenixReplay.Session.Flusher",
+  "PhoenixReplay.Session.Monitor",
+  "PhoenixReplay.Session.Recovery"
 ]
 
 model = [
   "PhoenixReplay.Config",
   "PhoenixReplay.Recording",
-  "PhoenixReplay.Recording.Event",
-  "PhoenixReplay.Recording.Summary",
-  "PhoenixReplay.Recording.Timeline",
+  "PhoenixReplay.Recording.*",
   "PhoenixReplay.Recordings.Filter"
 ]
 
+# Behaviours and their built-in implementations.
 logic = [
   "PhoenixReplay.Authorization",
-  "PhoenixReplay.Sanitizer",
-  "PhoenixReplay.Sanitizer.Default",
+  "PhoenixReplay.Collector*",
+  "PhoenixReplay.Redactor*",
+  "PhoenixReplay.Sanitizer*",
   "PhoenixReplay.Storage.Codec"
 ]
 
 infrastructure = [
   "PhoenixReplay.Application",
-  "PhoenixReplay.Recorder.AsyncComponents",
-  "PhoenixReplay.Recorder.Buffer",
-  "PhoenixReplay.Recorder.Components",
+  "PhoenixReplay.Capture.*",
+  "PhoenixReplay.Session.Buffer",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",
+  "PhoenixReplay.Storage.Ecto.Migration",
   "PhoenixReplay.Storage.File",
   "PhoenixReplay.Telemetry"
 ]
@@ -90,7 +95,8 @@ infrastructure = [
       {"PhoenixReplay*", app_config, except: ["PhoenixReplay.Config"]},
       {"PhoenixReplay.Recording", ["File.*", ":ets.*", "Phoenix.PubSub.*"]},
       {"PhoenixReplay.Recording.*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]},
-      {"PhoenixReplay.Sanitizer*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]}
+      {"PhoenixReplay.Sanitizer*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]},
+      {"PhoenixReplay.Redactor*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]}
     ]
   ],
   smells: [strict: true]

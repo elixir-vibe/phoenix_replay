@@ -1,7 +1,10 @@
 import { Socket } from 'phoenix'
 import { LiveSocket } from 'phoenix_live_view'
 
+import { confirmClicks } from './dom/confirm'
+import { copyLinks } from './dom/copy'
 import { EventList } from './hooks/event_list'
+import { FrameViewport } from './hooks/frame_viewport'
 import { Scrubber } from './hooks/scrubber'
 
 const meta = (name: string): string | undefined =>
@@ -9,7 +12,9 @@ const meta = (name: string): string | undefined =>
 
 const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Socket, {
   params: { _csrf_token: meta('csrf-token') },
-  hooks: { EventList, Scrubber }
+  hooks: { EventList, FrameViewport, Scrubber }
 })
 
+confirmClicks(window)
+copyLinks(window)
 liveSocket.connect()

@@ -10,14 +10,19 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   LiveComponents in the template render through
   `PhoenixReplay.Web.Live.ReplayComponent` with their recorded assigns; see
-  `PhoenixReplay.Web.Replay`. A template that fails with the recorded
+  `PhoenixReplay.Web.Rendering`. A template that fails with the recorded
   assigns shows a placeholder instead of crashing the frame.
+
+  A session that is still running is never read from the buffer here: the
+  player redacts it and hands it over with `PhoenixReplay.Web.Playback.load/2`.
+  Until then the frame shows a placeholder.
   """
 
   use Phoenix.LiveView
 
   alias PhoenixReplay.Recording.Timeline
-  alias PhoenixReplay.Web.{Context, Layouts, Playback, Replay}
+  alias PhoenixReplay.Recordings
+  alias PhoenixReplay.Web.{Context, Layouts, Playback, Rendering}
   alias PhoenixReplay.Web.Live.ReplayComponent
 
   @private :phoenix_replay_frame
@@ -25,7 +30,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
-    recording = Context.fetch_recording!(socket, id)
+    recording = if Recordings.live?(id), do: nil, else: Context.fetch_recording!(socket, id)
 
     if connected?(socket) and is_binary(params["channel"]) do
       :ok = Playback.subscribe(params["channel"])
@@ -33,7 +38,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
     end
 
     frame = %{
-      view: recording.view,
+      view: recording && recording.view,
       assets: Layouts.frame_assets(Context.fetch(socket), socket.endpoint),
       components: %{},
       error: nil
@@ -43,20 +48,51 @@ defmodule PhoenixReplay.Web.Live.Frame do
      socket
      |> put_private(@private, %{recording: recording, keys: []})
      |> assign(@private, frame)
-     |> show(Timeline.first_render_index(recording)), layout: false}
+     |> show_first(), layout: false}
   end
+
+  defp show_first(%{private: %{@private => %{recording: nil}}} = socket), do: socket
+
+  defp show_first(socket),
+    do: show(socket, Timeline.first_render_index(socket.private[@private].recording))
 
   # Recorded templates keep their bindings; the replay must not react to them.
   @impl true
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   @impl true
+  def handle_info({Playback, {:load, recording}}, socket) do
+    if Context.allowed?(socket, :view, recording) do
+      {:noreply,
+       socket
+       |> put_private(@private, %{recording: recording, keys: []})
+       |> update(@private, &%{&1 | view: recording.view})
+       |> show_first()}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(
+        {Playback, {:seek, _index}},
+        %{private: %{@private => %{recording: nil}}} = socket
+      ),
+      do: {:noreply, socket}
+
   def handle_info({Playback, {:seek, index}}, socket), do: {:noreply, show(socket, index)}
   def handle_info({Playback, _message}, socket), do: {:noreply, socket}
 
   @impl true
+  def render(%{@private => %{view: nil}} = assigns) do
+    ~H"""
+    <div style="padding: 2rem; color: #737373; text-align: center; font-family: system-ui, sans-serif;">
+      Redacting the session…
+    </div>
+    """
+  end
+
   def render(%{@private => %{error: nil, view: view, components: states}} = assigns),
-    do: assigns |> view.render() |> Replay.rewrite(states)
+    do: assigns |> view.render() |> Rendering.rewrite(states)
 
   def render(assigns) do
     ~H"""
@@ -105,6 +141,6 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   defp check_render(socket) do
     frame = socket.assigns[@private]
-    assign(socket, @private, %{frame | error: Replay.render_error(frame.view, socket.assigns)})
+    assign(socket, @private, %{frame | error: Rendering.render_error(frame.view, socket.assigns)})
   end
 end

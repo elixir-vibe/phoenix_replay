@@ -53,7 +53,7 @@ defmodule PhoenixReplay.Web.Layouts do
         <script :for={src <- @assets.scripts} defer src={src}>
         </script>
       </head>
-      <body class="h-full bg-neutral-100 font-sans text-neutral-900 antialiased">
+      <body class="h-full bg-canvas font-sans text-ink antialiased">
         {@inner_content}
       </body>
     </html>

@@ -34,13 +34,34 @@ defmodule PhoenixReplay.Recording.TimelineTest do
     assert Timeline.last_index(recording([])) == 0
   end
 
-  test "interactive?/1 requires an event or a second navigation" do
-    mount = %Event{at: 0, type: :mount, data: %{assigns: %{}}}
-    params = %Event{at: 1, type: :params, data: %{params: %{}, uri: "/"}}
-    event = %Event{at: 2, type: :event, data: %{name: "x", params: %{}}}
+  test "viewport_at/2 follows viewport events from the connected viewport" do
+    vp = fn width -> %{width: width, height: 800, dpr: 1} end
 
-    refute Timeline.interactive?(recording([mount, params]))
-    assert Timeline.interactive?(recording([mount, params, params]))
-    assert Timeline.interactive?(recording([mount, event]))
+    recording = %{
+      recording([
+        %Event{at: 0, type: :mount, data: %{assigns: %{}}},
+        %Event{at: 1, type: :viewport, data: vp.(800)},
+        %Event{at: 2, type: :event, data: %{name: "x", params: %{}}}
+      ])
+      | client: %{viewport: vp.(1200), user_agent: nil, tab: nil, referer: nil}
+    }
+
+    assert Timeline.viewport_at(recording, 0) == vp.(1200)
+    assert Timeline.viewport_at(recording, 2) == vp.(800)
+    assert Timeline.viewport_at(recording([]), 0) == nil
+  end
+
+  test "url_at/2 follows navigation from the URL the session started on" do
+    recording = %{
+      recording([
+        %Event{at: 0, type: :mount, data: %{assigns: %{}}},
+        %Event{at: 1, type: :params, data: %{params: %{}, uri: "http://x/b"}},
+        %Event{at: 2, type: :event, data: %{name: "x", params: %{}}}
+      ])
+      | url: "http://x/a"
+    }
+
+    assert Timeline.url_at(recording, 0) == "http://x/a"
+    assert Timeline.url_at(recording, 2) == "http://x/b"
   end
 end

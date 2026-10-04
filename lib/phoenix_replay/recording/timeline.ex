@@ -46,6 +46,34 @@ defmodule PhoenixReplay.Recording.Timeline do
   end
 
   @doc """
+  The page URL after the event at `index`: the last navigation up to it, or
+  the URL the session started on.
+  """
+  @spec url_at(Recording.t(), non_neg_integer()) :: String.t() | nil
+  def url_at(%Recording{events: events, url: url}, index) do
+    events
+    |> Enum.take(index + 1)
+    |> Enum.reduce(url, fn
+      %Event{type: :params, data: %{uri: uri}}, _acc -> uri
+      %Event{}, acc -> acc
+    end)
+  end
+
+  @doc """
+  The browser viewport after the event at `index`: the last `:viewport`
+  event up to it, or the viewport the session connected with, if known.
+  """
+  @spec viewport_at(Recording.t(), non_neg_integer()) :: Recording.viewport() | nil
+  def viewport_at(%Recording{events: events, client: client}, index) do
+    events
+    |> Enum.take(index + 1)
+    |> Enum.reduce(client[:viewport], fn
+      %Event{type: :viewport, data: viewport}, _acc -> viewport
+      %Event{}, acc -> acc
+    end)
+  end
+
+  @doc """
   Accumulates LiveComponent assigns visible after the event at `index`,
   keyed by `{module, id}`.
   """
@@ -63,17 +91,5 @@ defmodule PhoenixReplay.Recording.Timeline do
       %Event{}, acc ->
         acc
     end)
-  end
-
-  @doc """
-  Returns true when the recording contains user interaction worth keeping.
-
-  A session with no events and at most the initial `handle_params/3` is a
-  plain page view.
-  """
-  @spec interactive?(Recording.t()) :: boolean()
-  def interactive?(%Recording{events: events}) do
-    Enum.any?(events, &(&1.type == :event)) or
-      Enum.count_until(events, &(&1.type == :params), 2) == 2
   end
 end

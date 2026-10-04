@@ -2,7 +2,7 @@ defmodule PhoenixReplay.RecordingsTest do
   use ExUnit.Case, async: false
 
   alias PhoenixReplay.{Config, Recordings, Storage}
-  alias PhoenixReplay.Recorder.Buffer
+  alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
 
   setup do
@@ -25,6 +25,37 @@ defmodule PhoenixReplay.RecordingsTest do
     assert [%{id: "buffered", live?: true}, %{id: "stored", live?: false}] = listed
   end
 
+  test "pages stored recordings in storage, or after checking each one", %{config: config} do
+    for i <- 1..5 do
+      Storage.save(config.storage, Fixtures.counter_recording(id: "r#{i}", connected_at: i))
+    end
+
+    filter = %Recordings.Filter{}
+    ids = fn {summaries, total} -> {Enum.map(summaries, & &1.id), total} end
+
+    assert ids.(Recordings.query(config, filter, now: 10, offset: 1, limit: 2)) ==
+             {~w(r4 r3), 5}
+
+    allow = &(&1.id != "r4")
+
+    assert ids.(Recordings.query(config, filter, now: 10, offset: 1, limit: 2, allow: allow)) ==
+             {~w(r3 r2), 4}
+
+    assert %{views: ["PhoenixReplay.Test.Live.Counter"], event_names: ["inc"]} =
+             Recordings.facets(config, allow)
+  end
+
+  test "lists running sessions matching a filter", %{config: config} do
+    recording = Fixtures.counter_recording(id: "running", connected_at: 1)
+    Buffer.open(%{recording | client: Map.put(recording.client, :tab, "t9")}, self(), config)
+    on_exit(fn -> Buffer.close("running") end)
+
+    assert [%{id: "running", live?: true}] =
+             Recordings.live(%Recordings.Filter{tab: "t9"}, System.system_time(:millisecond))
+
+    assert Recordings.live(%Recordings.Filter{tab: "other"}, 0) == []
+  end
+
   test "fetches from the buffer first, then storage", %{config: config} do
     recording = Fixtures.counter_recording()
     assert Recordings.fetch(config, recording.id) == {:error, :not_found}
@@ -35,6 +66,23 @@ defmodule PhoenixReplay.RecordingsTest do
     Buffer.open(recording, self(), config)
     on_exit(fn -> Buffer.close(recording.id) end)
     assert {:ok, %{events: []}} = Recordings.fetch(config, recording.id)
+  end
+
+  test "redacts buffered sessions with their own redactor", %{config: config} do
+    recording = %{Fixtures.counter_recording() | url: "http://localhost/cards/4242"}
+    session_config = %{config | redact: {PhoenixReplay.Redactor.Patterns, patterns: [~r/\d{4}$/]}}
+    Buffer.open(recording, self(), session_config)
+    on_exit(fn -> Buffer.close(recording.id) end)
+    Buffer.put_url(recording.id, recording.url)
+
+    assert Recordings.live?(recording.id)
+    refute Recordings.live?("missing")
+
+    assert %{url: "http://localhost/cards/[REDACTED]"} =
+             Enum.find(Recordings.list(config), &(&1.id == recording.id))
+
+    assert {:ok, %{url: "http://localhost/cards/[REDACTED]"}} =
+             Recordings.fetch(config, recording.id)
   end
 
   test "delete and clear notify subscribers", %{config: config} do

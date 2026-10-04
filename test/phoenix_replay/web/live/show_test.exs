@@ -4,7 +4,9 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.Storage
+  alias PhoenixReplay.{Config, Storage}
+  alias PhoenixReplay.Recording.Event
+  alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
   alias PhoenixReplay.Web.Playback
 
@@ -19,6 +21,27 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
   defp assigns(view), do: :sys.get_state(view.pid).socket.assigns
 
+  defp open_tab(view, name), do: view |> element(~s(button[role="tab"]), name) |> render_click()
+
+  # Buffers a running session whose URL the redactor masks.
+  defp buffer_live(id) do
+    recording = %{
+      Fixtures.counter_recording(id: id, clicks: 2)
+      | url: "http://localhost/cards/4242"
+    }
+
+    redactor = {PhoenixReplay.Redactor.Patterns, patterns: [~r/\d{4}$/]}
+    :ok = Buffer.open(recording, self(), %{Config.load() | redact: redactor})
+    Buffer.put_url(id, recording.url)
+
+    recording.events
+    |> Enum.with_index()
+    |> Enum.each(fn {event, seq} -> Buffer.append(id, seq, event) end)
+
+    on_exit(fn -> Buffer.close(id) end)
+    recording
+  end
+
   # Delivers the pending playback step now. Playback tests use recordings
   # with hour-long gaps, so the real timer cannot fire during the test.
   defp advance(view) do
@@ -26,6 +49,48 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     Process.cancel_timer(timer)
     send(view.pid, {:advance, ref})
     assigns(view)
+  end
+
+  test "opens at a linked moment and links to the current one" do
+    {:ok, view, _html} = live(build_conn(), "/replay/show?at=4")
+    assert assigns(view).index == 4
+    assert has_element?(view, ~s(button[data-copy="/replay/show?at=4"]), "Copy link to 0:02")
+
+    render_click(view, "next")
+    assert has_element?(view, ~s(button[data-copy="/replay/show?at=5"]))
+  end
+
+  test "groups events by interaction, filters them and marks what changed" do
+    {:ok, view, _html} = live(build_conn(), "/replay/show")
+
+    # mount leads with its render; each click leads with its render.
+    assert has_element?(view, "#replay-events > li:nth-child(1) li", "assigns count")
+    assert has_element?(view, "#replay-events > li:nth-child(2) > button", "inc")
+
+    nested =
+      view |> render() |> LazyHTML.from_document() |> LazyHTML.query("#replay-events li li")
+
+    assert Enum.count(nested) == 3
+
+    view |> element("#replay-event-search") |> render_change(%{"q" => "nothing"})
+    assert has_element?(view, "#replay-events li", "No events match.")
+    view |> element("#replay-event-search") |> render_change(%{"q" => ""})
+
+    open_tab(view, "State")
+    assert has_element?(view, "#replay-assigns summary.bg-accent-soft", "count")
+  end
+
+  test "jumps to the first error" do
+    recording = Fixtures.counter_recording(id: "failing")
+    error = %Event{at: 1500, type: :log, data: %{level: :error, message: "boom", metadata: %{}}}
+    events = List.insert_at(recording.events, 4, error)
+    Storage.save(Fixtures.storage(), %{recording | events: events})
+
+    {:ok, view, _html} = live(build_conn(), "/replay/failing")
+    view |> element("button", "1 error · jump to first") |> render_click()
+
+    assert assigns(view).index == 4
+    assert has_element?(view, "#replay-events dd", "boom")
   end
 
   test "starts at the first render and steps through events" do
@@ -43,7 +108,32 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     render_hook(view, "seek", %{"index" => 5})
     assert assigns(view).index == 5
-    assert render(view) =~ "count: 2"
+    assert open_tab(view, "State") =~ "count"
+    assert has_element?(view, "#replay-assigns summary", "2")
+  end
+
+  test "redacts a live session before showing it, and hands it to the frame" do
+    buffer_live("live-1")
+    html = build_conn() |> get("/replay/live-1") |> html_response(200)
+    assert html =~ "Redacting the session"
+    refute html =~ "4242"
+
+    {:ok, view, _html} = live(build_conn(), "/replay/live-1")
+    channel = assigns(view).channel
+    Playback.subscribe(channel)
+    Playback.frame_ready(channel)
+
+    assert render_async(view) =~ "PhoenixReplay.Test.Live.Counter"
+    assert assigns(view).recording.url == "http://localhost/cards/[REDACTED]"
+    assert_receive {Playback, {:load, %{url: "http://localhost/cards/[REDACTED]"}}}
+    assert_receive {Playback, {:seek, 1}}
+  end
+
+  test "navigates away from live sessions the viewer may not see" do
+    buffer_live("secret-live")
+    {:ok, view, _html} = live(build_conn(), "/restricted/replay/secret-live")
+
+    assert_redirect(view, "/restricted/replay")
   end
 
   test "drives its own frame channel" do
@@ -73,7 +163,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     Storage.save(Fixtures.storage(), %{recording | events: events})
     {:ok, view, _html} = live(build_conn(), "/replay/hours")
-    render_change(view, "speed", %{"speed" => "10"})
+    view |> element(~s(button[value="10"])) |> render_click()
     render_click(view, "toggle")
 
     # Every event is an hour apart; at 10x the next one is due in six minutes.
@@ -105,5 +195,80 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     end
 
     assert {:ok, _view, _html} = live(build_conn(), "/replay/secret-1")
+  end
+
+  describe "client context" do
+    defp client(viewport, tab, referer \\ nil) do
+      %{
+        viewport: viewport,
+        user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1",
+        tab: tab,
+        referer: referer
+      }
+    end
+
+    test "sizes the frame to the recorded viewport and names the device" do
+      recording = %{
+        Fixtures.counter_recording(id: "phone")
+        | client: client(%{width: 390, height: 844, dpr: 3}, nil)
+      }
+
+      Storage.save(Fixtures.storage(), recording)
+      {:ok, view, _html} = live(build_conn(), "/replay/phone")
+
+      assert has_element?(
+               view,
+               ~s(#replay-viewport[data-width="390"][data-height="844"][data-mode="fit"])
+             )
+
+      view |> element(~s(button[value="actual"])) |> render_click()
+      assert has_element?(view, ~s(#replay-viewport[data-mode="actual"]))
+      assert has_element?(view, ~s(button[value="actual"][aria-pressed="true"]))
+      open_tab(view, "Visit")
+      device = view |> element("#replay-device") |> render()
+      assert device =~ "390 × 844 @3x"
+      assert device =~ "· Mobile Safari on iOS"
+    end
+
+    test "shows how the visit started" do
+      recording = Fixtures.counter_recording(id: "visit")
+
+      client =
+        Map.merge(recording.client, %{
+          headers: %{"accept-language" => "de-DE"},
+          landing: %{
+            path: "/pricing",
+            at: 1_700_000_000_000,
+            params: %{"utm_source" => "google", "utm_medium" => "cpc"},
+            referrer: "https://www.google.com/search"
+          }
+        })
+
+      Storage.save(Fixtures.storage(), %{recording | client: client})
+      {:ok, view, _html} = live(build_conn(), "/replay/visit")
+      open_tab(view, "Visit")
+
+      visit = view |> element("#replay-visit") |> render()
+      assert visit =~ "google / cpc"
+      assert visit =~ "from www.google.com"
+      assert visit =~ "/pricing"
+      assert visit =~ "de-DE"
+    end
+
+    test "links the sessions of one browser tab" do
+      for {id, at} <- [{"first", 1}, {"second", 2}, {"third", 3}] do
+        referer = if id != "first", do: "http://localhost/counter"
+        recording = Fixtures.counter_recording(id: id, connected_at: at)
+        Storage.save(Fixtures.storage(), %{recording | client: client(nil, "tab-9", referer)})
+      end
+
+      {:ok, view, _html} = live(build_conn(), "/replay/second")
+
+      assert open_tab(view, "Visit") =~ "Came from"
+      assert view |> element("#replay-journey") |> render() =~ "Session 2 of 3 in this tab"
+      assert has_element?(view, ~s(#replay-journey a[href="/replay/first"]), "Previous")
+      assert has_element?(view, ~s(#replay-journey a[href="/replay/third"]), "Next")
+      assert has_element?(view, ~s(#replay-journey a[href="/replay?tab=tab-9"]))
+    end
   end
 end

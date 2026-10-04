@@ -11,7 +11,10 @@ config :volt,
   entry: "assets/js/app.ts",
   outdir: "priv/static/assets",
   # LiveView writes colocated hooks under the build path ("phoenix-colocated/example").
-  resolve_dirs: ["deps", Mix.Project.build_path()],
+  # PhoenixReplay is a path dependency here, so its client module resolves
+  # from the directory holding the library; apps installing it from Hex
+  # resolve it from deps.
+  resolve_dirs: ["deps", Mix.Project.build_path(), Path.expand("../../..", __DIR__)],
   target: :es2020,
   sourcemap: :hidden,
   tailwind: [
@@ -76,6 +79,15 @@ config :logger, :default_formatter,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
+
+# Record Ecto queries and log messages alongside LiveView events, and always
+# keep sessions that hit an error.
+config :phoenix_replay,
+  collect: [{PhoenixReplay.Collector.Ecto, repo: Example.Repo}],
+  logs: [level: :info],
+  keep: [errors: true],
+  # Which language visitors browse in and which campaign brought them.
+  context: [headers: ["accept-language"], landing: [params: [:utm, :click_ids]]]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

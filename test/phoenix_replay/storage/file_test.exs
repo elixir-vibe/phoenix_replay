@@ -22,6 +22,60 @@ defmodule PhoenixReplay.Storage.FileTest do
     assert [%{id: "newer", event_count: 6}, %{id: "older"}] = FileStorage.list(opts)
   end
 
+  test "keeps read summaries indexed and follows files other nodes write", %{
+    opts: opts,
+    tmp_dir: tmp_dir
+  } do
+    dir = opts[:path]
+    FileStorage.save(Fixtures.counter_recording(id: "mine", connected_at: 2), opts)
+    assert [%{id: "mine"}] = FileStorage.list(opts)
+
+    # An indexed summary is not read again.
+    File.write!(Path.join(dir, "mine.summary"), "unreadable")
+    assert [%{id: "mine"}] = FileStorage.list(opts)
+
+    # Another node saves into the same directory.
+    elsewhere = [path: Path.join(tmp_dir, "elsewhere")]
+    FileStorage.save(Fixtures.counter_recording(id: "theirs", connected_at: 1), elsewhere)
+
+    for ext <- ~w(.recording .summary),
+        do:
+          File.cp!(Path.join(elsewhere[:path], "theirs" <> ext), Path.join(dir, "theirs" <> ext))
+
+    assert [%{id: "mine"}, %{id: "theirs"}] = FileStorage.list(opts)
+
+    # And deletes one.
+    File.rm!(Path.join(dir, "mine.summary"))
+    assert [%{id: "theirs"}] = FileStorage.list(opts)
+  end
+
+  test "pages summaries matching a filter", %{opts: opts} do
+    for i <- 1..5,
+        do: FileStorage.save(Fixtures.counter_recording(id: "r#{i}", connected_at: i), opts)
+
+    filter = %PhoenixReplay.Recordings.Filter{}
+
+    assert {[%{id: "r4"}, %{id: "r3"}], 5} =
+             FileStorage.query(filter, [now: 10, offset: 1, limit: 2], opts)
+
+    Process.sleep(2)
+    saved = System.system_time(:millisecond)
+    Process.sleep(2)
+    FileStorage.save(Fixtures.counter_recording(id: "late", connected_at: 0), opts)
+
+    assert {[%{id: "late"}], 1} =
+             FileStorage.query(filter, [now: 10, since: saved, limit: 5], opts)
+
+    assert {_page, 5} = FileStorage.query(filter, [now: 10, until: saved, limit: 0], opts)
+  end
+
+  test "orders sessions that started together by id", %{opts: opts} do
+    for id <- ~w(t1 t2 t3),
+        do: FileStorage.save(Fixtures.counter_recording(id: id, connected_at: 7), opts)
+
+    assert ~w(t3 t2 t1) == Enum.map(FileStorage.list(opts), & &1.id)
+  end
+
   test "deletes one or all recordings", %{opts: opts} do
     for id <- ~w(a b), do: FileStorage.save(Fixtures.counter_recording(id: id), opts)
 
@@ -45,5 +99,51 @@ defmodule PhoenixReplay.Storage.FileTest do
   test "never touches paths outside the directory", %{opts: opts} do
     assert FileStorage.fetch("../escape", opts) == {:error, :not_found}
     assert FileStorage.delete("../escape", opts) == {:error, :not_found}
+  end
+
+  describe "chunks" do
+    alias PhoenixReplay.Recording.Event
+
+    defp event(at), do: %Event{at: at, type: :info, data: %{tag: at}}
+
+    test "appends chunks and reads them back ordered by sequence, with the latest metadata",
+         %{opts: opts} do
+      recording = %{Fixtures.counter_recording(id: "part") | events: []}
+
+      assert FileStorage.fetch_partial("part", opts) == {:error, :not_found}
+      assert :ok = FileStorage.append(recording, [{0, event(0)}, {2, event(2)}], opts)
+      assert :ok = FileStorage.append(%{recording | url: "/later"}, [{1, event(1)}], opts)
+
+      assert {:ok, %{url: "/later", events: events}} = FileStorage.fetch_partial("part", opts)
+      assert Enum.map(events, & &1.at) == [0, 1, 2]
+      assert FileStorage.partials(opts) == ["part"]
+      assert FileStorage.list(opts) == []
+    end
+
+    test "saving the finished recording replaces its chunks", %{opts: opts} do
+      recording = Fixtures.counter_recording(id: "done")
+      :ok = FileStorage.append(recording, [{0, event(0)}], opts)
+
+      assert :ok = FileStorage.save(recording, opts)
+      assert FileStorage.partials(opts) == []
+      assert FileStorage.fetch_partial("done", opts) == {:error, :not_found}
+      assert File.ls!(opts[:path]) |> Enum.sort() == ["done.recording", "done.summary"]
+    end
+
+    test "deleting and clearing remove chunks too", %{opts: opts} do
+      for id <- ~w(a b), do: FileStorage.append(Fixtures.counter_recording(id: id), [], opts)
+
+      assert :ok = FileStorage.delete("a", opts)
+      assert FileStorage.partials(opts) == ["b"]
+      assert :ok = FileStorage.clear(opts)
+      assert FileStorage.partials(opts) == []
+    end
+
+    test "recovers only part files this node wrote", %{opts: opts} do
+      :ok = FileStorage.append(Fixtures.counter_recording(id: "mine"), [], opts)
+      File.write!(Path.join(opts[:path], "theirs.othernode.part"), "")
+
+      assert FileStorage.partials(opts) == ["mine"]
+    end
   end
 end

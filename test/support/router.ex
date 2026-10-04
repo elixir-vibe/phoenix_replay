@@ -9,6 +9,7 @@ defmodule PhoenixReplay.Test.Router do
   pipeline :browser do
     plug :fetch_session
     plug :protect_from_forgery
+    plug PhoenixReplay.Plug
   end
 
   scope "/" do
@@ -27,6 +28,21 @@ defmodule PhoenixReplay.Test.Router do
 
     live_session :limited, on_mount: [{PhoenixReplay.Recorder, max_events: 3}] do
       live "/limited/counter", PhoenixReplay.Test.Live.Counter
+    end
+
+    live_session :flushed,
+      on_mount: [{PhoenixReplay.Recorder, flush: [events: 2, interval: 60_000]}] do
+      live "/flushed/counter", PhoenixReplay.Test.Live.Counter
+    end
+
+    live_session :collected, on_mount: [{PhoenixReplay.Recorder, redact: ["card-\\d+"]}] do
+      live "/telemetry", PhoenixReplay.Test.Live.TelemetryPage
+    end
+
+    live_session :tail_sampled,
+      on_mount: [{PhoenixReplay.Recorder, keep: [rate: 0.0, errors: true, slower_than: 100]}] do
+      live "/tail/counter", PhoenixReplay.Test.Live.Counter
+      live "/tail/telemetry", PhoenixReplay.Test.Live.TelemetryPage
     end
 
     phoenix_replay "/replay"

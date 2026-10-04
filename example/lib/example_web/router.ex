@@ -9,6 +9,7 @@ defmodule ExampleWeb.Router do
     plug :put_root_layout, html: {ExampleWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug PhoenixReplay.Plug
   end
 
   scope "/", ExampleWeb do
@@ -27,5 +28,15 @@ defmodule ExampleWeb.Router do
     # Replays render inside the app's own root layout, so assets resolve
     # through Volt's manifest in production.
     phoenix_replay "/replay", frame_layout: {ExampleWeb.Layouts, :root}
+  end
+
+  if Application.compile_env(:example, :dev_routes) do
+    scope "/dev", ExampleWeb do
+      pipe_through :browser
+
+      live_session :catalog, root_layout: {ExampleWeb.Catalog.Layout, :root} do
+        live "/components", Catalog.Live
+      end
+    end
   end
 end

@@ -8,31 +8,44 @@ defmodule PhoenixReplay.Recorder do
 
   Options given as `{PhoenixReplay.Recorder, opts}` override the
   `PhoenixReplay.Config` values for that live session. `:sample_rate`,
-  `:max_events` and `:sanitizer` are accepted:
+  `:keep`, `:max_events`, `:sanitizer`, `:redact` and `:flush` are accepted:
 
       live_session :checkout,
-        on_mount: [{PhoenixReplay.Recorder, sample_rate: 0.1, max_events: 2_000}] do
+        on_mount: [{PhoenixReplay.Recorder, keep: [rate: 0.1, errors: true]}] do
         live "/checkout", CheckoutLive
       end
 
   Recording starts on the connected mount. Lifecycle hooks capture events,
   params changes, `handle_info/2` message tags, and the assigns changed by
   each render, all passed through the configured `PhoenixReplay.Sanitizer`.
+  While `:max_memory` is exceeded, new sessions are not recorded.
   Events are written by the LiveView process itself into
-  `PhoenixReplay.Recorder.Buffer`; `PhoenixReplay.Recorder.Monitor` saves the
+  `PhoenixReplay.Session.Buffer`; `PhoenixReplay.Session.Monitor` saves the
   recording once the process exits.
 
   Recorder state lives in `socket.private`, so the view's assigns are left
   untouched.
+
+  When the host app sends PhoenixReplay's client context, the recording
+  also holds the browser's viewport, user agent, tab and the URL the user
+  came from; see `PhoenixReplay.Capture.Client`.
   """
 
-  import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, put_private: 3]
+  import Phoenix.LiveView,
+    only: [
+      attach_hook: 4,
+      connected?: 1,
+      get_connect_info: 2,
+      get_connect_params: 1,
+      put_private: 3
+    ]
 
   alias PhoenixReplay.{Config, Recording}
-  alias PhoenixReplay.Recorder.{Buffer, Monitor}
+  alias PhoenixReplay.Capture.Client
+  alias PhoenixReplay.Session.{Buffer, Monitor}
 
   @private :phoenix_replay
-  @session_options [:sample_rate, :max_events, :sanitizer]
+  @session_options [:sample_rate, :keep, :max_events, :sanitizer, :redact, :flush]
 
   @doc """
   Starts recording on the connected mount, for the sampled share of sessions.
@@ -59,7 +72,7 @@ defmodule PhoenixReplay.Recorder do
 
     config = Config.load(opts)
 
-    if connected?(socket) and sampled?(config.sample_rate),
+    if connected?(socket) and sampled?(config.sample_rate) and memory?(config.max_memory),
       do: {:cont, start(socket, params, session, config)},
       else: {:cont, socket}
   end
@@ -74,15 +87,22 @@ defmodule PhoenixReplay.Recorder do
   def sampled?(rate, _draw) when rate <= 0.0, do: false
   def sampled?(rate, draw), do: draw <= rate
 
+  defp memory?(nil), do: true
+  defp memory?(max_memory), do: Buffer.memory() < max_memory
+
   defp start(socket, params, session, config) do
     sanitizer = config.sanitizer
+    # The request context PhoenixReplay.Plug kept is recorded once, in client.
+    {kept, session} = Map.pop(session, PhoenixReplay.Plug.session_key())
 
     recording = %Recording{
       id: Recording.generate_id(),
       view: socket.view,
       params: if(is_map(params), do: sanitizer.sanitize_params(params), else: %{}),
       session: sanitizer.sanitize_params(session),
-      connected_at: System.system_time(:millisecond)
+      connected_at: System.system_time(:millisecond),
+      client:
+        Client.client(get_connect_params(socket), get_connect_info(socket, :user_agent), kept)
     }
 
     :ok = Buffer.open(recording, self(), config)
@@ -108,6 +128,7 @@ defmodule PhoenixReplay.Recorder do
 
   defp handle_event(name, params, socket) do
     %{sanitizer: sanitizer} = socket.private[@private]
+    params = Client.observe(params)
     {:cont, record(socket, :event, %{name: name, params: sanitizer.sanitize_params(params)})}
   end
 

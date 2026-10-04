@@ -52,6 +52,36 @@ config :phoenix_replay, sanitizer: MyApp.ReplaySanitizer
 
 A sanitizer can also be set per live session with `on_mount: [{PhoenixReplay.Recorder, sanitizer: MyApp.CheckoutSanitizer}]`. Keep sanitizers free of exceptions: they run inside your LiveViews.
 
+## Redacting values
+
+A sanitizer runs inside your LiveViews on every event, so it filters by key, which is cheap. An email address typed into a form, a card number in a log message or a phone number in SQL carries no telling key. Finding those takes detection, so a `PhoenixReplay.Redactor` masks them when a session is saved, in a background task, where its cost never reaches your users.
+
+Mask matches of your own patterns:
+
+```elixir
+config :phoenix_replay, redact: [~r/\b\d{13,19}\b/, ~r/[\w.+-]+@[\w-]+\.[\w.]+/]
+```
+
+Or detect personal data with [Obscura](https://hexdocs.pm/obscura), an optional dependency:
+
+```elixir
+def deps do
+  [{:obscura, "~> 0.2"}]
+end
+```
+
+```elixir
+config :phoenix_replay, redact: {PhoenixReplay.Redactor.Obscura, []}
+```
+
+`PhoenixReplay.Redactor.Obscura` finds emails, phone numbers, card numbers, US social security numbers, IBANs and IP addresses, and replaces them with placeholders such as `"[EMAIL]"`. Choose others with `entities:`.
+
+The redactor sees every string in a recording: its URL, params and session, assigns, event params, and collected SQL, logs and exit reasons. Struct types are kept, so templates still render; a template that parses a redacted value may render differently than it did live.
+
+Sessions still running are redacted when the dashboard opens them, so they show the same values as once they are saved. The player shows the redaction's progress meanwhile. If a redactor fails, the session is not saved and the dashboard does not show it: nothing unredacted is stored or displayed. The buffer of running sessions holds sanitized but unredacted values in memory until they are saved.
+
+Ecto query parameters and URL query strings are left out of collected events unless you enable them.
+
 ## What is never recorded
 
 - `handle_info/2` message contents; only the message tag is kept,

@@ -38,4 +38,20 @@ defmodule PhoenixReplay.Storage.CodecTest do
     assert Codec.decode(Codec.encode(Fixtures.counter_recording()), Summary) ==
              {:error, :undecodable}
   end
+
+  test "frames survive appending and stop at a torn or corrupt frame" do
+    binary =
+      IO.iodata_to_binary([Codec.frame(:first), Codec.frame(%{second: [2]}), Codec.frame(3)])
+
+    assert Codec.decode_frames(binary) == [:first, %{second: [2]}, 3]
+
+    torn = binary_part(binary, 0, byte_size(binary) - 2)
+    assert Codec.decode_frames(torn) == [:first, %{second: [2]}]
+
+    second_payload_byte = byte_size(IO.iodata_to_binary(Codec.frame(:first))) + 12
+    <<head::binary-size(^second_payload_byte), byte, rest::binary>> = binary
+    assert Codec.decode_frames(<<head::binary, Bitwise.bxor(byte, 1), rest::binary>>) == [:first]
+
+    assert Codec.decode_frames("") == []
+  end
 end

@@ -133,6 +133,23 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     assert quantities.(render(view)) == %{"apple" => "0", "pear" => "1"}
   end
 
+  test "waits for a live session from the player instead of reading the buffer" do
+    recording = Fixtures.counter_recording(id: "live-frame", clicks: 1)
+    :ok = PhoenixReplay.Session.Buffer.open(recording, self(), PhoenixReplay.Config.load())
+    on_exit(fn -> PhoenixReplay.Session.Buffer.close("live-frame") end)
+
+    {:ok, view, html} = live(build_conn(), "/replay/live-frame/frame?channel=c9")
+    assert html =~ "Redacting the session"
+
+    seek("c9", 3)
+    assert render(view) =~ "Redacting the session"
+
+    Playback.load("c9", recording)
+    assert render(view) =~ ~s(<span id="count">0</span>)
+    seek("c9", 3)
+    assert render(view) =~ ~s(<span id="count">1</span>)
+  end
+
   test "responds 404 for unauthorized recordings" do
     save(Fixtures.counter_recording(id: "secret-1"))
 

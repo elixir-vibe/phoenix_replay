@@ -31,6 +31,93 @@ defmodule PhoenixReplay.ConfigTest do
     assert_raise ArgumentError, ~r/:sample_rate/, fn -> Config.new(sample_rate: 1.5) end
   end
 
+  test "normalizes collectors" do
+    assert Config.new([]).collect == []
+
+    assert Config.new(
+             collect: [
+               MyCollector,
+               {MyCollector, limit: 5},
+               [:my_app, :checkout, :stop],
+               {[:my_app, :search, :stop], metadata: [:query]}
+             ]
+           ).collect == [
+             {MyCollector, []},
+             {MyCollector, limit: 5},
+             {PhoenixReplay.Collector.Generic, event: [:my_app, :checkout, :stop]},
+             {PhoenixReplay.Collector.Generic,
+              event: [:my_app, :search, :stop], metadata: [:query]}
+           ]
+
+    assert_raise ArgumentError, ~r/:collect entry/, fn -> Config.new(collect: ["nope"]) end
+  end
+
+  test "validates tail sampling, logs, redaction and memory" do
+    assert Config.new([]).keep == %{rate: 1.0, errors: false, slower_than: nil}
+
+    assert Config.new(keep: [rate: 0, errors: true]).keep == %{
+             rate: 0.0,
+             errors: true,
+             slower_than: nil
+           }
+
+    assert_raise ArgumentError, ~r/:rate/, fn -> Config.new(keep: [rate: 2]) end
+
+    assert Config.new([]).logs == nil
+    assert Config.new(logs: []).logs == %{level: :info, metadata: [], limit: 1_000}
+    assert_raise ArgumentError, ~r/:level/, fn -> Config.new(logs: [level: :loud]) end
+
+    assert Config.new([]).redact == nil
+    assert Config.new(redact: []).redact == nil
+
+    assert {PhoenixReplay.Redactor.Patterns,
+            patterns: [%Regex{source: "a+"}, %Regex{source: "b"}]} =
+             Config.new(redact: ["a+", ~r/b/]).redact
+
+    assert Config.new(redact: {MyRedactor, x: 1}).redact == {MyRedactor, x: 1}
+    assert Config.new(redact: MyRedactor).redact == {MyRedactor, []}
+    assert_raise ArgumentError, ~r/:redact pattern/, fn -> Config.new(redact: [:email]) end
+
+    assert Config.new([]).flush == %{events: 200, interval: 5_000}
+    assert Config.new(flush: [events: 50]).flush == %{events: 50, interval: 5_000}
+    assert Config.new(flush: false).flush == nil
+    assert_raise ArgumentError, ~r/:interval/, fn -> Config.new(flush: [interval: 0]) end
+
+    assert Config.new(max_memory: 1_024).max_memory == 1_024
+    assert_raise ArgumentError, ~r/:max_memory/, fn -> Config.new(max_memory: 0) end
+  end
+
+  test "normalizes request context" do
+    assert Config.new([]).context == %{headers: [], landing: nil}
+
+    context =
+      Config.new(
+        context: [
+          headers: ["Accept-Language", :cf_ipcountry],
+          landing: [params: [:utm, "ref", :click_ids, "ref"], attribution: :last]
+        ]
+      ).context
+
+    assert context.headers == ["accept-language", "cf_ipcountry"]
+
+    assert context.landing == %{
+             params:
+               ~w(utm_source utm_medium utm_campaign utm_term utm_content ref gclid fbclid msclkid),
+             referrer: true,
+             attribution: :last
+           }
+
+    assert_raise ArgumentError, ~r/"cookie"/, fn -> Config.new(context: [headers: ["Cookie"]]) end
+
+    assert_raise ArgumentError, ~r/:params/, fn ->
+      Config.new(context: [landing: [params: [:nope]]])
+    end
+
+    assert_raise ArgumentError, ~r/:attribution/, fn ->
+      Config.new(context: [landing: [attribution: :middle]])
+    end
+  end
+
   test "rejects unknown keys and invalid values" do
     assert_raise ArgumentError, ~r/:max_events/, fn -> Config.new(max_events: 0) end
     assert_raise ArgumentError, ~r/:unknown/, fn -> Config.new(unknown: true) end

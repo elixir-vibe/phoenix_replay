@@ -1,6 +1,8 @@
 defmodule ExampleWeb.TaskLive.Index do
   use ExampleWeb, :live_view
 
+  require Logger
+
   alias Example.Tasks
 
   @impl true
@@ -57,6 +59,19 @@ defmodule ExampleWeb.TaskLive.Index do
     {:noreply, socket}
   end
 
+  # Shows how a failure looks in a replay: the failed query and the error
+  # log are recorded, and the session is kept by `keep: [errors: true]`.
+  def handle_event("sync", _params, socket) do
+    case Tasks.sync() do
+      :ok ->
+        {:noreply, socket}
+
+      {:error, message} ->
+        Logger.error("Sync failed: #{message}")
+        {:noreply, put_flash(socket, :error, "Sync failed")}
+    end
+  end
+
   def handle_event("filter", %{"filter" => filter}, socket) do
     {:noreply, assign(socket, :filter, filter)}
   end
@@ -64,7 +79,11 @@ defmodule ExampleWeb.TaskLive.Index do
   def handle_event("save", %{"title" => _} = params, socket) do
     case socket.assigns.live_action do
       :new ->
-        Tasks.create_task(params)
+        case Tasks.create_task(params) do
+          {:ok, task} -> Logger.info("Created task #{task.id}")
+          {:error, _changeset} -> Logger.warning("Could not create a task")
+        end
+
         {:noreply, push_patch(socket, to: ~p"/")}
 
       :edit ->
