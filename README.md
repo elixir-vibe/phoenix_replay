@@ -151,8 +151,6 @@ mix assets.build
 mix ci
 ```
 
-The dashboard bundle and client module in `priv/static` are built, not tracked: `mix assets.build` builds them, `mix ci` rebuilds them first, and `mix hex.build` and `mix hex.publish` build them into every package. A Git dependency on PhoenixReplay has no bundle until it is built there.
-
 ## Part of Elixir Vibe
 
 PhoenixReplay records LiveView sessions as assigns timelines, making every session replayable and every bug reproducible.
