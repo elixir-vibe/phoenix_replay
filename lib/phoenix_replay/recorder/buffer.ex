@@ -28,6 +28,8 @@ defmodule PhoenixReplay.Recorder.Buffer do
   metadata rows in the ordered set.
   """
 
+  import Ex2ms
+
   alias PhoenixReplay.{Config, Storage}
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.{Event, Summary}
@@ -194,9 +196,12 @@ defmodule PhoenixReplay.Recorder.Buffer do
   """
   @spec pending(Recording.id(), integer()) :: Storage.chunk()
   def pending(id, after_seq \\ -1) do
-    :ets.select(@table, [
-      {{{id, :"$1"}, :"$2"}, [{:is_integer, :"$1"}, {:>, :"$1", after_seq}], [{{:"$1", :"$2"}}]}
-    ])
+    :ets.select(
+      @table,
+      fun do
+        {{^id, seq}, event} when is_integer(seq) and seq > ^after_seq -> {seq, event}
+      end
+    )
   end
 
   @doc """
@@ -246,14 +251,14 @@ defmodule PhoenixReplay.Recorder.Buffer do
   @doc "Lists `{id, pid}` for every buffered session."
   @spec sessions() :: [{Recording.id(), pid()}]
   def sessions do
-    :ets.select(@table, [{{{:"$1", :meta}, :"$2", :_, :_}, [], [{{:"$1", :"$2"}}]}])
+    :ets.select(@table, fun(do: ({{id, :meta}, pid, _config, _recording} -> {id, pid})))
   end
 
   @doc "Summarizes every buffered session, most recent first."
   @spec summaries() :: [Summary.t()]
   def summaries do
     @table
-    |> :ets.select([{{{:_, :meta}, :"$1", :_, :"$2"}, [], [{{:"$1", :"$2"}}]}])
+    |> :ets.select(fun(do: ({{_id, :meta}, pid, _config, recording} -> {pid, recording})))
     |> Enum.map(fn {pid, recording} ->
       flushed = flushed_totals(recording.id)
 
@@ -276,7 +281,7 @@ defmodule PhoenixReplay.Recorder.Buffer do
     :ets.delete(@table, {id, :seq})
     :ets.delete(@table, {id, :state})
     :ets.delete(@table, {id, :meta})
-    :ets.select_delete(@table, [{{{id, :"$1"}, :_}, [{:is_integer, :"$1"}], [true]}])
+    :ets.select_delete(@table, events_of(id))
     :ok
   end
 
@@ -293,35 +298,43 @@ defmodule PhoenixReplay.Recorder.Buffer do
     append(id, seq, %Event{at: at, type: type, data: data})
   end
 
+  # Rows of the session's buffered events, which have integer sequence keys.
+  defp events_of(id), do: fun(do: ({{^id, seq}, _event} when is_integer(seq) -> true))
+
   defp events(id) do
-    :ets.select(@table, [{{{id, :"$1"}, :"$2"}, [{:is_integer, :"$1"}], [:"$2"]}])
+    :ets.select(@table, fun(do: ({{^id, seq}, event} when is_integer(seq) -> event)))
   end
 
   defp event_count(id) do
-    :ets.select_count(@table, [{{{id, :"$1"}, :_}, [{:is_integer, :"$1"}], [true]}])
+    :ets.select_count(@table, events_of(id))
   end
 
   defp event_names(id) do
-    pattern = {{id, :_}, %{__struct__: Event, type: :event, data: %{name: :"$1"}}}
-    @table |> :ets.select([{pattern, [], [:"$1"]}]) |> Enum.uniq() |> Enum.sort()
+    @table
+    |> :ets.select(fun(do: ({{^id, _seq}, %{type: :event, data: %{name: name}}} -> name)))
+    |> Enum.uniq()
+    |> Enum.sort()
   end
 
   defp dropped(id) do
     @table
-    |> :ets.select([
-      {{{:collected, id, :"$1"}, :"$2", :"$3"}, [{:>, :"$2", :"$3"}],
-       [{{:"$1", {:-, :"$2", :"$3"}}}]}
-    ])
+    |> :ets.select(
+      fun do
+        {{:collected, ^id, name}, count, limit} when count > limit -> {name, count - limit}
+      end
+    )
     |> Map.new()
   end
 
   defp error_count(id) do
     @table
-    |> :ets.select([
-      {{{id, :_}, %{__struct__: Event, type: :"$1"}},
-       [{:orelse, {:==, :"$1", :telemetry}, {:orelse, {:==, :"$1", :log}, {:==, :"$1", :exit}}}],
-       [:"$_"]}
-    ])
+    |> :ets.select(
+      fun do
+        {{^id, _seq}, %{type: type}} = row
+        when type == :telemetry or type == :log or type == :exit ->
+          row
+      end
+    )
     |> Enum.count(fn {_key, event} -> Event.error?(event) end)
   end
 
