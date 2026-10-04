@@ -97,4 +97,19 @@ defmodule PhoenixReplay.Capture.LiveComponentsTest do
     {:ok, view, _html} = live(build_conn(), "/replay")
     assert Buffer.session(view.pid) == :error
   end
+
+  test "records viewport changes sent with component events", %{sessions: sessions} do
+    {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/cart")
+    viewport = %{"width" => 1024, "height" => 768, "dpr" => 2}
+
+    view |> element("#item-pear button") |> render_click(%{"_replay" => viewport})
+
+    recording = recording(id)
+    assert %Event{data: %{width: 1024}} = Enum.find(recording.events, &(&1.type == :viewport))
+
+    assert %Event{data: %{params: params}} =
+             Enum.find(recording.events, &match?(%Event{type: :event, data: %{target: _}}, &1))
+
+    refute Map.has_key?(params, "_replay")
+  end
 end

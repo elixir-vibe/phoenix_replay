@@ -46,6 +46,20 @@ defmodule PhoenixReplay.Recording.Timeline do
   end
 
   @doc """
+  The browser viewport after the event at `index`: the last `:viewport`
+  event up to it, or the viewport the session connected with, if known.
+  """
+  @spec viewport_at(Recording.t(), non_neg_integer()) :: Recording.viewport() | nil
+  def viewport_at(%Recording{events: events, client: client}, index) do
+    events
+    |> Enum.take(index + 1)
+    |> Enum.reduce(client[:viewport], fn
+      %Event{type: :viewport, data: viewport}, _acc -> viewport
+      %Event{}, acc -> acc
+    end)
+  end
+
+  @doc """
   Accumulates LiveComponent assigns visible after the event at `index`,
   keyed by `{module, id}`.
   """

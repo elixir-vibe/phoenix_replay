@@ -58,4 +58,23 @@ defmodule PhoenixReplay.Web.ComponentsTest do
     assert Components.milliseconds(42.6) == "43 ms"
     assert Components.milliseconds(1_540) == "1.5 s"
   end
+
+  test "labels viewports, devices and referers" do
+    assert Components.viewport_label(%{width: 390, height: 844, dpr: 3}) == "390 × 844 @3x"
+    assert Components.viewport_label(%{width: 1440, height: 900, dpr: 1}) == "1440 × 900"
+    assert Components.viewport_label(%{width: 412, height: 915, dpr: 2.625}) == "412 × 915 @2.6x"
+
+    assert Components.device_label(
+             "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile/15E148 Safari/604.1"
+           ) == "Safari on iOS"
+
+    assert Components.device_label(
+             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/141.0 Safari/537.36"
+           ) == "Chrome on macOS"
+
+    assert Components.device_label("curl/8.0") == nil
+    assert Components.device_label(nil) == nil
+
+    assert Components.path_of("http://www.example.com/tasks?filter=all") == "/tasks?filter=all"
+  end
 end

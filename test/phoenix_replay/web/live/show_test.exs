@@ -150,4 +150,46 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     assert {:ok, _view, _html} = live(build_conn(), "/replay/secret-1")
   end
+
+  describe "client context" do
+    defp client(viewport, tab, referer \\ nil) do
+      %{
+        viewport: viewport,
+        user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1",
+        tab: tab,
+        referer: referer
+      }
+    end
+
+    test "sizes the frame to the recorded viewport and names the device" do
+      recording = %{
+        Fixtures.counter_recording(id: "phone")
+        | client: client(%{width: 390, height: 844, dpr: 3}, nil)
+      }
+
+      Storage.save(Fixtures.storage(), recording)
+      {:ok, view, _html} = live(build_conn(), "/replay/phone")
+
+      assert has_element?(view, ~s(#replay-viewport[data-width="390"][data-height="844"]))
+      device = view |> element("#replay-device") |> render()
+      assert device =~ "390 × 844 @3x"
+      assert device =~ "· Safari on iOS"
+    end
+
+    test "links the sessions of one browser tab" do
+      for {id, at} <- [{"first", 1}, {"second", 2}, {"third", 3}] do
+        referer = if id != "first", do: "http://localhost/counter"
+        recording = Fixtures.counter_recording(id: id, connected_at: at)
+        Storage.save(Fixtures.storage(), %{recording | client: client(nil, "tab-9", referer)})
+      end
+
+      {:ok, view, html} = live(build_conn(), "/replay/second")
+
+      assert html =~ "Came from"
+      assert view |> element("#replay-journey") |> render() =~ "Session 2 of 3 in this tab"
+      assert has_element?(view, ~s(#replay-journey a[href="/replay/first"]), "Previous")
+      assert has_element?(view, ~s(#replay-journey a[href="/replay/third"]), "Next")
+      assert has_element?(view, ~s(#replay-journey a[href="/replay?tab=tab-9"]))
+    end
+  end
 end

@@ -112,6 +112,7 @@ defmodule PhoenixReplay.Web.Components do
   def event_icon(:telemetry), do: "⏱"
   def event_icon(:log), do: "💬"
   def event_icon(:exit), do: "💥"
+  def event_icon(:viewport), do: "📐"
 
   @doc """
   Groups event types for filtering the event list: `"liveview"`,
@@ -138,6 +139,63 @@ defmodule PhoenixReplay.Web.Components do
   defp type_marker_class(:telemetry), do: "size-1 bg-teal-500"
   defp type_marker_class(:log), do: "size-1 bg-neutral-300"
   defp type_marker_class(:exit), do: "size-2 bg-red-600"
+  defp type_marker_class(:viewport), do: "size-1 bg-neutral-500"
+
+  @doc "Describes a viewport as `390 × 844 @3x`."
+  @spec viewport_label(PhoenixReplay.Recording.viewport()) :: String.t()
+  def viewport_label(%{width: width, height: height, dpr: dpr}) do
+    density = if dpr == 1, do: "", else: " @#{format_dpr(dpr)}x"
+    "#{width} × #{height}#{density}"
+  end
+
+  defp format_dpr(dpr) when is_integer(dpr), do: Integer.to_string(dpr)
+  defp format_dpr(dpr) when dpr == trunc(dpr), do: dpr |> trunc() |> Integer.to_string()
+  defp format_dpr(dpr), do: :erlang.float_to_binary(dpr / 1, decimals: 1)
+
+  @browsers [
+    {"Edg/", "Edge"},
+    {"Firefox/", "Firefox"},
+    {"Chrome/", "Chrome"},
+    {"Safari/", "Safari"}
+  ]
+  @systems [
+    {"iPhone", "iOS"},
+    {"iPad", "iPadOS"},
+    {"Android", "Android"},
+    {"Mac OS X", "macOS"},
+    {"Windows", "Windows"},
+    {"Linux", "Linux"}
+  ]
+
+  @doc """
+  Names the browser and system in a user agent, such as `"Safari on iOS"`,
+  or returns `nil` when neither is recognized.
+  """
+  @spec device_label(String.t() | nil) :: String.t() | nil
+  def device_label(nil), do: nil
+
+  def device_label(user_agent) do
+    case Enum.reject([known(user_agent, @browsers), known(user_agent, @systems)], &is_nil/1) do
+      [] -> nil
+      parts -> Enum.join(parts, " on ")
+    end
+  end
+
+  defp known(user_agent, names) do
+    Enum.find_value(names, fn {marker, name} ->
+      if String.contains?(user_agent, marker), do: name
+    end)
+  end
+
+  @doc "The path and query of a URL, for showing where a user came from."
+  @spec path_of(String.t()) :: String.t()
+  def path_of(url) do
+    case URI.parse(url) do
+      %URI{path: path, query: nil} when is_binary(path) -> path
+      %URI{path: path, query: query} when is_binary(path) -> path <> "?" <> query
+      _other -> url
+    end
+  end
 
   @doc "Formats a duration in milliseconds as `0.42 ms`, `12 ms` or `1.5 s`."
   @spec milliseconds(number()) :: String.t()
@@ -166,6 +224,9 @@ defmodule PhoenixReplay.Web.Components do
 
   def event_label(%Event{type: :log, data: %{level: level, message: message}}),
     do: "[#{level}] #{message}"
+
+  def event_label(%Event{type: :viewport, data: %{width: width, height: height}}),
+    do: "viewport #{width} × #{height}"
 
   def event_label(%Event{type: :exit, data: %{reason: reason}}),
     do: "exited: " <> (reason |> String.split("\n", parts: 2) |> hd())

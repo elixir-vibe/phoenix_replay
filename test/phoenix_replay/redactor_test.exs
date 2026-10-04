@@ -51,7 +51,13 @@ defmodule PhoenixReplay.RedactorTest do
       Fixtures.counter_recording(clicks: 1)
       | url: "http://x/1234-5678",
         params: %{"card" => "1234-5678"},
-        session: %{"note" => "1234-5678"}
+        session: %{"note" => "1234-5678"},
+        client: %{
+          viewport: %{width: 1234, height: 5678, dpr: 1},
+          user_agent: "Agent 1234-5678",
+          tab: "1234-5678",
+          referer: "http://x/1234-5678"
+        }
     }
 
     log = %Event{
@@ -69,6 +75,14 @@ defmodule PhoenixReplay.RedactorTest do
     assert redacted.url == "http://x/[REDACTED]"
     assert redacted.params == %{"card" => "[REDACTED]"}
     assert redacted.session == %{"note" => "[REDACTED]"}
+
+    assert redacted.client == %{
+             viewport: %{width: 1234, height: 5678, dpr: 1},
+             user_agent: "Agent [REDACTED]",
+             tab: "1234-5678",
+             referer: "http://x/[REDACTED]"
+           }
+
     assert Enum.find(redacted.events, &(&1.type == :log)).data.message == "paid [REDACTED]"
 
     total = length(recording.events)

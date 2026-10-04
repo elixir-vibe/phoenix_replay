@@ -68,6 +68,9 @@ defmodule PhoenixReplay.MixProject do
         lib
         priv/static/dashboard.js
         priv/static/dashboard.css
+        priv/static/phoenix_replay.js
+        priv/static/phoenix_replay.d.ts
+        package.json
         guides
         mix.exs
         .formatter.exs
@@ -139,12 +142,30 @@ defmodule PhoenixReplay.MixProject do
     ]
   end
 
+  # The client module host apps import, as an ES module with a stable name.
+  # Mix runs a task once per invocation, so the second build is a rerun.
+  defp build_client(_args) do
+    Mix.Task.rerun("volt.build", [
+      "--entry",
+      "priv/ts/client/phoenix_replay.ts",
+      "--format",
+      "esm",
+      "--name",
+      "phoenix_replay"
+    ])
+  end
+
   defp aliases do
     [
-      "assets.build": ["volt.build --tailwind", "cmd rm -f priv/static/manifest.json"],
+      "assets.build": [
+        "volt.build --tailwind",
+        &build_client/1,
+        "cmd npx tsc priv/ts/client/phoenix_replay.ts --declaration --emitDeclarationOnly --outDir priv/static --target es2022 --lib es2022,dom",
+        "cmd rm -f priv/static/manifest.json"
+      ],
       "assets.check": [
         "assets.build",
-        "cmd git diff --exit-code -- priv/static/dashboard.js priv/static/dashboard.css"
+        "cmd git diff --exit-code -- priv/static"
       ],
       ci: [
         "compile --warnings-as-errors",

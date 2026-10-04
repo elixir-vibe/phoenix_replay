@@ -44,6 +44,17 @@ live_session :checkout,
 end
 ```
 
+Optionally, the browser sends its viewport, user agent and tab, so a phone session replays at phone size and sessions across LiveViews link into one journey:
+
+```javascript
+import { replayParams, replayMetadata } from "phoenix_replay"
+
+new LiveSocket("/live", Socket, {
+  params: () => ({_csrf_token: csrfToken, ...replayParams()}),
+  metadata: replayMetadata
+})
+```
+
 See the [Recording guide](https://hexdocs.pm/phoenix_replay/recording.html) and [LiveComponents guide](https://hexdocs.pm/phoenix_replay/live-components.html).
 
 ## Telemetry and logs

@@ -24,8 +24,37 @@ A recording is a list of `PhoenixReplay.Recording.Event` structs, each with a mi
 | `:telemetry` | A telemetry event captured by a [collector](telemetry-and-logs.md) |
 | `:log` | A log message, when [log collection](telemetry-and-logs.md#collecting-logs) is on |
 | `:exit` | The formatted reason of a LiveView that exited abnormally |
+| `:viewport` | The browser's viewport changed, as seen with the user's next interaction |
 
 The recording also keeps the view module, URL, sanitized params and session, and the start time. Everything passes through the configured sanitizer first; see [Privacy and Security](privacy-and-security.md).
+
+## Browser and journey
+
+A recording can also say which browser it came from and where the user went. The server cannot see these alone, so they are sent by the browser, and recordings simply leave them out when it does not send them.
+
+```javascript
+import { replayParams, replayMetadata } from "phoenix_replay"
+
+const liveSocket = new LiveSocket("/live", Socket, {
+  params: () => ({_csrf_token: csrfToken, ...replayParams()}),
+  metadata: replayMetadata
+})
+```
+
+```elixir
+socket "/live", Phoenix.LiveView.Socket,
+  websocket: [connect_info: [:user_agent, session: @session_options]]
+```
+
+`mix igniter.install phoenix_replay` makes both changes for the setup Phoenix generates. With them, `PhoenixReplay.Recording` `client` holds:
+
+- **the viewport** — width, height and pixel ratio when the LiveView connected. The player renders the replay at that size, scaled to fit, so a phone session shows the phone layout.
+- **resizes** — the viewport also travels with each click and key press, and a change is recorded as a `:viewport` event, so the replay follows a rotated phone or a resized window. Your `handle_event/3` receives the extra `"_replay"` param; recorded params leave it out.
+- **the user agent** — shown in the player as, for example, "Safari on iOS".
+- **the tab** — an id kept in the tab's `sessionStorage`. Navigating to another LiveView starts a new recording; the tab id ties them into one journey, and the player links the previous and next sessions of the tab.
+- **the referer** — the URL the user came from by live navigation.
+
+The client module is `deps/phoenix_replay/priv/static/phoenix_replay.js`, with types; bundlers that resolve packages from `deps`, as Phoenix's esbuild and Volt setups do, import it as `"phoenix_replay"`.
 
 ## Which sessions are kept
 

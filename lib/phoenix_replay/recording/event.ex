@@ -23,6 +23,8 @@ defmodule PhoenixReplay.Recording.Event do
       a log message, see `PhoenixReplay.Capture.Logs`
     * `:exit` — `%{reason: String.t()}`, the LiveView process exited
       abnormally
+    * `:viewport` — `%{width: integer, height: integer, dpr: number}`, the
+      browser's viewport changed, as seen with the user's next interaction
 
   `:telemetry`, `:log` and `:exit` events describe what happened around
   the view; they do not change the replayed state.
@@ -39,6 +41,7 @@ defmodule PhoenixReplay.Recording.Event do
           | :telemetry
           | :log
           | :exit
+          | :viewport
 
   @type t :: %__MODULE__{at: non_neg_integer(), type: type(), data: map()}
 

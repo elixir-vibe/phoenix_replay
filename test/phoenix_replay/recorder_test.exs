@@ -127,4 +127,62 @@ defmodule PhoenixReplay.RecorderTest do
       PhoenixReplay.Recorder.on_mount([storage: Foo], %{}, %{}, socket)
     end
   end
+
+  describe "client context" do
+    @iphone "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1"
+
+    defp client_conn do
+      build_conn()
+      |> put_connect_params(%{
+        "_replay" => %{"width" => 390, "height" => 844, "dpr" => 3, "tab" => "tab-1"},
+        "_live_referer" => "http://www.example.com/form"
+      })
+      |> Plug.Conn.put_private(:live_view_connect_info, %{user_agent: @iphone})
+    end
+
+    test "records the viewport, user agent, tab and referer the client sent", %{
+      sessions: sessions
+    } do
+      {:ok, _view, _html, id} = Sessions.live(sessions, client_conn(), "/counter")
+
+      assert {:ok, %{client: client}} = Buffer.fetch(id)
+
+      assert client == %{
+               viewport: %{width: 390, height: 844, dpr: 3},
+               user_agent: @iphone,
+               tab: "tab-1",
+               referer: "http://www.example.com/form"
+             }
+    end
+
+    test "records nothing the client did not send", %{sessions: sessions} do
+      conn = put_connect_params(build_conn(), %{"_live_referer" => "undefined"})
+      {:ok, _view, _html, id} = Sessions.live(sessions, conn, "/counter")
+
+      assert {:ok, %{client: %{viewport: nil, user_agent: nil, tab: nil, referer: nil}}} =
+               Buffer.fetch(id)
+    end
+
+    test "records viewport changes sent with events, leaving them out of params", %{
+      sessions: sessions
+    } do
+      {:ok, view, _html, id} = Sessions.live(sessions, client_conn(), "/counter")
+      same = %{"_replay" => %{"width" => 390, "height" => 844, "dpr" => 3}}
+      rotated = %{"_replay" => %{"width" => 844, "height" => 390, "dpr" => 3}}
+
+      render_click(view, "inc", same)
+      render_click(view, "inc", rotated)
+      render_click(view, "inc", rotated)
+
+      {:ok, recording} = Buffer.fetch(id)
+      types = recording.events |> Enum.map(& &1.type) |> Enum.filter(&(&1 in [:event, :viewport]))
+      assert types == [:event, :viewport, :event, :event]
+
+      assert %Event{data: %{width: 844, height: 390}} =
+               Enum.find(recording.events, &(&1.type == :viewport))
+
+      assert Enum.all?(recording.events, &(not Map.has_key?(&1.data[:params] || %{}, "_replay")))
+      assert Timeline.viewport_at(recording, Timeline.last_index(recording)).width == 844
+    end
+  end
 end

@@ -7,6 +7,16 @@ defmodule PhoenixReplay.Recording do
 
   `dropped` counts collected events left out once a collector reached its
   `:limit`, keyed by collector name, such as `"my_app.repo.query"` or `"log"`.
+
+  `client` describes the browser, when it told PhoenixReplay (see
+  `PhoenixReplay.Capture.Viewport`):
+
+    * `:viewport` — `%{width: integer, height: integer, dpr: number}` when
+      the LiveView connected; later changes are `:viewport` events
+    * `:user_agent` — the `User-Agent` header, when the endpoint's socket
+      lists `:user_agent` in its `:connect_info`
+    * `:tab` — an id of the browser tab, shared by the tab's sessions
+    * `:referer` — the URL the user came from by live navigation
   """
 
   alias PhoenixReplay.Recording.Event
@@ -21,11 +31,31 @@ defmodule PhoenixReplay.Recording do
           session: map(),
           connected_at: integer(),
           events: [Event.t()],
-          dropped: %{String.t() => pos_integer()}
+          dropped: %{String.t() => pos_integer()},
+          client: client()
+        }
+
+  @type viewport :: %{width: pos_integer(), height: pos_integer(), dpr: number()}
+
+  @type client :: %{
+          viewport: viewport() | nil,
+          user_agent: String.t() | nil,
+          tab: String.t() | nil,
+          referer: String.t() | nil
         }
 
   @enforce_keys [:id, :view, :connected_at]
-  defstruct [:id, :view, :url, :connected_at, params: %{}, session: %{}, events: [], dropped: %{}]
+  defstruct [
+    :id,
+    :view,
+    :url,
+    :connected_at,
+    params: %{},
+    session: %{},
+    events: [],
+    dropped: %{},
+    client: %{viewport: nil, user_agent: nil, tab: nil, referer: nil}
+  ]
 
   @doc "Generates a URL-safe random recording id."
   @spec generate_id() :: id()

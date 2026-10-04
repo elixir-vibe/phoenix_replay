@@ -131,6 +131,29 @@ mix igniter.install phoenix_replay
 config :phoenix_replay, sample_rate: 0.0
 ```
 
+## Browser context
+{: .col-2}
+
+### LiveSocket
+
+```javascript
+import { replayParams, replayMetadata } from "phoenix_replay"
+
+new LiveSocket("/live", Socket, {
+  params: () => ({_csrf_token: csrfToken, ...replayParams()}),
+  metadata: replayMetadata
+})
+```
+
+Viewport, resizes and tab for each recording.
+
+### User agent
+
+```elixir
+socket "/live", Phoenix.LiveView.Socket,
+  websocket: [connect_info: [:user_agent, session: @session_options]]
+```
+
 ## Live sessions
 {: .col-2}
 

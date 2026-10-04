@@ -8,7 +8,7 @@ PhoenixReplay needs Elixir 1.18 or later and Phoenix LiveView 1.1 or later.
 mix igniter.install phoenix_replay
 ```
 
-The installer imports PhoenixReplay's formatter settings, mounts the dashboard at `/dev/replay` behind your `:dev_routes` flag (like Phoenix's LiveDashboard), turns recording off in `config/test.exs`, and ignores the local recordings directory. It then prints how to record a live session, which is the step below.
+The installer imports PhoenixReplay's formatter settings, mounts the dashboard at `/dev/replay` behind your `:dev_routes` flag (like Phoenix's LiveDashboard), turns recording off in `config/test.exs`, and ignores the local recordings directory. It also sends [browser context](../features/recording.md#browser-and-journey) to recordings: it adds `:user_agent` to your LiveView socket's `connect_info` and passes PhoenixReplay's client helpers to `LiveSocket` in `assets/js/app.js`, when that file still has the setup Phoenix generates. It then prints how to record a live session, which is the step below.
 
 ## Install manually
 
@@ -31,6 +31,8 @@ Add `:phoenix_replay` to `import_deps` in `.formatter.exs`, so `mix format` leav
 
 Turn recording off in `config/test.exs`; see [Testing](#testing).
 
+Optionally, send the browser's viewport, user agent and tab with recordings, as [Browser and journey](../features/recording.md#browser-and-journey) describes.
+
 ## Record a live session
 
 Add `PhoenixReplay.Recorder` to the `on_mount` hooks of the live sessions you want to record:
@@ -42,7 +44,7 @@ live_session :default, on_mount: [PhoenixReplay.Recorder] do
 end
 ```
 
-Every connected LiveView in the session is now recorded, including its LiveComponents. Nothing changes in your views, components or JavaScript.
+Every connected LiveView in the session is now recorded, including its LiveComponents. Nothing changes in your views or components, and the JavaScript side is optional.
 
 ## Mount the dashboard
 

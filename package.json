@@ -1,5 +1,16 @@
 {
+  "name": "phoenix_replay",
   "private": true,
+  "type": "module",
+  "module": "./priv/static/phoenix_replay.js",
+  "main": "./priv/static/phoenix_replay.js",
+  "types": "./priv/static/phoenix_replay.d.ts",
+  "exports": {
+    "import": {
+      "types": "./priv/static/phoenix_replay.d.ts",
+      "default": "./priv/static/phoenix_replay.js"
+    }
+  },
   "devDependencies": {
     "@types/phoenix": "^1.6.6",
     "oxlint-tsgolint": "0.22.1",

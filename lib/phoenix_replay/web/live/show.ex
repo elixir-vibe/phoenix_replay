@@ -86,7 +86,8 @@ defmodule PhoenixReplay.Web.Live.Show do
       duration_ms: Timeline.duration_ms(recording),
       kinds: kinds(recording),
       error_count: Enum.count(recording.events, &Event.error?/1),
-      dropped: Enum.sum_by(recording.dropped, fn {_name, count} -> count end)
+      dropped: Enum.sum_by(recording.dropped, fn {_name, count} -> count end),
+      journey: journey(socket, recording)
     )
     |> hand_over()
     |> seek(Timeline.first_render_index(recording))
@@ -209,6 +210,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       event: Timeline.event_at(recording, index),
       at: event_at(recording, index),
       next_at: event_at(recording, min(index + 1, Timeline.last_index(recording))),
+      viewport: Timeline.viewport_at(recording, index),
       assigns_preview: recording |> Timeline.assigns_at(index) |> inspect(pretty: true, limit: 50)
     )
   end
@@ -265,19 +267,58 @@ defmodule PhoenixReplay.Web.Live.Show do
   defp redaction_percent({done, total}) when total > 0, do: Float.round(done / total * 100, 1)
   defp redaction_percent(_progress), do: 0
 
+  # The sessions of the recording's browser tab, oldest first, when it has more than one.
+  defp journey(socket, %{id: id, client: %{tab: tab}}) when is_binary(tab) do
+    sessions =
+      socket.assigns.context.config
+      |> Recordings.list()
+      |> Enum.filter(&(&1.tab == tab and Context.allowed?(socket, :list, &1)))
+      |> Enum.sort_by(& &1.connected_at)
+
+    case {Enum.find_index(sessions, &(&1.id == id)), sessions} do
+      {index, [_first, _second | _rest]} when is_integer(index) ->
+        %{
+          tab: tab,
+          position: index + 1,
+          total: length(sessions),
+          previous: if(index > 0, do: Enum.at(sessions, index - 1)),
+          next: Enum.at(sessions, index + 1)
+        }
+
+      _alone ->
+        nil
+    end
+  end
+
+  defp journey(_socket, _recording), do: nil
+
   attr :context, Context, required: true
   attr :id, :string, required: true
   attr :channel, :string, required: true
+  attr :viewport, :map, default: nil
 
+  # The frame renders at the recorded viewport, scaled down to fit: the
+  # FrameViewport hook writes the sizes into the ignored style element, so
+  # the frame itself stays server-rendered.
   defp frame(assigns) do
     ~H"""
-    <section class="mb-4 overflow-hidden rounded-lg border border-neutral-200 bg-white">
-      <iframe
-        id="replay-frame"
-        title="Replay"
-        src={Context.path(@context, [@id, "frame"]) <> "?channel=#{@channel}"}
-        class="block h-[600px] w-full border-0"
-      ></iframe>
+    <section
+      id="replay-viewport"
+      phx-hook="FrameViewport"
+      data-width={@viewport && @viewport.width}
+      data-height={@viewport && @viewport.height}
+      class="mb-4 overflow-hidden rounded-lg border border-neutral-200 bg-white"
+    >
+      <style id="replay-viewport-style" phx-update="ignore">
+      </style>
+      <div id="replay-viewport-box">
+        <iframe
+          id="replay-frame"
+          title="Replay"
+          src={Context.path(@context, [@id, "frame"]) <> "?channel=#{@channel}"}
+          class="block h-[600px] w-full border-0"
+        ></iframe>
+      </div>
     </section>
     """
   end
@@ -347,6 +388,43 @@ defmodule PhoenixReplay.Web.Live.Show do
           </span>
           <span :if={@dropped > 0} title={inspect(@recording.dropped)}>
             · {@dropped} collected events over the limit dropped
+          </span>
+        </p>
+        <p
+          :if={@viewport || @recording.client.user_agent || @recording.client.referer || @journey}
+          class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-500"
+        >
+          <span :if={@viewport} id="replay-device" title={@recording.client.user_agent}>
+            {viewport_label(@viewport)}<span :if={label = device_label(@recording.client.user_agent)}> · {label}</span>
+          </span>
+          <span :if={!@viewport && @recording.client.user_agent} title={@recording.client.user_agent}>
+            {device_label(@recording.client.user_agent) || "Unknown browser"}
+          </span>
+          <span :if={@recording.client.referer} title={@recording.client.referer}>
+            Came from
+            <code class="font-mono text-neutral-600">{path_of(@recording.client.referer)}</code>
+          </span>
+          <span :if={@journey} id="replay-journey" class="inline-flex items-center gap-2">
+            <.link
+              navigate={Context.path(@context, []) <> "?" <> URI.encode_query(%{"tab" => @journey.tab})}
+              class="underline decoration-neutral-300 hover:text-neutral-800"
+            >
+              Session {@journey.position} of {@journey.total} in this tab
+            </.link>
+            <.link
+              :if={@journey.previous}
+              navigate={Context.path(@context, [@journey.previous.id])}
+              class="hover:text-neutral-800"
+            >
+              ← Previous
+            </.link>
+            <.link
+              :if={@journey.next}
+              navigate={Context.path(@context, [@journey.next.id])}
+              class="hover:text-neutral-800"
+            >
+              Next →
+            </.link>
           </span>
         </p>
       </header>
@@ -420,7 +498,7 @@ defmodule PhoenixReplay.Web.Live.Show do
         </div>
       </section>
 
-      <.frame context={@context} id={@recording.id} channel={@channel} />
+      <.frame context={@context} id={@recording.id} channel={@channel} viewport={@viewport} />
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section class="flex min-w-0 flex-col rounded-lg border border-neutral-200 bg-white">

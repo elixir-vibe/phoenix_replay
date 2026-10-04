@@ -25,6 +25,7 @@ if Code.ensure_loaded?(Ecto.Query) do
               add :event_count, :integer, null: false
               add :duration_ms, :integer, null: false
               add :error_count, :integer, null: false, default: 0
+              add :tab, :string
               add :event_names, :binary, null: false
               add :data, :binary, null: false
             end
@@ -43,7 +44,16 @@ if Code.ensure_loaded?(Ecto.Query) do
     alias PhoenixReplay.Storage.Codec
 
     @table "phoenix_replay_recordings"
-    @summary_fields [:id, :view, :url, :connected_at, :event_count, :error_count, :duration_ms]
+    @summary_fields [
+      :id,
+      :view,
+      :url,
+      :connected_at,
+      :event_count,
+      :error_count,
+      :duration_ms,
+      :tab
+    ]
     @replaced_fields [
       :view,
       :url,
@@ -51,6 +61,7 @@ if Code.ensure_loaded?(Ecto.Query) do
       :event_count,
       :error_count,
       :duration_ms,
+      :tab,
       :event_names,
       :data
     ]

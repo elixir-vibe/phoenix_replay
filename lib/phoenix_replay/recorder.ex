@@ -25,11 +25,23 @@ defmodule PhoenixReplay.Recorder do
 
   Recorder state lives in `socket.private`, so the view's assigns are left
   untouched.
+
+  When the host app sends PhoenixReplay's client context, the recording
+  also holds the browser's viewport, user agent, tab and the URL the user
+  came from; see `PhoenixReplay.Capture.Viewport`.
   """
 
-  import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, put_private: 3]
+  import Phoenix.LiveView,
+    only: [
+      attach_hook: 4,
+      connected?: 1,
+      get_connect_info: 2,
+      get_connect_params: 1,
+      put_private: 3
+    ]
 
   alias PhoenixReplay.{Config, Recording}
+  alias PhoenixReplay.Capture.Viewport
   alias PhoenixReplay.Session.{Buffer, Monitor}
 
   @private :phoenix_replay
@@ -86,7 +98,8 @@ defmodule PhoenixReplay.Recorder do
       view: socket.view,
       params: if(is_map(params), do: sanitizer.sanitize_params(params), else: %{}),
       session: sanitizer.sanitize_params(session),
-      connected_at: System.system_time(:millisecond)
+      connected_at: System.system_time(:millisecond),
+      client: Viewport.client(get_connect_params(socket), get_connect_info(socket, :user_agent))
     }
 
     :ok = Buffer.open(recording, self(), config)
@@ -112,6 +125,7 @@ defmodule PhoenixReplay.Recorder do
 
   defp handle_event(name, params, socket) do
     %{sanitizer: sanitizer} = socket.private[@private]
+    params = Viewport.observe(params)
     {:cont, record(socket, :event, %{name: name, params: sanitizer.sanitize_params(params)})}
   end
 

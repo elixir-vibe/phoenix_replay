@@ -34,7 +34,16 @@ defmodule PhoenixReplay.Recordings.FilterTest do
   end
 
   test "round-trips through params" do
-    filter = %Filter{query: "a", view: "V", event: "e", within: "7d", min_events: 3, errors: true}
+    filter = %Filter{
+      query: "a",
+      view: "V",
+      event: "e",
+      within: "7d",
+      min_events: 3,
+      errors: true,
+      tab: "t1"
+    }
+
     assert filter |> Filter.to_params() |> Filter.from_params() == filter
     assert Filter.to_params(%Filter{}) == %{}
     assert Filter.empty?(%Filter{})
@@ -44,7 +53,7 @@ defmodule PhoenixReplay.Recordings.FilterTest do
   test "matches every criterion" do
     summaries = [
       summary("checkout-1", event_names: ["pay", "save"], event_count: 40),
-      summary("home-1", view: "MyAppWeb.HomeLive", event_count: 5),
+      summary("home-1", view: "MyAppWeb.HomeLive", event_count: 5, tab: "t1"),
       summary("old-1", connected_at: @now - :timer.hours(48), event_count: 50, error_count: 2)
     ]
 
@@ -55,6 +64,7 @@ defmodule PhoenixReplay.Recordings.FilterTest do
     assert ids(%{"within" => "24h"}, summaries) == ~w(checkout-1 home-1)
     assert ids(%{"min_events" => "30"}, summaries) == ~w(checkout-1 old-1)
     assert ids(%{"errors" => "1"}, summaries) == ~w(old-1)
+    assert ids(%{"tab" => "t1"}, summaries) == ~w(home-1)
 
     assert ids(%{"min_events" => "30", "within" => "7d", "event" => "save"}, summaries) ==
              ~w(checkout-1)

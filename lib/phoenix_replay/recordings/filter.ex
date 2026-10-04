@@ -12,6 +12,7 @@ defmodule PhoenixReplay.Recordings.Filter do
     * `"min_events"` — minimum number of recorded events
     * `"errors"` — `"1"` to keep only sessions with an error, such as an
       error log, a failed query or a crash
+    * `"tab"` — sessions from one browser tab, a user's journey
 
   Blank or invalid parameters are ignored.
   """
@@ -26,10 +27,11 @@ defmodule PhoenixReplay.Recordings.Filter do
           event: String.t() | nil,
           within: String.t() | nil,
           min_events: pos_integer() | nil,
-          errors: boolean()
+          errors: boolean(),
+          tab: String.t() | nil
         }
 
-  defstruct [:query, :view, :event, :within, :min_events, errors: false]
+  defstruct [:query, :view, :event, :within, :min_events, :tab, errors: false]
 
   @doc "The supported `\"within\"` values, shortest first."
   @spec windows() :: [String.t()]
@@ -44,7 +46,8 @@ defmodule PhoenixReplay.Recordings.Filter do
       event: text(params["event"]),
       within: if(Map.has_key?(@windows, params["within"]), do: params["within"]),
       min_events: positive_integer(params["min_events"]),
-      errors: params["errors"] == "1"
+      errors: params["errors"] == "1",
+      tab: text(params["tab"])
     }
   end
 
@@ -57,7 +60,8 @@ defmodule PhoenixReplay.Recordings.Filter do
       {"event", filter.event},
       {"within", filter.within},
       {"min_events", filter.min_events && Integer.to_string(filter.min_events)},
-      {"errors", if(filter.errors, do: "1")}
+      {"errors", if(filter.errors, do: "1")},
+      {"tab", filter.tab}
     ]
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
@@ -79,7 +83,8 @@ defmodule PhoenixReplay.Recordings.Filter do
       (is_nil(filter.event) or filter.event in summary.event_names) and
       (is_nil(filter.within) or now - summary.connected_at <= @windows[filter.within]) and
       (is_nil(filter.min_events) or summary.event_count >= filter.min_events) and
-      (not filter.errors or summary.error_count > 0)
+      (not filter.errors or summary.error_count > 0) and
+      (is_nil(filter.tab) or summary.tab == filter.tab)
   end
 
   defp query?(_summary, nil), do: true

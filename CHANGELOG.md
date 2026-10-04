@@ -16,17 +16,19 @@
 - `[:phoenix_replay, :collector, :exception]` reports collectors that raised.
 - `PhoenixReplay.Recording.Summary` counts `error_count`, the dashboard marks errors and filters sessions with `?errors=1`, and the player hides events by kind.
 - `on_mount: {PhoenixReplay.Recorder, opts}` accepts `:keep` and `:redact`.
+- Recordings can carry the browser's viewport, user agent, tab and the URL the user came from, sent by the new client module (`import { replayParams, replayMetadata } from "phoenix_replay"`) and `:user_agent` in the LiveView socket's `connect_info`. Resizes are recorded as `:viewport` events. The player renders the replay at the recorded viewport, names the browser, and links the sessions of one tab; the dashboard filters them with `?tab=`. The installer wires up the client and the user agent.
 - `PhoenixReplay.Recordings.fetch/3` redacts running sessions and reports progress; `PhoenixReplay.Recordings.live?/1` tells running sessions apart.
 
 ### Changed
 
 - Internal modules are grouped by role: `PhoenixReplay.Capture.*` observes LiveViews, `PhoenixReplay.Session.*` follows a running recording until it is stored. `PhoenixReplay.Recorder` is only the `on_mount` hook. `PhoenixReplay.Retention` is now `PhoenixReplay.Recordings.Retention`; the `:retention` option is unchanged.
 - `[:phoenix_replay, :recording, :discarded]` metadata carries a `reason`: `:not_interactive` or `:not_sampled`.
-- `PhoenixReplay.Storage.Ecto` stores `error_count`. Add the column to existing tables:
+- `PhoenixReplay.Storage.Ecto` stores `error_count` and `tab`. Add the columns to existing tables:
 
   ```elixir
   alter table(:phoenix_replay_recordings) do
     add :error_count, :integer, null: false, default: 0
+    add :tab, :string
   end
   ```
 
