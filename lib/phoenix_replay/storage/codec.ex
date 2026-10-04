@@ -21,14 +21,45 @@ defmodule PhoenixReplay.Storage.Codec do
   Structs are rebuilt with `struct/2`, so data written before a field was
   added gets the field's default.
 
-  Returns `{:error, :undecodable}` for corrupt data, unknown atoms, or a term
-  of a different shape.
+  Recordings hold module names, such as the structs in assigns, and safe
+  decoding refuses atoms the VM has not created yet. In development, where
+  modules load on first use, a recording can name a module that exists but
+  has not been loaded since the node started. The first time a binary does
+  not decode, modules available on the code path but not yet loaded are
+  loaded, which creates only the atoms of modules that really exist, and
+  decoding is retried.
+
+  Returns `{:error, :undecodable}` for corrupt data, atoms of no known
+  module, or a term of a different shape.
   """
   @spec decode(binary(), module() | :list) :: {:ok, struct() | list()} | {:error, :undecodable}
   def decode(binary, shape) when is_binary(binary) and is_atom(shape) do
+    with {:error, :undecodable} <- safe_decode(binary, shape),
+         true <- load_available_modules() do
+      safe_decode(binary, shape)
+    else
+      false -> {:error, :undecodable}
+      decoded -> decoded
+    end
+  end
+
+  defp safe_decode(binary, shape) do
     binary |> :erlang.binary_to_term([:safe]) |> shape(shape)
   rescue
     ArgumentError -> {:error, :undecodable}
+  end
+
+  # Loads at most once per node; false when that already happened.
+  defp load_available_modules do
+    if :persistent_term.get({__MODULE__, :modules_loaded}, false) do
+      false
+    else
+      for {name, _file, false} <- :code.all_available(),
+          do: :code.ensure_loaded(List.to_atom(name))
+
+      :persistent_term.put({__MODULE__, :modules_loaded}, true)
+      true
+    end
   end
 
   @doc """
