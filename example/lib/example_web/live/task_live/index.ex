@@ -59,6 +59,19 @@ defmodule ExampleWeb.TaskLive.Index do
     {:noreply, socket}
   end
 
+  # Shows how a failure looks in a replay: the failed query and the error
+  # log are recorded, and the session is kept by `keep: [errors: true]`.
+  def handle_event("sync", _params, socket) do
+    case Tasks.sync() do
+      :ok ->
+        {:noreply, socket}
+
+      {:error, message} ->
+        Logger.error("Sync failed: #{message}")
+        {:noreply, put_flash(socket, :error, "Sync failed")}
+    end
+  end
+
   def handle_event("filter", %{"filter" => filter}, socket) do
     {:noreply, assign(socket, :filter, filter)}
   end

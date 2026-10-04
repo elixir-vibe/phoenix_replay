@@ -6,26 +6,34 @@
         {length(@tasks)} total · {Enum.count(@tasks, & &1.completed)} completed
       </p>
     </div>
-    <.link
-      patch={~p"/tasks/new"}
-      class="inline-flex h-9 items-center gap-1.5 rounded-md bg-gray-900 px-3.5 text-sm font-medium text-white transition-colors hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
+    <div class="flex items-center gap-2">
+      <button
+        phx-click="sync"
+        class="inline-flex h-9 items-center rounded-md border border-gray-200 px-3.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
       >
-        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-      New Task
-    </.link>
+        Sync
+      </button>
+      <.link
+        patch={~p"/tasks/new"}
+        class="inline-flex h-9 items-center gap-1.5 rounded-md bg-gray-900 px-3.5 text-sm font-medium text-white transition-colors hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        New Task
+      </.link>
+    </div>
   </header>
 
   <nav class="mb-6 flex gap-1 border-b border-gray-200" aria-label="Filter tasks">
@@ -261,3 +269,5 @@
     </div>
   </div>
 </div>
+
+<Layouts.flash_group flash={@flash} />

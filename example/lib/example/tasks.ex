@@ -13,6 +13,14 @@ defmodule Example.Tasks do
 
   def get_task(id), do: Repo.get(Task, id)
 
+  @doc "Pretends to sync with a remote service, whose table does not exist."
+  def sync do
+    case Repo.query("SELECT id FROM remote_tasks") do
+      {:ok, _result} -> :ok
+      {:error, error} -> {:error, Exception.message(error)}
+    end
+  end
+
   @doc "Counts open tasks by priority."
   def open_by_priority do
     Task

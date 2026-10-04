@@ -102,6 +102,15 @@ defmodule ExampleWeb.Features.TaskLiveTest do
     |> assert_has("button", text: "All 2")
   end
 
+  @tag :capture_log
+  test "a failed sync shows an error", %{conn: conn} do
+    conn
+    |> visit(~p"/")
+    |> assert_has("body .phx-connected")
+    |> click_button("Sync")
+    |> assert_has("#flash-error", text: "Sync failed")
+  end
+
   test "cancel modal returns to task list", %{conn: conn} do
     conn
     |> visit(~p"/")
