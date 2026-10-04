@@ -27,9 +27,7 @@ defmodule PhoenixReplay.Web.Assets do
     css: {"dashboard.css", "text/css"}
   ]
 
-  # Read at compile time from the source tree and embedded, never at runtime.
-  # credo:disable-for-next-line ExSlop.Check.Warning.PathExpandPriv
-  @static Path.expand("../../../priv/static", __DIR__)
+  @static Application.app_dir(:phoenix_replay, "priv/static")
 
   @bundle_files (for {kind, {file, content_type}} <- @bundle, into: %{} do
                    path = Path.join(@static, file)
