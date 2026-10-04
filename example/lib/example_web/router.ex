@@ -29,4 +29,14 @@ defmodule ExampleWeb.Router do
     # through Volt's manifest in production.
     phoenix_replay "/replay", frame_layout: {ExampleWeb.Layouts, :root}
   end
+
+  if Application.compile_env(:example, :dev_routes) do
+    scope "/dev", ExampleWeb do
+      pipe_through :browser
+
+      live_session :catalog, root_layout: {ExampleWeb.Catalog.Layout, :root} do
+        live "/components", Catalog.Live
+      end
+    end
+  end
 end
