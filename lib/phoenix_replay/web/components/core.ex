@@ -139,8 +139,14 @@ defmodule PhoenixReplay.Web.Components.Core do
     """
   end
 
-  @doc "A pill that toggles something on and off, such as a filter."
+  @doc """
+  A pill that toggles something on and off. A `"show"` chip shows a kind
+  of thing while pressed and crosses it out otherwise; an `"only"` chip
+  narrows to its kind while pressed, in its `tone`.
+  """
   attr :pressed, :boolean, required: true
+  attr :mode, :string, values: ~w(show only), default: "show"
+  attr :tone, :string, values: ~w(neutral error), default: "neutral"
   attr :rest, :global
   slot :inner_block, required: true
 
@@ -152,8 +158,12 @@ defmodule PhoenixReplay.Web.Components.Core do
       aria-pressed={to_string(@pressed)}
       class={[
         "inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-xs whitespace-nowrap transition-colors pointer-coarse:h-9",
-        @pressed && "border-line bg-hover text-ink",
-        !@pressed && "border-dashed border-line text-faint line-through hover:text-muted"
+        @mode == "show" && @pressed && "border-line bg-hover text-ink",
+        @mode == "show" && !@pressed &&
+          "border-dashed border-line text-faint line-through hover:text-muted",
+        @mode == "only" && !@pressed && "border-line text-ink hover:bg-hover",
+        @mode == "only" && @pressed && @tone == "neutral" && "border-ink bg-ink text-on-ink",
+        @mode == "only" && @pressed && @tone == "error" && "border-error bg-error-soft text-error"
       ]}
       {@rest}
     >

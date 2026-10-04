@@ -146,6 +146,7 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
           assert query.(%{"q" => "%"}) == {~w(b), 1}
           assert query.(%{"q" => "off!"}) == {~w(b), 1}
           assert query.(%{"q" => "_"}) == {~w(b), 1}
+          assert query.(%{"q" => "INC"}) == {~w(d c b a), 4}
           assert query.(%{"view" => "Other"}) == {~w(c), 1}
           assert query.(%{"errors" => "1"}) == {~w(c), 1}
           assert query.(%{"tab" => "t1"}) == {~w(d b), 2}

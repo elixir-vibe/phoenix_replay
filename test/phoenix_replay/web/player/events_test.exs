@@ -55,7 +55,7 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
 
   test "marks errors" do
     error = %Event{at: 0, type: :log, data: %{level: :error, message: "", metadata: %{}}}
-    assert Events.marker_class(error) == "size-2 bg-error"
+    assert Events.marker_class(error) == "size-2.5 bg-error ring-3 ring-error-soft"
     assert Events.marker_class(%Event{at: 0, type: :params}) == "size-1.5 bg-kind-nav"
   end
 

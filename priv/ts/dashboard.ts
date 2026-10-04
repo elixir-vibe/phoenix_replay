@@ -3,6 +3,7 @@ import { LiveSocket } from 'phoenix_live_view'
 
 import { confirmClicks } from './dom/confirm'
 import { copyLinks } from './dom/copy'
+import { searchShortcut } from './dom/shortcut'
 import { EventList } from './hooks/event_list'
 import { FrameViewport } from './hooks/frame_viewport'
 import { Scrubber } from './hooks/scrubber'
@@ -17,4 +18,5 @@ const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Sock
 
 confirmClicks(window)
 copyLinks(window)
+searchShortcut(window)
 liveSocket.connect()

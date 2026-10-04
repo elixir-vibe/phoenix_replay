@@ -5,7 +5,7 @@ defmodule PhoenixReplay.Recordings.Filter do
   Filters round-trip through URL query parameters, so a filtered dashboard
   view can be shared as a link:
 
-    * `"q"` — text found in the recording's URL or id
+    * `"q"` — text found in the recording's URL, id or event names
     * `"view"` — exact view module name, such as `"MyAppWeb.CheckoutLive"`
     * `"event"` — a `handle_event/3` name the session triggered
     * `"within"` — `"1h"`, `"24h"` or `"7d"` since the session started
@@ -138,7 +138,7 @@ defmodule PhoenixReplay.Recordings.Filter do
     query = String.downcase(query)
 
     Enum.any?(
-      [summary.id, summary.url || ""],
+      [summary.id, summary.url || "" | summary.event_names],
       &(&1 |> String.downcase() |> String.contains?(query))
     )
   end

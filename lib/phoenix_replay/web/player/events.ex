@@ -150,10 +150,13 @@ defmodule PhoenixReplay.Web.Player.Events do
   def dropped_count(%Recording{dropped: dropped}),
     do: Enum.sum_by(dropped, fn {_name, count} -> count end)
 
+  # Errors stand out: larger, red, with a soft ring.
+  @error_marker "size-2.5 bg-error ring-3 ring-error-soft"
+
   @doc "Classes for an event's timeline marker. Errors are larger and red."
   @spec marker_class(Event.t()) :: String.t()
   def marker_class(%Event{} = event) do
-    if Event.error?(event), do: "size-2 bg-error", else: type_marker_class(event.type)
+    if Event.error?(event), do: @error_marker, else: type_marker_class(event.type)
   end
 
   defp type_marker_class(:mount), do: "size-1.5 bg-ink"
@@ -165,7 +168,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   defp type_marker_class(:component_destroyed), do: "size-1 bg-kind-component"
   defp type_marker_class(:telemetry), do: "size-1 bg-kind-query"
   defp type_marker_class(:log), do: "size-1 bg-kind-log"
-  defp type_marker_class(:exit), do: "size-2 bg-error"
+  defp type_marker_class(:exit), do: @error_marker
   defp type_marker_class(:viewport), do: "size-1 bg-kind-render"
 
   @doc "One-line description of an event."

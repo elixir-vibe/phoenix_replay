@@ -153,6 +153,7 @@ defmodule PhoenixReplay.Web.Components.Recordings do
   attr :filter, Filter, required: true
   attr :views, :list, required: true
   attr :event_names, :list, required: true
+  attr :path, :any, required: true, doc: "a function from a filter to the list's URL"
 
   @spec filter_bar(map()) :: Phoenix.LiveView.Rendered.t()
   def filter_bar(assigns) do
@@ -174,15 +175,19 @@ defmodule PhoenixReplay.Web.Components.Recordings do
     >
       <label class={[@field, "min-w-0 flex-[1_1_14rem]"]}>
         <.icon name="lucide:search" class="size-4 shrink-0 text-muted" />
-        <span class="sr-only">Search by URL or id</span>
+        <span class="sr-only">Search by URL, session id or event</span>
         <input
           type="search"
           name="q"
           value={@filter.query}
-          placeholder="Search URL or session id"
+          placeholder="Search URL, session id or event"
           phx-debounce="300"
+          data-shortcut="/"
           class="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-faint"
         />
+        <kbd class="hidden rounded border border-line px-1.5 font-mono text-[11px] text-muted sm:inline">
+          /
+        </kbd>
       </label>
       <button
         id="recording-filter-toggle"
@@ -199,6 +204,15 @@ defmodule PhoenixReplay.Web.Components.Recordings do
         <.icon name="lucide:sliders-horizontal" class="size-4" /> Filters
         <span :if={@active > 0} class="rounded-full bg-ink px-1.5 text-xs text-on-ink">{@active}</span>
       </button>
+      <nav aria-label="Quick filters" class="flex w-full gap-1.5 sm:hidden">
+        <.quick_filter
+          :for={{label, target, active?} <- quick_filters(@filter)}
+          path={@path.(target)}
+          current={active?}
+        >
+          {label}
+        </.quick_filter>
+      </nav>
       <%!-- Phones show these behind the button; wider screens lay them out in the bar. --%>
       <div
         id="recording-filter-more"
@@ -260,6 +274,38 @@ defmodule PhoenixReplay.Web.Components.Recordings do
         </label>
       </div>
     </form>
+    """
+  end
+
+  # One tap on a phone: everything, sessions with errors, the last day.
+  # Each is the filter it leads to and whether it is in effect.
+  defp quick_filters(%Filter{} = filter) do
+    last_day? = filter.within == "24h"
+
+    [
+      {"All", %Filter{}, Filter.empty?(filter)},
+      {"With errors", %Filter{filter | errors: not filter.errors}, filter.errors},
+      {"Last 24 h", %Filter{filter | within: if(last_day?, do: nil, else: "24h")}, last_day?}
+    ]
+  end
+
+  attr :path, :string, required: true
+  attr :current, :boolean, required: true
+  slot :inner_block, required: true
+
+  defp quick_filter(assigns) do
+    ~H"""
+    <.link
+      patch={@path}
+      aria-current={@current && "true"}
+      class={[
+        "inline-flex h-9 items-center rounded-full border px-3 text-[13px] whitespace-nowrap",
+        @current && "border-ink bg-ink text-on-ink",
+        !@current && "border-line bg-surface text-ink"
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.link>
     """
   end
 

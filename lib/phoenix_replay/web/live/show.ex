@@ -58,6 +58,7 @@ defmodule PhoenixReplay.Web.Live.Show do
         speeds: @speeds,
         hidden: MapSet.new(),
         query: "",
+        errors_only: false,
         tab: "events",
         frame_mode: "fit",
         # A link to a moment opens the player there.
@@ -163,6 +164,10 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   def handle_event("tab", %{"value" => tab}, socket) when tab in ~w(events state visit) do
     {:noreply, assign(socket, :tab, tab)}
+  end
+
+  def handle_event("errors_only", _params, socket) do
+    {:noreply, update(socket, :errors_only, &(not &1))}
   end
 
   def handle_event("search_events", %{"q" => query}, socket) do
@@ -387,6 +392,7 @@ defmodule PhoenixReplay.Web.Live.Show do
             index={@index}
             hidden={@hidden}
             query={@query}
+            errors_only={@errors_only}
           />
           <.state :if={@tab == "state"} assigns={@replayed} changed={@changed} at={@at} />
           <.visit

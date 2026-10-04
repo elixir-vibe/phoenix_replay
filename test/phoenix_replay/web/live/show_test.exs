@@ -91,6 +91,13 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     assert assigns(view).index == 4
     assert has_element?(view, "#replay-events dd", "boom")
+
+    # The Errors chip narrows the list to errors, under their interaction.
+    view |> element(~s(button[phx-click="errors_only"]), "Errors") |> render_click()
+    assert has_element?(view, ~s(button[phx-click="errors_only"][aria-pressed="true"]))
+    rows = view |> render() |> LazyHTML.from_document() |> LazyHTML.query("#replay-events li li")
+    assert [row] = Enum.to_list(rows)
+    assert LazyHTML.text(row) =~ "boom"
   end
 
   test "starts at the first render and steps through events" do
