@@ -21,8 +21,12 @@ defmodule PhoenixReplay.Web.Rendering do
   @type states :: %{{module(), term()} => map()}
 
   @doc """
-  Renders `module` with `assigns`, returning the error message when any
-  part of the template fails to evaluate, or `nil`.
+  Renders `module` with `assigns`, returning a short description of the
+  error when any part of the template fails to evaluate, or `nil`.
+
+  Exception messages can include every assign, so the description names a
+  missing assign or keeps the first line of the message; the full message
+  is logged at the debug level.
   """
   @spec render_error(module(), map()) :: String.t() | nil
   # credo:disable-for-next-line ExSlop.Check.Warning.BlanketRescue
@@ -36,7 +40,24 @@ defmodule PhoenixReplay.Web.Rendering do
         "PhoenixReplay: #{inspect(module)} failed to render: #{Exception.message(exception)}"
       )
 
-      Exception.message(exception)
+      describe(exception)
+  end
+
+  @max_description 200
+
+  @doc false
+  @spec describe(Exception.t()) :: String.t()
+  def describe(%KeyError{key: key, term: %{__changed__: _changed}}) when is_atom(key),
+    do: "the recording has no @#{key}"
+
+  def describe(%KeyError{key: key}), do: "key #{inspect(key)} not found"
+
+  def describe(exception) do
+    line = exception |> Exception.message() |> String.split("\n", parts: 2) |> hd()
+
+    if String.length(line) > @max_description,
+      do: String.slice(line, 0, @max_description) <> "…",
+      else: line
   end
 
   @doc "Routes every LiveComponent in `rendered` through the replay component."
