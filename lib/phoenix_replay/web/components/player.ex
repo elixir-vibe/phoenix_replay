@@ -74,6 +74,10 @@ defmodule PhoenixReplay.Web.Components.Player do
   attr :link, :string, required: true, doc: "the URL of the current moment"
   attr :can_delete, :boolean, default: true
 
+  attr :can_export, :boolean,
+    default: false,
+    doc: "whether the recording can be exported as a video"
+
   @spec player_header(map()) :: Phoenix.LiveView.Rendered.t()
   def player_header(assigns) do
     ~H"""
@@ -119,9 +123,18 @@ defmodule PhoenixReplay.Web.Components.Player do
           <span class="hidden group-data-copied:inline">Copied</span>
         </.button>
         <.theme_toggle id="theme-toggle" />
-        <.menu :if={@can_delete} id="replay-menu" label="More actions">
+        <.menu :if={@can_delete or @can_export} id="replay-menu" label="More actions">
           <:trigger><.icon name="lucide:ellipsis" class="size-4" /></:trigger>
-          <:item tone="danger">
+          <:item :if={@can_export}>
+            <button
+              id="replay-export"
+              type="button"
+              phx-click={JS.push("export") |> close_menu("replay-menu")}
+            >
+              <.icon name="lucide:clapperboard" class="size-4" /> Export video
+            </button>
+          </:item>
+          <:item :if={@can_delete} tone="danger">
             <button type="button" phx-click="delete" data-confirm="Delete this recording?">
               <.icon name="lucide:trash-2" class="size-4" /> Delete recording
             </button>
@@ -129,6 +142,81 @@ defmodule PhoenixReplay.Web.Components.Player do
         </.menu>
       </div>
     </header>
+    """
+  end
+
+  @doc """
+  The state of a video export under the player's header: waiting, its
+  progress, a link to the video once it is ready, or why it failed.
+  """
+  attr :job, PhoenixReplay.Export.Job, required: true
+  attr :download, :any, default: nil, doc: "the video's URL once it is ready"
+
+  @spec export_status(map()) :: Phoenix.LiveView.Rendered.t()
+  def export_status(assigns) do
+    ~H"""
+    <div
+      id="replay-export-status"
+      role="status"
+      data-status={@job.status}
+      class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-chrome px-4 py-2 text-sm sm:px-5"
+    >
+      <%= case @job.status do %>
+        <% :queued -> %>
+          <.icon name="lucide:loader-circle" class="size-4 animate-spin text-muted" />
+          <span class="text-muted">Waiting to export the video…</span>
+        <% :running -> %>
+          <.icon name="lucide:loader-circle" class="size-4 animate-spin text-muted" />
+          <span>Exporting video</span>
+          <div
+            role="progressbar"
+            aria-label="Export progress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow={@job.progress}
+            class="h-1.5 w-40 overflow-hidden rounded-full bg-line"
+          >
+            <div
+              class="h-full rounded-full bg-accent transition-[width]"
+              style={"width: #{@job.progress}%"}
+            >
+            </div>
+          </div>
+          <span class="font-mono text-xs text-muted tabular-nums">{@job.progress}%</span>
+        <% :done -> %>
+          <.icon name="lucide:circle-check" class="size-4 text-accent" />
+          <span>Video ready</span>
+          <a
+            id="replay-export-download"
+            href={@download}
+            download
+            class="inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-xs font-medium hover:bg-hover"
+          >
+            <.icon name="lucide:download" class="size-3.5" /> Download MP4
+          </a>
+        <% :failed -> %>
+          <.icon name="lucide:circle-alert" class="size-4 text-error" />
+          <span class="text-error">{@job.error}</span>
+          <button
+            type="button"
+            phx-click="export"
+            class="inline-flex h-7 items-center rounded-md border border-line bg-surface px-2.5 text-xs font-medium hover:bg-hover"
+          >
+            Try again
+          </button>
+      <% end %>
+      <span class="flex-1"></span>
+      <button
+        :if={PhoenixReplay.Export.Job.finished?(@job)}
+        type="button"
+        phx-click="dismiss_export"
+        aria-label="Dismiss"
+        title="Dismiss"
+        class="inline-flex size-7 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-ink"
+      >
+        <.icon name="lucide:x" class="size-4" />
+      </button>
+    </div>
     """
   end
 

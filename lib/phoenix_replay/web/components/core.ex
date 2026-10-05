@@ -387,8 +387,14 @@ defmodule PhoenixReplay.Web.Components.Core do
     |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "##{id}-button")
   end
 
-  defp close_menu(id) do
-    %JS{}
+  @doc """
+  Closes the `menu/1` with `id` after `js`. LiveView runs only the
+  nearest `phx-click`, so an item with its own chains this to close the
+  menu too. Unspecced, like Phoenix's own `JS` helpers: `JS.t()` is
+  opaque to Dialyzer.
+  """
+  def close_menu(js \\ %JS{}, id) do
+    js
     |> JS.hide(to: "##{id}-items")
     |> JS.set_attribute({"aria-expanded", "false"}, to: "##{id}-button")
   end

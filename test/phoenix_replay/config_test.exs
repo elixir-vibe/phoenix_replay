@@ -130,6 +130,21 @@ defmodule PhoenixReplay.ConfigTest do
     assert_raise ArgumentError, ~r/:debounce/, fn -> Config.new(state: [debounce: 0]) end
   end
 
+  test "exports videos only once configured, with an endpoint" do
+    assert Config.new([]).export == nil
+
+    assert %{endpoint: MyAppWeb.Endpoint, fps: 30, idle: 3_000, max_concurrency: 1, hold: 1_000} =
+             Config.new(export: [endpoint: MyAppWeb.Endpoint]).export
+
+    assert Config.new(export: [endpoint: MyAppWeb.Endpoint, idle: nil]).export.idle == nil
+    assert Config.new(export: false).export == nil
+    assert_raise ArgumentError, ~r/:fps/, fn -> Config.new(export: [fps: 0]) end
+
+    assert_raise ArgumentError, ~r/:frame_layout/, fn ->
+      Config.new(export: [frame_layout: "x"])
+    end
+  end
+
   test "rejects unknown keys and invalid values" do
     assert_raise ArgumentError, ~r/:max_events/, fn -> Config.new(max_events: 0) end
     assert_raise ArgumentError, ~r/:unknown/, fn -> Config.new(unknown: true) end

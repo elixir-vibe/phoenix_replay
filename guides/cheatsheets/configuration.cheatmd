@@ -125,6 +125,26 @@ config :phoenix_replay,
 
 On by default; `state: false` records none, and `inputs: false` records everything but form controls. Needs `replayRecorder(liveSocket)` in the browser. See [Recording](recording.md#client-state).
 
+### Video export
+
+```elixir
+config :phoenix_replay,
+  export: [
+    endpoint: MyAppWeb.Endpoint,
+    fps: 30,
+    max_dpr: 2,
+    idle: 3_000,
+    hold: 1_000,
+    crf: 23,
+    preset: "veryfast",
+    max_concurrency: 1,
+    ttl: :timer.hours(1),
+    playwright: [executable: "node_modules/.bin/playwright"]
+  ]
+```
+
+Off by default. Needs `{:playwright_ex, "~> 0.14"}` with Playwright's Chromium and `ffmpeg`. See [Exporting videos](dashboard.md#exporting-videos).
+
 ### Retention
 
 ```elixir

@@ -12,6 +12,10 @@ defmodule PhoenixReplay.Web.Live.Frame do
   `replay_render/1`, which the frame calls in place of `render/1`; see
   `PhoenixReplay.Web.Rendering.render/2`.
 
+  Opened with `stage=1`, as `PhoenixReplay.Export.Stage` opens it, the
+  frame pushes a `"phx_replay:shown"` event with the index after each
+  render, so the export takes its screenshot once the page shows it.
+
   Form control values the browser recorded are pushed to the frame's
   script with a `"phx_replay:inputs"` event after each render, which puts
   them back into the replayed page; see `PhoenixReplay.Recording.State`.
@@ -35,6 +39,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
   alias PhoenixReplay.Web.Live.ReplayComponent
 
   @private :phoenix_replay_frame
+  @stage :phoenix_replay_stage
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
@@ -49,15 +54,18 @@ defmodule PhoenixReplay.Web.Live.Frame do
       :ok = Channel.frame_ready(params["channel"])
     end
 
+    context = Context.fetch(socket)
+
     frame = %{
       view: recording && recording.view,
-      assets: Layouts.frame_assets(Context.fetch(socket), socket.endpoint),
+      assets: Layouts.frame_assets(context, context.endpoint || socket.endpoint),
       components: %{},
       error: nil
     }
 
     {:ok,
      socket
+     |> put_private(@stage, params["stage"] == "1")
      |> put_private(@private, private(recording))
      |> assign(@private, frame)
      |> show_first(), layout: false}
@@ -137,7 +145,13 @@ defmodule PhoenixReplay.Web.Live.Frame do
     |> put_private(@private, %{private | timeline: timeline, keys: keys})
     |> check_render()
     |> push_inputs(State.inputs(timeline.assigns[State.assign()]))
+    |> push_shown(index)
   end
+
+  defp push_shown(%{private: %{@stage => true}} = socket, index),
+    do: push_event(socket, "phx_replay:shown", %{index: index})
+
+  defp push_shown(socket, _index), do: socket
 
   # The values typed into form controls are not in the assigns; the frame's
   # script puts them back after LiveView applied the render.

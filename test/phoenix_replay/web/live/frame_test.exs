@@ -101,6 +101,23 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     assert values == %{}
   end
 
+  test "tells an export's stage when each position has rendered" do
+    save(Fixtures.counter_recording(id: "staged", clicks: 1))
+
+    {:ok, view, _html} = live(build_conn(), "/replay/staged/frame?channel=c-stage&stage=1")
+    assert_push_event(view, "phx_replay:shown", %{index: 1})
+
+    seek("c-stage", 3)
+    render(view)
+    assert_push_event(view, "phx_replay:shown", %{index: 3})
+
+    # The player's frame is not told.
+    {:ok, view, _html} = live(build_conn(), "/replay/staged/frame?channel=c-player")
+    seek("c-player", 3)
+    render(view)
+    refute_push_event(view, "phx_replay:shown", %{})
+  end
+
   test "renders the recorded view at each position" do
     save(Fixtures.counter_recording(id: "frame", clicks: 2))
     {:ok, view, html} = live(build_conn(), "/replay/frame/frame?channel=c1")

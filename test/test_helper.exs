@@ -11,6 +11,12 @@ exclude =
       repo not in repos,
       do: tag
 
+# Video export needs ffmpeg and Playwright's Chromium.
+exclude =
+  if PhoenixReplay.Export.available(PhoenixReplay.Config.load()) == :ok,
+    do: exclude,
+    else: [:export | exclude]
+
 ExUnit.start(exclude: exclude)
 
 # Dashboard TypeScript tests from priv/ts run as ExUnit tests: pure modules in

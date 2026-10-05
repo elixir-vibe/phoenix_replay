@@ -59,7 +59,9 @@ defmodule PhoenixReplay.MixProject do
         {:jason, "~> 1.4", optional: true},
         {:obscura, "~> 0.2", optional: true},
         {:lazy_html, ">= 0.1.0", only: :test},
-        {:playwright_ex, "~> 0.14", only: :test},
+        # Captures replays for video export; see PhoenixReplay.Export.
+        {:playwright_ex, "~> 0.14", optional: true},
+        {:bandit, "~> 1.5", only: :test},
         {:volt, "~> 0.20", only: [:dev, :test], runtime: false},
         {:ex_doc, "~> 0.35", only: :dev, runtime: false},
         {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
@@ -143,6 +145,7 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Storage.Retention
         ],
         Collectors: ~r/^PhoenixReplay\.Collector/,
+        "Video export": ~r/^PhoenixReplay\.Export/,
         Extension: [
           PhoenixReplay.Authorization,
           PhoenixReplay.Sanitizer,

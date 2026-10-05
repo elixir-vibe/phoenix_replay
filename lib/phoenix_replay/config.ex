@@ -97,6 +97,31 @@ defmodule PhoenixReplay.Config do
       * `:max_age` — milliseconds after which recordings are deleted
       * `:max_count` — number of most recent recordings to keep
       * `:interval` — milliseconds between pruning runs (default `60_000`)
+    * `:export` — video export with `PhoenixReplay.Export`, off by default.
+      A keyword list turns it on; `:endpoint` is required:
+      * `:endpoint` — your endpoint, which serves the stylesheets and
+        scripts the replayed pages load
+      * `:frame_layout` — `{module, function}` root layout for exported
+        replays, as the router's option of that name (default the
+        dashboard's frame layout)
+      * `:dir` — where finished videos are kept (default
+        `phoenix_replay/exports` in the system's temporary directory)
+      * `:ttl` — milliseconds a finished video is kept (default `3_600_000`)
+      * `:max_concurrency` — videos exported at once; more wait their turn
+        (default `1`)
+      * `:fps` — frames per second (default `30`)
+      * `:max_dpr` — the highest device pixel ratio to render at, which
+        bounds the video's size (default `2`)
+      * `:idle` — milliseconds a stretch without activity is shortened to,
+        or `nil` to keep it whole (default `3_000`)
+      * `:hold` — milliseconds the last moment is held at the end
+        (default `1_000`)
+      * `:crf` — the H.264 quality, lower is better (default `23`)
+      * `:preset` — the x264 speed preset (default `"veryfast"`)
+      * `:ffmpeg` — the `ffmpeg` executable (default `"ffmpeg"`)
+      * `:playwright` — options for `PlaywrightEx.Supervisor`, such as
+        `:executable` or `:ws_endpoint` (default `[]`)
+      * `:timeout` — milliseconds a browser step may take (default `30_000`)
     * `:persist` — keyword list controlling `PhoenixReplay.Session.Finalizer`:
       * `:attempts` — save attempts before giving up (default `3`)
       * `:backoff` — base delay in milliseconds, multiplied by the attempt
@@ -104,10 +129,11 @@ defmodule PhoenixReplay.Config do
 
   ## Switching options off and overriding them
 
-  `:flush`, `:logs`, `:pointer`, `:state`, `:redact`, `:max_memory` and
-  the context's `:landing` can be switched off with `nil` or `false`.
+  `:flush`, `:logs`, `:pointer`, `:state`, `:export`, `:redact`,
+  `:max_memory` and the context's `:landing` can be switched off with `nil`
+  or `false`.
 
-  For `:flush`, `:logs`, `:pointer`, `:state` and `:landing`, `true` turns
+  For `:flush`, `:logs`, `:pointer`, `:state`, `:export` and `:landing`, `true` turns
   one on with whatever is already set, or its defaults, and a keyword list
   sets some of its settings onto that, as `:keep`, `:retention` and
   `:persist` do. So a live session's `{PhoenixReplay.Recorder, flush:
@@ -150,6 +176,22 @@ defmodule PhoenixReplay.Config do
     debounce: 300
   }
   @landing %{params: [], referrer: true, attribution: :first}
+  @export %{
+    endpoint: nil,
+    frame_layout: nil,
+    dir: nil,
+    ttl: 3_600_000,
+    max_concurrency: 1,
+    fps: 30,
+    max_dpr: 2,
+    idle: 3_000,
+    hold: 1_000,
+    crf: 23,
+    preset: "veryfast",
+    ffmpeg: "ffmpeg",
+    playwright: [],
+    timeout: 30_000
+  }
   @off [nil, false]
 
   @secret_headers ~w(cookie authorization proxy-authorization)
@@ -203,6 +245,23 @@ defmodule PhoenixReplay.Config do
 
   @type context :: %{headers: [String.t()], landing: landing() | nil}
 
+  @type export :: %{
+          endpoint: module() | nil,
+          frame_layout: {module(), atom()} | nil,
+          dir: Path.t() | nil,
+          ttl: pos_integer(),
+          max_concurrency: pos_integer(),
+          fps: pos_integer(),
+          max_dpr: pos_integer(),
+          idle: pos_integer() | nil,
+          hold: non_neg_integer(),
+          crf: non_neg_integer(),
+          preset: String.t(),
+          ffmpeg: String.t(),
+          playwright: keyword(),
+          timeout: pos_integer()
+        }
+
   @type logs :: %{level: Logger.level(), metadata: [atom()], limit: pos_integer()}
 
   @typedoc "A storage backend module and its options."
@@ -222,6 +281,7 @@ defmodule PhoenixReplay.Config do
           pointer: pointer() | nil,
           state: state() | nil,
           context: context(),
+          export: export() | nil,
           retention: retention(),
           persist: persist()
         }
@@ -239,6 +299,7 @@ defmodule PhoenixReplay.Config do
             pointer: nil,
             state: @state,
             context: %{headers: [], landing: nil},
+            export: nil,
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
 
@@ -350,6 +411,9 @@ defmodule PhoenixReplay.Config do
   defp put({:flush, value}, config),
     do: %{config | flush: switch(:flush, value, config.flush, @flush, &positive?/2)}
 
+  defp put({:export, value}, config),
+    do: %{config | export: switch(:export, value, config.export, @export, &valid_export?/2)}
+
   defp put({:retention, opts}, config) when is_list(opts),
     do: %{config | retention: merge(config.retention, opts, &valid_retention?/2)}
 
@@ -434,6 +498,16 @@ defmodule PhoenixReplay.Config do
     raise ArgumentError,
           "invalid :phoenix_replay configuration #{inspect(key)}: #{inspect(value)}"
   end
+
+  defp valid_export?(:endpoint, value), do: is_atom(value)
+  defp valid_export?(:frame_layout, nil), do: true
+  defp valid_export?(:frame_layout, {module, fun}), do: is_atom(module) and is_atom(fun)
+  defp valid_export?(:dir, value), do: is_nil(value) or is_binary(value)
+  defp valid_export?(:idle, value), do: is_nil(value) or pos_integer?(value)
+  defp valid_export?(key, value) when key in [:crf, :hold], do: non_neg_integer?(value)
+  defp valid_export?(key, value) when key in [:preset, :ffmpeg], do: is_binary(value)
+  defp valid_export?(:playwright, value), do: Keyword.keyword?(value)
+  defp valid_export?(_key, value), do: pos_integer?(value)
 
   defp valid_retention?(:max_age, value), do: is_nil(value) or pos_integer?(value)
   defp valid_retention?(:max_count, value), do: is_nil(value) or non_neg_integer?(value)

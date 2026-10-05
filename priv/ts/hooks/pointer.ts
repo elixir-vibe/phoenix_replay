@@ -22,7 +22,8 @@ const ARROW = 'M0 0V16.5L4.6 12.2L7.6 18.8L10.3 17.6L7.4 11.1H13.2Z'
  * The element carries the track as JSON in `data-track` and the recorded
  * viewport in `data-width` and `data-height`, and sits beside the frame
  * as a `[data-frame-overlay]`, which FrameViewport sizes like the frame.
- * It follows the time the Scrubber announces. While the element has
+ * It follows the time the Scrubber announces, and reads its size on every
+ * draw, so whoever holds it may resize it. While the element has
  * `data-rotated`, the frame shows the other orientation than recorded, so
  * nothing is drawn and the page is not scrolled.
  */
@@ -68,6 +69,7 @@ export class Pointer extends ViewHook {
     if (!svg) return
 
     this.at = ms
+    this.size()
     svg.replaceChildren()
 
     if (this.el.dataset.rotated !== undefined) {

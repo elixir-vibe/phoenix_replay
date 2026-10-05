@@ -7,9 +7,22 @@ app_config = [
   "Application.delete_env"
 ]
 
+# Video export drives a browser through its own endpoint, so most of it
+# is an adapter; its plan and jobs are data, and ffmpeg is infrastructure.
 adapter = [
   "Mix.Tasks.PhoenixReplay.*",
   "PhoenixReplay",
+  "PhoenixReplay.Export",
+  "PhoenixReplay.Export.Access",
+  "PhoenixReplay.Export.Capture",
+  "PhoenixReplay.Export.Endpoint",
+  "PhoenixReplay.Export.ErrorHTML",
+  "PhoenixReplay.Export.Router",
+  "PhoenixReplay.Export.Runtime",
+  "PhoenixReplay.Export.Server",
+  "PhoenixReplay.Export.Stage",
+  "PhoenixReplay.Export.Supervisor",
+  "PhoenixReplay.Export.Video",
   "PhoenixReplay.Plug",
   "PhoenixReplay.Recorder",
   "PhoenixReplay.Router",
@@ -29,6 +42,8 @@ orchestrator = [
 
 model = [
   "PhoenixReplay.Config",
+  "PhoenixReplay.Export.Job",
+  "PhoenixReplay.Export.Schedule",
   "PhoenixReplay.Recording",
   "PhoenixReplay.Recording.*"
 ]
@@ -46,6 +61,7 @@ logic = [
 infrastructure = [
   "PhoenixReplay.Application",
   "PhoenixReplay.Capture.*",
+  "PhoenixReplay.Export.Encoder",
   "PhoenixReplay.Session.Buffer",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",

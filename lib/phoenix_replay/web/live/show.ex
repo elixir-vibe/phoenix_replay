@@ -17,6 +17,10 @@ defmodule PhoenixReplay.Web.Live.Show do
   Collected telemetry and log events follow the LiveView event that caused
   them, indented, and can be hidden by kind. They leave the replayed state
   as it was, so selecting one shows its details next to the assigns.
+
+  A saved recording can be exported as a video when `PhoenixReplay.Export`
+  is available. The export runs under `PhoenixReplay.Export.Server`, and
+  the player follows its progress and links the video when it is ready.
   """
 
   use Phoenix.LiveView
@@ -25,8 +29,8 @@ defmodule PhoenixReplay.Web.Live.Show do
   import PhoenixReplay.Web.Components.{Core, Player}
 
   alias PhoenixReplay.Recording.{Filter, PointerTrack, Timeline}
-  alias PhoenixReplay.Catalog
-  alias PhoenixReplay.Web.{Context, Layouts, Params}
+  alias PhoenixReplay.{Catalog, Export}
+  alias PhoenixReplay.Web.{Context, Download, Layouts, Params}
   alias PhoenixReplay.Web.Player.{Channel, Events}
 
   @speeds [1, 2, 5, 10]
@@ -62,15 +66,34 @@ defmodule PhoenixReplay.Web.Live.Show do
         frame_mode: "fit",
         # Shows the replay turned to the other orientation than recorded.
         rotated?: false,
+        export: nil,
+        exportable?: false,
         # A link to a moment opens the player there.
         start_at: Params.integer(params["at"], nil)
       )
 
     cond do
-      not socket.assigns.live? -> {:ok, loaded(socket, Context.fetch_recording!(socket, id))}
-      connected?(socket) -> {:ok, load_live(socket)}
-      true -> {:ok, socket}
+      not socket.assigns.live? ->
+        {:ok, socket |> loaded(Context.fetch_recording!(socket, id)) |> follow_export()}
+
+      connected?(socket) ->
+        {:ok, load_live(socket)}
+
+      true ->
+        {:ok, socket}
     end
+  end
+
+  # Only saved recordings are exported.
+  defp follow_export(socket) do
+    %{context: context, id: id} = socket.assigns
+    exportable? = Export.available?(context.config)
+    if connected?(socket) and exportable?, do: Export.subscribe(id)
+
+    assign(socket,
+      exportable?: exportable?,
+      export: if(connected?(socket) and exportable?, do: Export.latest(id))
+    )
   end
 
   defp load_live(socket) do
@@ -199,6 +222,16 @@ defmodule PhoenixReplay.Web.Live.Show do
     end
   end
 
+  def handle_event("export", _params, %{assigns: %{exportable?: true}} = socket) do
+    case Export.start(socket.assigns.id, socket.assigns.context.config) do
+      {:ok, job} -> {:noreply, assign(socket, :export, job)}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, Export.describe(reason))}
+    end
+  end
+
+  def handle_event("dismiss_export", _params, socket),
+    do: {:noreply, assign(socket, :export, nil)}
+
   def handle_event("delete", _params, socket) do
     %{context: context, recording: recording} = socket.assigns
 
@@ -249,6 +282,11 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   def handle_info({:redaction_progress, _done, _total}, socket), do: {:noreply, socket}
+
+  def handle_info({Export, %{recording_id: id} = job}, %{assigns: %{id: id}} = socket),
+    do: {:noreply, assign(socket, :export, job)}
+
+  def handle_info({Export, _other_recording}, socket), do: {:noreply, socket}
 
   defp seek(socket, index) do
     timeline = Timeline.seek(socket.assigns.timeline, index)
@@ -379,6 +417,15 @@ defmodule PhoenixReplay.Web.Live.Show do
       dropped={@dropped}
       at={@at}
       link={Context.path(@context, [@recording.id]) <> "?at=#{@index}"}
+      can_export={@exportable?}
+    />
+    <.export_status
+      :if={@export}
+      job={@export}
+      download={
+        @export.status == :done &&
+          Context.path(@context, [@recording.id, "video", Download.sign(@socket, @export)])
+      }
     />
     <div class="flex flex-wrap items-stretch">
       <main class="flex min-w-0 flex-[999_1_40rem] flex-col gap-4 p-4 sm:p-5">

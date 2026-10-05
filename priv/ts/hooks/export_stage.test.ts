@@ -1,0 +1,65 @@
+import { afterEach, expect, test } from 'volt:test'
+
+import { mountHook, html } from '../test/hooks'
+import { ExportStage } from './export_stage'
+import { TIME_EVENT } from './scrubber'
+
+afterEach(() => {
+  document.body.replaceChildren()
+  delete window.phoenixReplayStage
+})
+
+const stage = async (): Promise<{ el: HTMLElement; frame: HTMLIFrameElement }> => {
+  const el = html(`
+    <div style="position: fixed; inset: 0; width: 800px; height: 600px">
+      <div style="position: absolute">
+        <iframe srcdoc="<body></body>"></iframe>
+        <div data-frame-overlay></div>
+      </div>
+    </div>
+  `)
+  const frame = el.querySelector('iframe') as HTMLIFrameElement
+  const loaded = new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }))
+  mountHook(ExportStage, el)
+  await loaded
+  return { el, frame }
+}
+
+const shown = (frame: HTMLIFrameElement, index: number): void => {
+  frame.contentWindow?.dispatchEvent(new CustomEvent('phx:phx_replay:shown', { detail: { index } }))
+}
+
+test('shows a moment once the frame has rendered its event', async () => {
+  const { el, frame } = await stage()
+  const times: number[] = []
+  window.addEventListener(TIME_EVENT, (event) => times.push((event as CustomEvent<number>).detail))
+
+  let done = false
+  const showing = window.phoenixReplayStage
+    ?.show({ index: 3, at: 1_500, width: 400, height: 300 })
+    .then(() => {
+      done = true
+    })
+
+  // Not before the frame shows event 3.
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(done).toBe(false)
+  shown(frame, 2)
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(done).toBe(false)
+
+  shown(frame, 3)
+  await showing
+  expect(times).toEqual([1_500])
+
+  // The device is sized to the viewport and centred on the stage.
+  const device = el.firstElementChild as HTMLElement
+  expect([device.style.width, device.style.height]).toEqual(['400px', '300px'])
+  expect([device.style.left, device.style.top]).toEqual(['200px', '150px'])
+  const overlay = el.querySelector<HTMLElement>('[data-frame-overlay]')
+  expect([overlay?.dataset.width, overlay?.dataset.height]).toEqual(['400', '300'])
+
+  // The same event again needs no new render.
+  await window.phoenixReplayStage?.show({ index: 3, at: 1_600, width: 400, height: 300 })
+  expect(times).toEqual([1_500, 1_600])
+})

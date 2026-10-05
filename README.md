@@ -115,6 +115,8 @@ phoenix_replay "/replay",
 
 The dashboard ships its own assets and loads your app's own Phoenix and LiveView clients, so it needs nothing from your asset pipeline. See the [Dashboard guide](https://hexdocs.pm/phoenix_replay/dashboard.html).
 
+Export a recording as an MP4 of the page and the pointer, from the player's menu or with `mix phoenix_replay.export <id>`. A headless Chromium films the replay through [`playwright_ex`](https://hexdocs.pm/playwright_ex) and `ffmpeg` encodes it; see [Exporting videos](https://hexdocs.pm/phoenix_replay/dashboard.html#exporting-videos).
+
 ## Storage
 
 Recordings are kept in compressed files by default, or in your database:

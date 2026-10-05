@@ -415,6 +415,31 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert {:ok, _view, _html} = live(build_conn(), "/replay/secret-1")
   end
 
+  test "follows an export of the recording and links its video", %{recording: recording} do
+    {:ok, view, _html} = live(build_conn(), "/replay/show")
+    refute has_element?(view, "#replay-export-status")
+    job = %PhoenixReplay.Export.Job{id: "j", recording_id: recording.id}
+
+    send(view.pid, {PhoenixReplay.Export, %{job | status: :running, progress: 42}})
+    assert has_element?(view, ~s(#replay-export-status [role="progressbar"][aria-valuenow="42"]))
+
+    send(
+      view.pid,
+      {PhoenixReplay.Export, %{job | status: :done, progress: 100, path: "/tmp/j.mp4"}}
+    )
+
+    assert has_element?(view, ~s(#replay-export-download[href^="/replay/show/video/"]))
+
+    send(view.pid, {PhoenixReplay.Export, %{job | status: :failed, error: "The browser failed."}})
+    assert has_element?(view, "#replay-export-status", "The browser failed.")
+    view |> element(~s(#replay-export-status button[aria-label="Dismiss"])) |> render_click()
+    refute has_element?(view, "#replay-export-status")
+
+    # Another recording's exports are not shown.
+    send(view.pid, {PhoenixReplay.Export, %{job | recording_id: "other"}})
+    refute has_element?(view, "#replay-export-status")
+  end
+
   describe "client context" do
     defp client(viewport, tab, navigated_from \\ nil) do
       %Client{

@@ -14,7 +14,16 @@ config :phoenix_replay,
     {PhoenixReplay.Storage.File, path: Path.join(System.tmp_dir!(), "phoenix_replay_test")},
   persist: [attempts: 2, backoff: 0],
   # Tests flush sessions explicitly, so no chunk is written behind their backs.
-  flush: false
+  flush: false,
+  # Small, quick videos; the tests tagged :export need ffmpeg and Playwright.
+  export: [
+    endpoint: PhoenixReplay.Test.Endpoint,
+    dir: Path.join(System.tmp_dir!(), "phoenix_replay_test_exports"),
+    playwright: [executable: "node_modules/.bin/playwright"],
+    fps: 10,
+    max_dpr: 1,
+    hold: 500
+  ]
 
 config :logger, level: :warning
 

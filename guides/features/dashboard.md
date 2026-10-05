@@ -75,6 +75,36 @@ When the session recorded the pointer, it is drawn over the replay: the cursor, 
 
 Each viewer drives a private frame, so several people can watch the same recording independently.
 
+## Exporting videos
+
+**Export video** in the player's menu turns a saved recording into an MP4 of the replayed page and the pointer, for a bug report or a ticket. A bar under the header shows its progress and, when it is done, links the video. Several viewers asking for the same recording share one export, and the video is kept for an hour.
+
+The same export runs from the command line, with no server running:
+
+```console
+mix phoenix_replay.export <recording-id> --output checkout-bug.mp4
+```
+
+A recording holds no pixels, so an export replays it in a headless Chromium and films it, the way the player shows it: at the recorded viewport and pixel ratio, rotations included, with the cursor, touches, ripples and scrolling drawn over it. It films at 30 frames per second but screenshots only when the picture changes, and shortens stretches without activity to three seconds, so an export takes about as long as the activity it shows, not the whole session, and makes a small file. `ffmpeg` encodes it as H.264.
+
+It needs three things on the machine that exports: [`playwright_ex`](https://hexdocs.pm/playwright_ex) with Playwright's Chromium, `ffmpeg`, and your endpoint named in the configuration:
+
+```elixir
+# mix.exs
+{:playwright_ex, "~> 0.14"}
+
+# config/config.exs
+config :phoenix_replay, export: [endpoint: MyAppWeb.Endpoint]
+```
+
+```console
+npm install playwright && npx playwright install chromium
+```
+
+Until all three are there, the menu has no **Export video**. The browser loads the replay from a private endpoint PhoenixReplay starts on 127.0.0.1 with the first export, behind a token, so your router needs no route for it and your login does not get in the way; it asks your endpoint only for the stylesheets and scripts the page loads. If the frame uses your own root layout, name it in `export: [frame_layout: ...]` too. Exports run one at a time under the application's supervision tree; see `PhoenixReplay.Export` for every option.
+
+Only saved recordings are exported, not sessions still running.
+
 ## Light and dark
 
 The dashboard follows the system's light or dark appearance. The sun and moon button in its header switches to the other one, and the browser remembers the choice. It ships its own fonts, Geist and Geist Mono, and icons, so it looks the same in every app.

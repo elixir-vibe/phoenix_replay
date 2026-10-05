@@ -7,6 +7,7 @@ import { replayInputs } from './client/replay_inputs'
 import { searchShortcut } from './dom/shortcut'
 import { themeToggle } from './dom/theme'
 import { EventList } from './hooks/event_list'
+import { ExportStage } from './hooks/export_stage'
 import { FrameViewport } from './hooks/frame_viewport'
 import { Pointer } from './hooks/pointer'
 import { Scrubber } from './hooks/scrubber'
@@ -16,7 +17,7 @@ const meta = (name: string): string | undefined =>
 
 const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Socket, {
   params: { _csrf_token: meta('csrf-token') },
-  hooks: { EventList, FrameViewport, Pointer, Scrubber }
+  hooks: { EventList, ExportStage, FrameViewport, Pointer, Scrubber }
 })
 
 confirmClicks(window)
