@@ -66,6 +66,8 @@ defmodule PhoenixReplay.Web.Live.Show do
         frame_mode: "fit",
         # Shows the replay turned to the other orientation than recorded.
         rotated?: false,
+        # Holds the frame where the user had scrolled; off, it scrolls freely.
+        follow_scroll?: true,
         export: nil,
         exportable?: false,
         # A link to a moment opens the player there.
@@ -202,6 +204,9 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   def handle_event("rotate", _params, socket),
     do: {:noreply, update(socket, :rotated?, &not/1)}
+
+  def handle_event("follow_scroll", _params, socket),
+    do: {:noreply, update(socket, :follow_scroll?, &not/1)}
 
   def handle_event("tab", %{"value" => tab}, socket) when tab in ~w(events state visit) do
     {:noreply, assign(socket, :tab, tab)}
@@ -436,6 +441,7 @@ defmodule PhoenixReplay.Web.Live.Show do
           viewport={@viewport}
           mode={@frame_mode}
           rotated={@rotated?}
+          follow_scroll={@follow_scroll?}
           below="replay-playback"
           pointer={@pointer}
           ready={@frame_ready?}

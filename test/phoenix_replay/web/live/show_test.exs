@@ -497,6 +497,43 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       assert render(view) =~ "landscape"
     end
 
+    test "holds the page where the user scrolled, unless told not to" do
+      recording = Fixtures.counter_recording(id: "scrolled")
+
+      scrolled = %Event{
+        at: 1_500,
+        type: :pointer,
+        data: %{span: 100, moves: [], presses: [], scrolls: [50, 0, 300]}
+      }
+
+      Storage.save(Fixtures.storage(), %{
+        recording
+        | client: client(%{width: 390, height: 844, dpr: 3}, nil),
+          events: List.insert_at(recording.events, 4, scrolled)
+      })
+
+      {:ok, view, _html} = live(build_conn(), "/replay/scrolled")
+      assert has_element?(view, ~s(#replay-follow-scroll[aria-checked="true"]))
+      assert has_element?(view, "#replay-frame.pointer-events-none")
+      assert has_element?(view, "#replay-pointer[data-follow-scroll]")
+
+      view |> element("#replay-follow-scroll") |> render_click()
+      assert has_element?(view, ~s(#replay-follow-scroll[aria-checked="false"]))
+      refute has_element?(view, "#replay-frame.pointer-events-none")
+      refute has_element?(view, "#replay-pointer[data-follow-scroll]")
+
+      # Rotated, the recorded positions do not fit, so the page scrolls freely.
+      view |> element("#replay-follow-scroll") |> render_click()
+      view |> element("#replay-rotate") |> render_click()
+      assert has_element?(view, "#replay-follow-scroll[disabled]")
+      refute has_element?(view, "#replay-frame.pointer-events-none")
+
+      # A recording without scrolling has nothing to follow.
+      {:ok, view, _html} = live(build_conn(), "/replay/show")
+      refute has_element?(view, "#replay-follow-scroll")
+      refute has_element?(view, "#replay-frame.pointer-events-none")
+    end
+
     test "rotates the replay to the other orientation, without the pointer" do
       recording = Fixtures.counter_recording(id: "turned")
 

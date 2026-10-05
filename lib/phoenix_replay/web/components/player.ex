@@ -231,12 +231,19 @@ defmodule PhoenixReplay.Web.Components.Player do
   out in the other orientation; **Rotate** sends `"rotate"` to toggle it.
   The pointer was recorded in the recorded layout, so it is not drawn, and
   the page not scrolled as recorded, while the frame is rotated.
+
+  When the session recorded scrolling, `follow_scroll` holds the page
+  where the user had scrolled: the frame takes no wheel or touch, and the
+  overlay puts the recorded position back after every render. **Follow
+  scroll** in the view menu sends `"follow_scroll"` to toggle it, leaving
+  the page to scroll freely.
   """
   attr :src, :string, required: true
   attr :url, :string, default: nil, doc: "the page URL at the current moment"
   attr :viewport, :map, default: nil
   attr :mode, :string, default: "fit"
   attr :rotated, :boolean, default: false
+  attr :follow_scroll, :boolean, default: true
   attr :below, :string, default: nil
 
   attr :pointer, :map,
@@ -251,8 +258,12 @@ defmodule PhoenixReplay.Web.Components.Player do
   def replay_frame(assigns) do
     shown = shown_viewport(assigns.viewport, assigns.rotated)
 
+    scrolls? = assigns.pointer != nil and assigns.pointer.scrolls != []
+
     assigns =
       assign(assigns,
+        scrolls?: scrolls?,
+        following?: scrolls? and assigns.follow_scroll and not assigns.rotated,
         pointer?: assigns.pointer != nil and PointerTrack.any?(assigns.pointer),
         shown: shown,
         orientation: shown && Format.orientation(shown)
@@ -374,10 +385,34 @@ defmodule PhoenixReplay.Web.Components.Player do
               Rotate
             </button>
           </:item>
+          <:item :if={@scrolls?}>
+            <button
+              id="replay-follow-scroll"
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={to_string(@following?)}
+              disabled={@rotated}
+              title={
+                if @rotated,
+                  do: "The scrolling was recorded in the other orientation",
+                  else: "Hold the page where the user had scrolled"
+              }
+              phx-click={JS.push("follow_scroll") |> close_menu("replay-view")}
+              class="group disabled:opacity-40"
+            >
+              <.icon name="lucide:check" class="size-4 opacity-0 group-aria-checked:opacity-100" />
+              Follow scroll
+            </button>
+          </:item>
         </.menu>
       </div>
       <div id="replay-viewport-box" class="relative bg-canvas">
-        <iframe id="replay-frame" title="Replay" src={@src} class="block h-[600px] w-full border-0"></iframe>
+        <iframe
+          id="replay-frame"
+          title="Replay"
+          src={@src}
+          class={["block h-[600px] w-full border-0", @following? && "pointer-events-none"]}
+        ></iframe>
         <%!-- Covers the frame while its page loads and its LiveView connects. --%>
         <div
           id="replay-loading"
@@ -398,6 +433,7 @@ defmodule PhoenixReplay.Web.Components.Player do
           data-frame-overlay
           data-track={JSON.encode!(@pointer)}
           data-rotated={@rotated}
+          data-follow-scroll={@following?}
           data-width={@viewport.width}
           data-height={@viewport.height}
           aria-hidden="true"

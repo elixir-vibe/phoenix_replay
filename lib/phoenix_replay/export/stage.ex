@@ -63,6 +63,7 @@ defmodule PhoenixReplay.Export.Stage do
           phx-hook="Pointer"
           phx-update="ignore"
           data-frame-overlay
+          data-follow-scroll
           data-track={JSON.encode!(@track)}
           data-width={@viewport.width}
           data-height={@viewport.height}

@@ -12,6 +12,7 @@ Pointer, touch and form recording, client state, and a richer player.
 - `phx_replay:start` and `phx_replay:stop` window events, and a `data-phx-replay` attribute on `<html>`, tell browser code when the page is recorded.
 - The player draws the recorded pointer over the replay: the cursor with a short trail, a ripple for each press and a fingertip for each touch, and scrolls the page as recorded. **Pointer** switches it off.
 - The player shows whether the viewport is portrait or landscape at each moment, and **Rotate** shows the replay in the other orientation, laying the page out again for it.
+- The replayed page holds where the user had scrolled, after every render and against the wheel. **Follow scroll** in the **View** menu lets it scroll freely.
 - The frame's bar gives the URL most of its width: the pointer is an icon toggle, and the viewport's size and scale open a **View** menu with Fit, Actual size and Rotate.
 - Video export: **Export video** in the player's menu, and `mix phoenix_replay.export <id>`, turn a saved recording into an MP4 of the replayed page and the pointer, at the recorded viewport, with idle stretches shortened. A headless Chromium films the replay through the optional [`playwright_ex`](https://hexdocs.pm/playwright_ex) dependency and `ffmpeg` encodes it. Turn it on with `export: [endpoint: MyAppWeb.Endpoint]`; see `PhoenixReplay.Export`.
 - The **State** tab shows what each event changed inside an assign, such as `tasks[id: 2].done: false → true`, matching list items by `id`.

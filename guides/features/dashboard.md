@@ -71,7 +71,7 @@ The panel beside it has three tabs:
 - **State** lists the assigns at that moment, marking the ones the selected event set. Open one to see its full value.
 - **Visit** shows the device, the other sessions of the same browser tab, the page the user came from, and how the visit started: its campaign, referrer, landing page and kept headers.
 
-When the session recorded the pointer, it is drawn over the replay: the cursor, moved between samples with a short trail, a ripple where it pressed, on the pressed element when the replayed page has it, and a fingertip for each touch. The replayed page scrolls as the user's did. The cursor button in the frame's bar hides or shows them. See [Pointer, touches and scrolling](recording.md#pointer-touches-and-scrolling).
+When the session recorded the pointer, it is drawn over the replay: the cursor, moved between samples with a short trail, a ripple where it pressed, on the pressed element when the replayed page has it, and a fingertip for each touch. The replayed page scrolls as the user's did, and stays there: the wheel does not move it. Turn off **Follow scroll** in the **View** menu to scroll it yourself. The cursor button in the frame's bar hides or shows them. See [Pointer, touches and scrolling](recording.md#pointer-touches-and-scrolling).
 
 Each viewer drives a private frame, so several people can watch the same recording independently.
 

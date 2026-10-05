@@ -23,7 +23,9 @@ const ARROW = 'M0 0V16.5L4.6 12.2L7.6 18.8L10.3 17.6L7.4 11.1H13.2Z'
  * viewport in `data-width` and `data-height`, and sits beside the frame
  * as a `[data-frame-overlay]`, which FrameViewport sizes like the frame.
  * It follows the time the Scrubber announces, and reads its size on every
- * draw, so whoever holds it may resize it. While the element has
+ * draw, so whoever holds it may resize it. It scrolls the page only while
+ * the element has `data-follow-scroll`, and then on every draw, so a page
+ * that re-rendered or was scrolled by hand goes back where the user was. While the element has
  * `data-rotated`, the frame shows the other orientation than recorded, so
  * nothing is drawn and the page is not scrolled.
  */
@@ -31,7 +33,6 @@ export class Pointer extends ViewHook {
   private track: Track = { moves: [], presses: [], scrolls: [] }
   private moves = new Map<number, Move[]>()
   private svg?: SVGSVGElement
-  private scrolled = ''
   private at?: number
   private readonly onTime = (event: Event): void =>
     this.render((event as CustomEvent<number>).detail)
@@ -72,11 +73,7 @@ export class Pointer extends ViewHook {
     this.size()
     svg.replaceChildren()
 
-    if (this.el.dataset.rotated !== undefined) {
-      // Scrolls again as recorded once the frame turns back.
-      this.scrolled = ''
-      return
-    }
+    if (this.el.dataset.rotated !== undefined) return
 
     this.scroll(ms)
 
@@ -107,15 +104,13 @@ export class Pointer extends ViewHook {
   }
 
   private scroll(ms: number): void {
+    if (this.el.dataset.followScroll === undefined) return
     const latest = this.track.scrolls[lastAtOrBefore(this.track.scrolls, ms, sampleAt)]
-    if (!latest) return
+    const page = this.frame()?.contentWindow
+    if (!latest || !page) return
 
     const [, x, y] = latest
-    const key = `${x},${y}`
-    if (key === this.scrolled) return
-
-    this.scrolled = key
-    this.frame()?.contentWindow?.scrollTo(x, y)
+    if (page.scrollX !== x || page.scrollY !== y) page.scrollTo(x, y)
   }
 
   // A touch is down from its press until its release.
