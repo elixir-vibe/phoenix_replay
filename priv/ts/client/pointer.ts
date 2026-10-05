@@ -1,16 +1,7 @@
 /**
- * Records the pointer, touches and scrolling for PhoenixReplay, when the
- * server asks for it.
- *
- *     import { replayPointer } from "phoenix_replay"
- *
- *     replayPointer(liveSocket)
- *
- * Nothing is recorded until a recorded LiveView with `:pointer` configured
- * mounts and sends the settings to record with. Batches go back over the
- * LiveView socket as an event PhoenixReplay's recorder takes before the
- * view sees it. Recording stops when the page navigates to another
- * LiveView, which sends its own settings if it records the pointer too.
+ * Records the pointer, touches and scrolling, in batches sent as
+ * `phx_replay:pointer`, while a recorded LiveView with `:pointer`
+ * configured asks for it. `replayRecorder` starts and stops it.
  */
 
 import {
@@ -37,43 +28,13 @@ export interface PointerSettings {
   max_points: number
 }
 
-/** The part of LiveSocket replayPointer uses. */
-export interface PointerSocket {
-  execJS(el: Element, encodedJS: string, eventType?: string | null): void
-}
+/** Sends a batch to the recorded LiveView as `event`. */
+export type Push = (event: string, value: unknown) => void
 
 const EVENT = 'phx_replay:pointer'
 
-/**
- * Records while a LiveView asks for it, and returns a function that stops
- * listening altogether.
- */
-export const replayPointer = (liveSocket: PointerSocket, target: Window = window): (() => void) => {
-  let recorder: Recorder | undefined
-
-  const start = (event: Event): void => {
-    recorder?.stop()
-    recorder = new Recorder(liveSocket, target, (event as CustomEvent<PointerSettings>).detail)
-  }
-
-  // A patch stays on the same LiveView; anything else leaves it.
-  const leave = (event: Event): void => {
-    if ((event as CustomEvent<{ kind?: string }>).detail?.kind === 'patch') return
-    recorder?.stop()
-    recorder = undefined
-  }
-
-  target.addEventListener(`phx:${EVENT}`, start)
-  target.addEventListener('phx:page-loading-start', leave)
-
-  return () => {
-    recorder?.stop()
-    target.removeEventListener(`phx:${EVENT}`, start)
-    target.removeEventListener('phx:page-loading-start', leave)
-  }
-}
-
-class Recorder {
+/** Records the pointer until stopped; see `replayRecorder`. */
+export class PointerRecorder {
   private moves: number[] = []
   private presses: Press[] = []
   private scrolls: number[] = []
@@ -85,7 +46,7 @@ class Recorder {
   private readonly listeners: [EventTarget, string, EventListener][]
 
   constructor(
-    private readonly liveSocket: PointerSocket,
+    private readonly push: Push,
     private readonly target: Window,
     private readonly settings: PointerSettings
   ) {
@@ -207,9 +168,7 @@ class Recorder {
     this.moves = []
     this.presses = []
     this.scrolls = []
-
-    const main = this.target.document.querySelector('[data-phx-main]')
-    if (main) this.liveSocket.execJS(main, JSON.stringify([['push', { event: EVENT, value }]]))
+    this.push(EVENT, value)
   }
 }
 

@@ -105,7 +105,23 @@ config :phoenix_replay,
   pointer: [sample: 50, scroll: 100, flush: 1_000, max_points: 500, limit: 3_600]
 ```
 
-Off by default; `pointer: true` uses these defaults. Needs `replayPointer(liveSocket)` in the browser. See [Recording](recording.md#pointer-touches-and-scrolling).
+Off by default; `pointer: true` uses these defaults. Needs `replayRecorder(liveSocket)` in the browser. See [Recording](recording.md#pointer-touches-and-scrolling).
+
+### Client state
+
+```elixir
+config :phoenix_replay,
+  state: [
+    flush: 1_000,
+    max_entries: 200,
+    max_key: 64,
+    max_entry_bytes: 8_192,
+    max_bytes: 65_536,
+    limit: 3_600
+  ]
+```
+
+On by default; `state: false` records none. Needs `replayRecorder(liveSocket)` in the browser, and code that reports with a `phx_replay:state` window event. See [Recording](recording.md#client-state).
 
 ### Retention
 

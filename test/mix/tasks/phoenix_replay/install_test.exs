@@ -157,9 +157,9 @@ defmodule Mix.Tasks.PhoenixReplay.InstallTest do
     content = install(%{"assets/js/app.js" => app}) |> content("assets/js/app.js")
 
     assert content =~
-             ~s(import { replayParams, replayMetadata, replayPointer } from "phoenix_replay")
+             ~s(import { replayParams, replayMetadata, replayRecorder } from "phoenix_replay")
 
-    assert content =~ "liveSocket.connect()\nreplayPointer(liveSocket)\nwindow.liveSocket"
+    assert content =~ "liveSocket.connect()\nreplayRecorder(liveSocket)\nwindow.liveSocket"
   end
 
   test "adds the import after a last import that spans several lines" do

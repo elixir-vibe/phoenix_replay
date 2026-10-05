@@ -213,8 +213,8 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    # replayPointer records nothing until a LiveView configures :pointer,
-    # so it is wired whenever the setup connects the socket.
+    # replayRecorder records nothing until a recorded LiveView asks, so it
+    # is wired whenever the setup connects the socket.
     defp wire_client(content) do
       content =
         String.replace(
@@ -226,9 +226,9 @@ if Code.ensure_loaded?(Igniter) do
 
       {content, helpers} =
         if Regex.match?(@live_socket_connect, content) do
-          {Regex.replace(@live_socket_connect, content, "\\0\n\\1replayPointer(liveSocket)",
+          {Regex.replace(@live_socket_connect, content, "\\0\n\\1replayRecorder(liveSocket)",
              global: false
-           ), "replayParams, replayMetadata, replayPointer"}
+           ), "replayParams, replayMetadata, replayRecorder"}
         else
           {content, "replayParams, replayMetadata"}
         end
@@ -262,17 +262,19 @@ if Code.ensure_loaded?(Igniter) do
       To record the browser's viewport and follow users across LiveViews,
       pass PhoenixReplay's client context to your LiveSocket:
 
-          import { replayParams, replayMetadata, replayPointer } from "phoenix_replay"
+          import { replayParams, replayMetadata, replayRecorder } from "phoenix_replay"
 
           const liveSocket = new LiveSocket("/live", Socket, {
             params: () => ({_csrf_token: csrfToken, ...replayParams()}),
             metadata: replayMetadata
           })
           liveSocket.connect()
-          replayPointer(liveSocket)
+          replayRecorder(liveSocket)
 
-      replayPointer records the pointer, touches and scrolling for live
-      sessions that configure :pointer, and nothing otherwise.
+      replayRecorder records the pointer, touches and scrolling for live
+      sessions that configure :pointer, and state other libraries report
+      with a phx_replay:state window event, only while a session is
+      recorded.
       """
     end
 

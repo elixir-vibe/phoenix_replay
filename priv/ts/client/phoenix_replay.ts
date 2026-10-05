@@ -11,12 +11,16 @@
  *
  * Both are optional: without them, recordings simply carry no viewport.
  *
- * `replayPointer(liveSocket)` also records the pointer, touches and
- * scrolling for LiveViews that configure `:pointer`; see `./pointer`.
+ * `replayRecorder(liveSocket)` also records the pointer, touches and
+ * scrolling for LiveViews that configure `:pointer`, and state other code
+ * reports with a `phx_replay:state` window event; see `./recorder`.
  */
 
-export { replayPointer } from './pointer'
-export type { PointerSettings, PointerSocket } from './pointer'
+export { replayRecorder, START_EVENT, STOP_EVENT } from './recorder'
+export type { RecordSettings, RecorderSocket, StartDetail } from './recorder'
+export type { PointerSettings } from './pointer'
+export { STATE_EVENT } from './state'
+export type { StateReport, StateSettings } from './state'
 
 export interface ReplayViewport {
   width: number

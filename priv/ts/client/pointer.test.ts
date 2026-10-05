@@ -1,7 +1,8 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { type PointerSettings, replayPointer } from './pointer'
+import type { PointerSettings } from './pointer'
 import type { Batch } from './pointer_track'
+import { replayRecorder } from './recorder'
 
 let stop = (): void => {}
 
@@ -23,14 +24,14 @@ const setup = (): Batch[] => {
 
   const batches: Batch[] = []
 
-  stop = replayPointer({
+  stop = replayRecorder({
     execJS: (el, encoded) => {
       expect(el).toBe(main)
       const [[command, { event, value }]] = JSON.parse(encoded) as [
         [string, { event: string; value: Batch }]
       ]
       expect(command).toBe('push')
-      expect(event).toBe('phx_replay:pointer')
+      if (event !== 'phx_replay:pointer') return
       batches.push(value)
     }
   })
@@ -40,7 +41,9 @@ const setup = (): Batch[] => {
 
 const announce = (detail: Partial<PointerSettings> = {}): void => {
   window.dispatchEvent(
-    new CustomEvent('phx:phx_replay:pointer', { detail: { ...settings, ...detail } })
+    new CustomEvent('phx:phx_replay:record', {
+      detail: { pointer: { ...settings, ...detail }, state: null }
+    })
   )
 }
 
