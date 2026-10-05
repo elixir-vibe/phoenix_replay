@@ -159,6 +159,47 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert_receive {Playback, {:seek, 3}}
   end
 
+  test "plays on after the last event to the end of the pointer track" do
+    recording = Fixtures.counter_recording(id: "pointed", clicks: 1)
+    last = PhoenixReplay.Recording.Timeline.duration_ms(recording)
+    # The pointer moved for three seconds after the last LiveView event.
+    batch = %Event{
+      at: last + 3_000,
+      type: :pointer,
+      data: %{span: 100, moves: [100, 5, 5, 0], presses: [], scrolls: []}
+    }
+
+    client = %{recording.client | viewport: %{width: 390, height: 844, dpr: 3}}
+
+    Storage.save(Fixtures.storage(), %{
+      recording
+      | events: [batch | recording.events],
+        client: client
+    })
+
+    {:ok, view, _html} = live(build_conn(), "/replay/pointed?at=3")
+    assert %{index: 3, duration_ms: duration} = assigns(view)
+    assert duration == last + 3_000
+    assert has_element?(view, "#replay-pointer")
+
+    render_click(view, "toggle")
+    assert %{at: ^duration, playing: nil} = advance(view)
+
+    # At the very end, playing starts over.
+    render_click(view, "toggle")
+    assert %{index: 1} = assigns(view)
+    # Events at the same time play on.
+    Storage.save(Fixtures.storage(), %{
+      recording
+      | id: "same",
+        events: Enum.map(recording.events, &%{&1 | at: 0})
+    })
+
+    {:ok, view, _html} = live(build_conn(), "/replay/same?at=0")
+    render_click(view, "toggle")
+    assert %{playing: {_timer, _ref}} = advance(view)
+  end
+
   test "plays to the end at the chosen speed" do
     gap = :timer.hours(1)
     recording = Fixtures.counter_recording(id: "hours", clicks: 2)

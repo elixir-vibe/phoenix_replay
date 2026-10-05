@@ -99,7 +99,8 @@ defmodule PhoenixReplay.Web.Live.Show do
       recording: recording,
       pointer: pointer,
       progress: nil,
-      duration_ms: Timeline.duration_ms(recording),
+      # The pointer can move on after the last LiveView event.
+      duration_ms: max(Timeline.duration_ms(recording), Pointer.end_at(pointer)),
       error_count: Events.error_count(recording),
       first_error: Events.first_error_index(recording),
       dropped: Events.dropped_count(recording),
@@ -206,12 +207,21 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   @impl true
+  # Steps to the next event; after the last one, plays on to the end of
+  # the pointer track, then stops.
   def handle_info({:advance, ref}, %{assigns: %{playing: {_timer, ref}}} = socket) do
-    socket = seek(socket, socket.assigns.index + 1)
+    %{index: index, recording: recording} = socket.assigns
 
-    if socket.assigns.index < Timeline.last_index(socket.assigns.recording),
-      do: {:noreply, schedule(socket)},
-      else: {:noreply, assign(socket, :playing, nil)}
+    socket =
+      if index < Timeline.last_index(recording),
+        do: seek(socket, index + 1),
+        else: assign(socket, :at, socket.assigns.next_at)
+
+    # Events can share a time; only the end of the recording stops playing.
+    if socket.assigns.index < Timeline.last_index(recording) or
+         socket.assigns.next_at > socket.assigns.at,
+       do: {:noreply, schedule(socket)},
+       else: {:noreply, assign(socket, :playing, nil)}
   end
 
   def handle_info({:advance, _stale}, socket), do: {:noreply, socket}
@@ -242,7 +252,7 @@ defmodule PhoenixReplay.Web.Live.Show do
     assign(socket,
       index: index,
       at: event_at(recording, index),
-      next_at: event_at(recording, min(index + 1, Timeline.last_index(recording))),
+      next_at: next_at(socket, index),
       viewport: Timeline.viewport_at(recording, index),
       url: Timeline.url_at(recording, index),
       replayed: Timeline.assigns_at(recording, index),
@@ -250,10 +260,17 @@ defmodule PhoenixReplay.Web.Live.Show do
     )
   end
 
+  # The next event's offset, or the end of the recording after the last.
+  defp next_at(%{assigns: %{recording: recording, duration_ms: duration_ms}}, index) do
+    if index < Timeline.last_index(recording),
+      do: event_at(recording, index + 1),
+      else: duration_ms
+  end
+
   defp play(socket) do
     %{recording: recording, index: index} = socket.assigns
 
-    if index >= Timeline.last_index(recording),
+    if index >= Timeline.last_index(recording) and socket.assigns.at >= socket.assigns.duration_ms,
       do: socket |> seek(Timeline.first_render_index(recording)) |> schedule(),
       else: schedule(socket)
   end

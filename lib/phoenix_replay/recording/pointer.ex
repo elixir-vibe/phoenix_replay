@@ -25,6 +25,16 @@ defmodule PhoenixReplay.Recording.Pointer do
   @spec empty() :: t()
   def empty, do: @empty
 
+  @doc "The offset of the track's last sample, or `0` for an empty track."
+  @spec end_at(t()) :: non_neg_integer()
+  def end_at(track) do
+    track
+    |> Map.values()
+    |> Enum.flat_map(&Enum.take(&1, -1))
+    |> Enum.map(&hd/1)
+    |> Enum.max(fn -> 0 end)
+  end
+
   @doc "Whether the track holds anything to show."
   @spec any?(t()) :: boolean()
   def any?(track), do: track != @empty

@@ -207,9 +207,11 @@ class Recorder {
 const type = (event: PointerEvent): number =>
   event.pointerType === 'touch' ? TOUCH : event.pointerType === 'pen' ? PEN : MOUSE
 
-/** The nearest pressed element with an id, and the point within it in thousandths. */
+/** The nearest pressed element with a lasting id, and the point within it in thousandths. */
 const anchor = (event: PointerEvent): [string | null, number, number] => {
-  const element = event.target instanceof Element ? event.target.closest('[id]') : null
+  // LiveView's own ids, phx-…, change with every mount, so the replay never has them.
+  const element =
+    event.target instanceof Element ? event.target.closest('[id]:not([id^="phx-"])') : null
   if (!element) return [null, 0, 0]
 
   const rect = element.getBoundingClientRect()

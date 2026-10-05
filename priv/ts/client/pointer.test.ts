@@ -22,6 +22,7 @@ const settings: PointerSettings = { sample: 40, scroll: 100, flush: 60_000, max_
 const setup = (): Batch[] => {
   const main = document.createElement('div')
   main.dataset.phxMain = ''
+  main.id = 'phx-GNuOmbTkq0ZBagSq'
   main.innerHTML =
     '<button id="save" style="position: fixed; left: 100px; top: 100px; width: 100px; height: 40px">Save</button>'
   document.body.append(main)
@@ -90,6 +91,17 @@ test('samples moves at most every sample ms, keeping where the pointer came to r
   expect(batch?.m.length).toBe(8)
   expect(batch?.m.slice(1, 3)).toEqual([10, 10])
   expect(batch?.m.slice(5, 7)).toEqual([12, 12])
+})
+
+test("anchors presses to an element with a lasting id, not LiveView's own", () => {
+  const batches = setup()
+  announce()
+
+  // The LiveView root's phx- id changes with each mount.
+  pointer('pointerdown', 600, 600)
+  leave('redirect')
+
+  expect(batches[0]?.p[0]?.[6]).toBe(null)
 })
 
 test('records presses on the nearest element with an id, and where within it', () => {
