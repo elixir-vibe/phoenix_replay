@@ -9,10 +9,13 @@
  * Nothing is recorded until a recorded LiveView mounts and sends what to
  * record. It then dispatches `phx_replay:start` on `window`, with the
  * state settings as its detail, `{ state: StateSettings | null }`, and
- * `phx_replay:stop` when recording ends: when the page navigates to
- * another LiveView, which starts again if it is recorded too. Other code
- * can listen for them without importing this module, to report its state
- * on start; see `./state`.
+ * `phx_replay:stop` when recording ends: when the page leaves the
+ * LiveView, by navigating to another, which starts again if it is
+ * recorded too, or by losing its connection, after which the rejoined
+ * view starts again. While recording, `<html>` carries a
+ * `data-phx-replay` attribute holding the start detail as JSON, for code
+ * that loads later. Other code can use either without importing this
+ * module, to report its state; see `./state`.
  *
  * Batches go back over the LiveView socket as events PhoenixReplay's
  * recorder takes before the view sees them.
@@ -26,7 +29,14 @@ export const START_EVENT = 'phx_replay:start'
 /** Dispatched on `window` when recording stops. */
 export const STOP_EVENT = 'phx_replay:stop'
 
+/** Set on `<html>` while recording, to the start detail as JSON. */
+export const RECORDING_ATTRIBUTE = 'data-phx-replay'
+
 const RECORD_EVENT = 'phx_replay:record'
+
+// The page-loading kinds that stay on the same LiveView: a patch, and an
+// event pushed with page loading. Any other leaves it or rejoins it.
+const SAME_VIEW = new Set(['patch', 'element'])
 
 /** What the server asks the browser to record; `null` records none. */
 export interface RecordSettings {
@@ -63,6 +73,7 @@ export const replayRecorder = (
     if (!recorders) return
     for (const recorder of recorders) recorder.stop()
     recorders = undefined
+    target.document.documentElement.removeAttribute(RECORDING_ATTRIBUTE)
     target.dispatchEvent(new CustomEvent(STOP_EVENT))
   }
 
@@ -76,12 +87,13 @@ export const replayRecorder = (
     ]
 
     const detail: StartDetail = { state: state ?? null }
+    target.document.documentElement.setAttribute(RECORDING_ATTRIBUTE, JSON.stringify(detail))
     target.dispatchEvent(new CustomEvent(START_EVENT, { detail }))
   }
 
-  // A patch stays on the same LiveView; anything else leaves it.
   const leave = (event: Event): void => {
-    if ((event as CustomEvent<{ kind?: string }>).detail?.kind !== 'patch') stop()
+    const kind = (event as CustomEvent<{ kind?: string }>).detail?.kind
+    if (kind === undefined || !SAME_VIEW.has(kind)) stop()
   }
 
   target.addEventListener(`phx:${RECORD_EVENT}`, start)

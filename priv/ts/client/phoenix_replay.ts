@@ -16,7 +16,7 @@
  * reports with a `phx_replay:state` window event; see `./recorder`.
  */
 
-export { replayRecorder, START_EVENT, STOP_EVENT } from './recorder'
+export { RECORDING_ATTRIBUTE, replayRecorder, START_EVENT, STOP_EVENT } from './recorder'
 export type { RecordSettings, RecorderSocket, StartDetail } from './recorder'
 export type { PointerSettings } from './pointer'
 export { STATE_EVENT } from './state'

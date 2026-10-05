@@ -1,6 +1,12 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { replayRecorder, START_EVENT, type StartDetail, STOP_EVENT } from './recorder'
+import {
+  RECORDING_ATTRIBUTE,
+  replayRecorder,
+  START_EVENT,
+  type StartDetail,
+  STOP_EVENT
+} from './recorder'
 import type { StateBatch, StateSettings } from './state'
 
 let stop = (): void => {}
@@ -46,9 +52,11 @@ const report = (key: unknown, changes: unknown): void => {
   window.dispatchEvent(new CustomEvent('phx_replay:state', { detail: { key, changes } }))
 }
 
-const leave = (): void => {
-  window.dispatchEvent(new CustomEvent('phx:page-loading-start', { detail: { kind: 'redirect' } }))
+const loading = (kind: string): void => {
+  window.dispatchEvent(new CustomEvent('phx:page-loading-start', { detail: { kind } }))
 }
+
+const leave = (): void => loading('redirect')
 
 const states = (pushed: { event: string; value: unknown }[]): StateBatch[] =>
   pushed.filter(({ event }) => event === 'phx_replay:state').map(({ value }) => value as StateBatch)
@@ -139,4 +147,45 @@ test('sends a full batch early, and stops listening after leaving', () => {
   leave()
   report('k', { n: 5 })
   expect(states(pushed).flatMap(({ e }) => e).length).toBe(4)
+})
+
+test('keeps recording through page loading that stays on the LiveView', () => {
+  const pushed = setup()
+  record()
+
+  // A patch, and an event pushed with page_loading: true.
+  loading('patch')
+  loading('element')
+  report('k', { n: 1 })
+  leave()
+
+  expect(states(pushed).flatMap(({ e }) => e).length).toBe(1)
+})
+
+test('stops when the LiveView rejoins or loses its connection', () => {
+  for (const kind of ['initial', 'error', 'redirect']) {
+    const pushed = setup()
+    record()
+    loading(kind)
+    report('k', { n: 1 })
+    stop()
+
+    expect(states(pushed)).toEqual([])
+  }
+})
+
+test('marks the page while recording, for code that loads later', () => {
+  setup()
+  const html = document.documentElement
+  expect(html.hasAttribute(RECORDING_ATTRIBUTE)).toBe(false)
+
+  record()
+  const detail = JSON.parse(html.getAttribute(RECORDING_ATTRIBUTE) ?? 'null') as StartDetail
+  expect(detail.state?.max_key).toBe(8)
+
+  leave()
+  expect(html.hasAttribute(RECORDING_ATTRIBUTE)).toBe(false)
+
+  record(null)
+  expect(html.getAttribute(RECORDING_ATTRIBUTE)).toBe('{"state":null}')
 })

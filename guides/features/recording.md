@@ -145,7 +145,16 @@ State goes through your `PhoenixReplay.Sanitizer`'s `sanitize_params/1` when it 
 
 A library reports state with plain DOM events, so it needs no dependency on PhoenixReplay, in Elixir or in JavaScript.
 
-**Knowing when to report.** `replayRecorder` dispatches `phx_replay:start` on `window` when the page's LiveView is recorded, and `phx_replay:stop` when recording ends, such as when the page navigates to another LiveView; a recorded one starts again. `phx_replay:start`'s detail is `{state: settings | null}`, the limits above with snake_case names, or `null` when client state is off. Report everything you hold on start, then changes as they happen. Reports made while nothing is recorded are ignored, so a library can also report unconditionally.
+**Knowing when to report.** `replayRecorder` dispatches `phx_replay:start` on `window` when the page's LiveView is recorded, and `phx_replay:stop` when recording ends: when the page navigates to another LiveView, or loses its connection. A recorded LiveView starts again when it mounts; patches and events pushed with page loading keep the recording going. `phx_replay:start`'s detail is `{state: settings | null}`, the limits above with snake_case names, or `null` when client state is off.
+
+Code that loads after the start can ask instead: while recording, `<html>` carries a `data-phx-replay` attribute holding the same detail as JSON.
+
+```js
+const recording = document.documentElement.dataset.phxReplay
+if (recording) reportEverything(JSON.parse(recording))
+```
+
+Report everything you hold on start, or when you load during a recording, then changes as they happen. Reports made while nothing is recorded are ignored, so a library can also report unconditionally.
 
 **Reporting.** Dispatch `phx_replay:state` on `window`:
 
