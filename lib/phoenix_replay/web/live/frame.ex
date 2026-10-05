@@ -27,7 +27,6 @@ defmodule PhoenixReplay.Web.Live.Frame do
   alias PhoenixReplay.Web.Live.ReplayComponent
 
   @private :phoenix_replay_frame
-  @unassignable [:flash, :uploads, :streams, :socket, :myself]
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
@@ -114,7 +113,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
     recorded = Timeline.assigns_at(recording, index)
     states = Timeline.components_at(recording, index)
     {flash, recorded} = Map.pop(recorded, :flash, %{})
-    recorded = Map.drop(recorded, @unassignable)
+    recorded = Rendering.assignable(recorded)
     keys = Map.keys(recorded)
 
     socket

@@ -5,20 +5,18 @@ defmodule PhoenixReplay.Sanitizer.Default do
     * Replaces the value of any key whose name contains `password`, `token`,
       `secret`, `api_key`, `private_key` or `credential` with `"[FILTERED]"`.
       Keys are kept so recorded templates still find them.
-    * Drops LiveView internals that cannot be replayed (`:__changed__`,
-      `:uploads`, `:streams`).
     * Recurses into maps, lists, tuples and structs, and compacts
       `Ecto.Changeset` and `Phoenix.HTML.Form` runtime metadata.
 
-  Opaque standard-library structs such as `MapSet` and `DateTime` are kept
-  as they are.
+  Opaque standard-library structs such as `MapSet` and `DateTime`, and
+  `URI`, are kept as they are: no key in them tells a secret apart.
+  LiveView internals that cannot be replayed never reach a sanitizer.
   """
 
   @behaviour PhoenixReplay.Sanitizer
 
   @filtered "[FILTERED]"
   @sensitive ~w(password token secret api_key apikey private_key credential)
-  @unreplayable [:__changed__, :uploads, :streams]
   @opaque_structs [
     Date,
     DateTime,
@@ -33,11 +31,7 @@ defmodule PhoenixReplay.Sanitizer.Default do
   ]
 
   @impl true
-  def sanitize_assigns(assigns) when is_map(assigns) do
-    assigns
-    |> Map.drop(@unreplayable)
-    |> sanitize_map()
-  end
+  def sanitize_assigns(assigns) when is_map(assigns), do: sanitize_map(assigns)
 
   @impl true
   def sanitize_params(params) when is_map(params), do: sanitize_map(params)

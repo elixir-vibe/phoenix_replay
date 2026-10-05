@@ -12,6 +12,7 @@
 
 - A recording's `client` is a `PhoenixReplay.Recording.Client` struct, and its landing a `PhoenixReplay.Recording.Client.Landing`. The URL of the LiveView that live-navigated to the session is `navigated_from`, formerly `referer`, so it no longer reads like the landing's HTTP `referrer`. Recordings stored by earlier versions are brought up to date when read.
 - Overriding `:flush`, `:pointer`, `:logs` or `:landing` in a live session merges the override into the global configuration, as the other options already did, instead of starting from the defaults. `nil` and `false` switch any of these options off; `true` switches one on with the global configuration or the defaults.
+- LiveView internals (`:__changed__`, `:uploads`, `:streams`, and a component's `:myself` and `:flash`) are left out of recorded assigns before the sanitizer runs, so a custom `PhoenixReplay.Sanitizer` no longer has to drop them.
 - `PhoenixReplay.Storage.File.query/3` is gone; the storage facade pages file storage from `list/1`.
 
 ### Fixed

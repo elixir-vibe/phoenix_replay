@@ -40,6 +40,8 @@ defmodule PhoenixReplay.Redactor do
   @doc "Redacts sensitive values in `text`."
   @callback redact(text :: String.t(), opts :: keyword()) :: {:ok, String.t()} | {:error, term()}
 
+  # As PhoenixReplay.Sanitizer.Default keeps them, but for URI: its path,
+  # query and user info hold whatever was typed into them.
   @opaque_structs [
     Date,
     DateTime,

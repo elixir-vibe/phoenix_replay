@@ -20,6 +20,10 @@ defmodule PhoenixReplay.Web.Rendering do
 
   @type states :: %{{module(), term()} => map()}
 
+  @max_description 200
+  # Assigns LiveView keeps for itself, which `assign/2` refuses.
+  @reserved [:flash, :uploads, :streams, :socket, :myself]
+
   @doc """
   Renders `module` with `assigns`, returning a short description of the
   error when any part of the template fails to evaluate, or `nil`.
@@ -43,9 +47,10 @@ defmodule PhoenixReplay.Web.Rendering do
       describe(exception)
   end
 
-  @max_description 200
-
-  @doc false
+  @doc """
+  Describes why a recorded template failed to render, in a line short
+  enough for the player: a missing assign is named as such.
+  """
   @spec describe(Exception.t()) :: String.t()
   def describe(%KeyError{key: key, term: %{__changed__: _changed}}) when is_atom(key),
     do: "the recording has no @#{key}"
@@ -59,6 +64,10 @@ defmodule PhoenixReplay.Web.Rendering do
       do: String.slice(line, 0, @max_description) <> "…",
       else: line
   end
+
+  @doc "Leaves out of recorded `assigns` those LiveView keeps for itself."
+  @spec assignable(map()) :: map()
+  def assignable(assigns), do: Map.drop(assigns, @reserved)
 
   @doc "Routes every LiveComponent in `rendered` through the replay component."
   @spec rewrite(Rendered.t(), states()) :: Rendered.t()

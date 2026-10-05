@@ -28,11 +28,10 @@ defmodule PhoenixReplay.Capture.LiveComponents do
 
   require Logger
 
-  alias PhoenixReplay.Capture.{AsyncResults, Client}
+  alias PhoenixReplay.Capture.{Assigns, AsyncResults, Client}
   alias PhoenixReplay.Session.Buffer
 
   @handler __MODULE__
-  @unreplayable [:myself, :flash]
 
   @events [
     [:phoenix, :live_component, :handle_event, :start],
@@ -149,8 +148,7 @@ defmodule PhoenixReplay.Capture.LiveComponents do
   defp sanitized_changes(assigns, changed, config) do
     assigns
     |> Map.take(Map.keys(changed))
-    |> Map.drop(@unreplayable)
-    |> config.sanitizer.sanitize_assigns()
+    |> Assigns.component(config.sanitizer)
   end
 
   defp record(type, data) do

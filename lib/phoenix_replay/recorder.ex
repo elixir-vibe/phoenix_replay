@@ -43,7 +43,7 @@ defmodule PhoenixReplay.Recorder do
     ]
 
   alias PhoenixReplay.{Config, Recording}
-  alias PhoenixReplay.Capture.{Client, Pointer}
+  alias PhoenixReplay.Capture.{Assigns, Client, Pointer}
   alias PhoenixReplay.Session.{Buffer, Monitor}
 
   @private :phoenix_replay
@@ -116,7 +116,7 @@ defmodule PhoenixReplay.Recorder do
     socket
     |> put_private(@private, state)
     |> record_pointer(config.pointer)
-    |> record(:mount, %{assigns: sanitizer.sanitize_assigns(socket.assigns)})
+    |> record(:mount, %{assigns: Assigns.view(socket.assigns, sanitizer)})
     |> attach_hook(@private, :handle_event, &handle_event/3)
     |> attach_params_hook(params)
     |> attach_hook(@private, :handle_info, &handle_info/2)
@@ -175,7 +175,7 @@ defmodule PhoenixReplay.Recorder do
   defp after_render(%{assigns: %{__changed__: changed}} = socket) when map_size(changed) > 0 do
     %{sanitizer: sanitizer} = socket.private[@private]
 
-    case socket.assigns |> Map.take(Map.keys(changed)) |> sanitizer.sanitize_assigns() do
+    case socket.assigns |> Map.take(Map.keys(changed)) |> Assigns.view(sanitizer) do
       assigns when map_size(assigns) > 0 -> record(socket, :render, %{assigns: assigns})
       _empty -> socket
     end

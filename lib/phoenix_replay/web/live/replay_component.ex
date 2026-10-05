@@ -14,7 +14,6 @@ defmodule PhoenixReplay.Web.Live.ReplayComponent do
   alias PhoenixReplay.Web.Rendering
 
   @replay_keys [:__replay_module__, :__replay_id__, :__replay_states__]
-  @unassignable [:flash, :uploads, :streams, :socket, :myself]
 
   @doc "Assigns that route a component through this replay component."
   @spec replay_assigns(module(), term(), Rendering.states()) :: map()
@@ -37,7 +36,7 @@ defmodule PhoenixReplay.Web.Live.ReplayComponent do
     {:ok,
      socket
      |> assign(replay)
-     |> assign(passed |> Map.merge(recorded) |> Map.drop(@unassignable))}
+     |> assign(passed |> Map.merge(recorded) |> Rendering.assignable())}
   end
 
   @impl true
