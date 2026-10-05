@@ -138,15 +138,17 @@ defmodule PhoenixReplay.Session.BufferTest do
   end
 
   test "counts large binaries in memory, until they are flushed", %{recording: %{id: id}} do
-    before = Buffer.memory()
     message = String.duplicate("x", 2_000_000)
     :ok = Buffer.record(self(), :log, %{level: :info, message: message, metadata: %{}})
 
-    # ETS alone counts the binary by reference, a few bytes.
-    assert Buffer.memory() - before >= 2_000_000
+    # ETS alone counts the binary by reference, a few bytes. The total
+    # covers every session, and other tests' sessions come and go, so it is
+    # compared with the binary, not with a reading taken before it.
+    holding = Buffer.memory()
+    assert holding >= 2_000_000
 
     :ok = Buffer.remove_flushed(id, Buffer.pending(id))
-    assert Buffer.memory() - before < 100_000
+    assert holding - Buffer.memory() >= 1_900_000
   end
 
   test "a collector writing as its session closes leaves nothing behind", %{
