@@ -271,10 +271,10 @@ if Code.ensure_loaded?(Igniter) do
           liveSocket.connect()
           replayRecorder(liveSocket)
 
-      replayRecorder records the pointer, touches and scrolling for live
-      sessions that configure :pointer, and state other libraries report
-      with a phx_replay:state window event, only while a session is
-      recorded.
+      While a session is recorded, replayRecorder records what users type
+      and choose in form controls, state your code reports with
+      replayState(key, changes), and, for live sessions that configure
+      :pointer, the pointer, touches and scrolling.
       """
     end
 

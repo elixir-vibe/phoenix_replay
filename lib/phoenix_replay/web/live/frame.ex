@@ -12,6 +12,10 @@ defmodule PhoenixReplay.Web.Live.Frame do
   `replay_render/1`, which the frame calls in place of `render/1`; see
   `PhoenixReplay.Web.Rendering.render/2`.
 
+  Form control values the browser recorded are pushed to the frame's
+  script with a `"phx_replay:inputs"` event after each render, which puts
+  them back into the replayed page; see `PhoenixReplay.Recording.State`.
+
   LiveComponents in the template render through
   `PhoenixReplay.Web.Live.ReplayComponent` with their recorded assigns; see
   `PhoenixReplay.Web.Rendering`. A template that fails with the recorded
@@ -24,7 +28,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   use Phoenix.LiveView
 
-  alias PhoenixReplay.Recording.Timeline
+  alias PhoenixReplay.Recording.{State, Timeline}
   alias PhoenixReplay.Catalog
   alias PhoenixReplay.Web.{Context, Layouts, Rendering}
   alias PhoenixReplay.Web.Player.Channel
@@ -111,10 +115,10 @@ defmodule PhoenixReplay.Web.Live.Frame do
     """
   end
 
-  defp private(nil), do: %{recording: nil, timeline: nil, keys: []}
+  defp private(nil), do: %{recording: nil, timeline: nil, keys: [], inputs: %{}}
 
   defp private(recording),
-    do: %{recording: recording, timeline: Timeline.new(recording), keys: []}
+    do: %{recording: recording, timeline: Timeline.new(recording), keys: [], inputs: %{}}
 
   defp show(socket, index) do
     %{timeline: timeline, keys: previous_keys} = private = socket.private[@private]
@@ -132,6 +136,17 @@ defmodule PhoenixReplay.Web.Live.Frame do
     |> refresh_components(states)
     |> put_private(@private, %{private | timeline: timeline, keys: keys})
     |> check_render()
+    |> push_inputs(State.inputs(timeline.assigns[State.assign()]))
+  end
+
+  # The values typed into form controls are not in the assigns; the frame's
+  # script puts them back after LiveView applied the render.
+  defp push_inputs(%{private: %{@private => %{inputs: inputs}}} = socket, inputs), do: socket
+
+  defp push_inputs(socket, inputs) do
+    socket
+    |> push_event("phx_replay:inputs", %{values: inputs})
+    |> put_private(@private, %{socket.private[@private] | inputs: inputs})
   end
 
   defp replace_flash(socket, flash) do

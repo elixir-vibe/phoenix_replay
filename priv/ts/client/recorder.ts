@@ -1,28 +1,32 @@
 /**
  * Records what only the browser knows for PhoenixReplay: the pointer,
- * touches and scrolling, and state that code in the page reports.
+ * touches and scrolling, what is typed and chosen in form controls, and
+ * state that code in the page reports with `replayState`.
  *
  *     import { replayRecorder } from "phoenix_replay"
  *
  *     replayRecorder(liveSocket)
  *
- * Nothing is recorded until a recorded LiveView mounts and sends what to
- * record. It then dispatches `phx_replay:start` on `window`, with the
- * state settings as its detail, `{ state: StateSettings | null }`, and
- * `phx_replay:stop` when recording ends: when the page leaves the
- * LiveView, by navigating to another, which starts again if it is
- * recorded too, or by losing its connection, after which the rejoined
- * view starts again. While recording, `<html>` carries a
- * `data-phx-replay` attribute holding the start detail as JSON, for code
- * that loads later. Other code can use either without importing this
- * module, to report its state; see `./state`.
+ * Nothing is sent until a recorded LiveView mounts and says what to
+ * record. Reported state is kept until then, so a recording starts with
+ * the state as it is; code that reports it needs to know nothing about
+ * recording. See `./state` and `./inputs`.
+ *
+ * Recording ends when the page leaves the LiveView, by navigating to
+ * another, which starts again if it is recorded too, or by losing its
+ * connection, after which the rejoined view starts again. `window` gets
+ * `phx_replay:start`, with `{ state: StateSettings | null }`, and
+ * `phx_replay:stop`, and `<html>` carries a `data-phx-replay` attribute
+ * holding the start detail as JSON while recording, for code that wants
+ * to know.
  *
  * Batches go back over the LiveView socket as events PhoenixReplay's
  * recorder takes before the view sees them.
  */
 
+import { InputRecorder } from './inputs'
 import { type PointerSettings, PointerRecorder, type Push } from './pointer'
-import { type StateSettings, StateRecorder } from './state'
+import { type StateSettings, StateRecorder, StateStore } from './state'
 
 /** Dispatched on `window` when recording starts. */
 export const START_EVENT = 'phx_replay:start'
@@ -63,6 +67,9 @@ export const replayRecorder = (
   target: Window = window
 ): (() => void) => {
   let recorders: { stop(): void }[] | undefined
+  // Kept whether or not the page is recorded, so recording starts with the
+  // state as it is and reporters never need to know when it starts.
+  const store = new StateStore(target)
 
   const push: Push = (event, value) => {
     const main = target.document.querySelector('[data-phx-main]')
@@ -72,6 +79,7 @@ export const replayRecorder = (
   const stop = (): void => {
     if (!recorders) return
     for (const recorder of recorders) recorder.stop()
+    store.detach()
     recorders = undefined
     target.document.documentElement.removeAttribute(RECORDING_ATTRIBUTE)
     target.dispatchEvent(new CustomEvent(STOP_EVENT))
@@ -81,10 +89,15 @@ export const replayRecorder = (
     stop()
     const { pointer, state } = (event as CustomEvent<Partial<RecordSettings>>).detail ?? {}
 
-    recorders = [
-      ...(pointer ? [new PointerRecorder(push, target, pointer)] : []),
-      ...(state ? [new StateRecorder(push, target, state)] : [])
-    ]
+    recorders = pointer ? [new PointerRecorder(push, target, pointer)] : []
+
+    if (state) {
+      const recorder = new StateRecorder(push, target, state)
+      store.attach(recorder)
+      // Inputs stop before the state recorder, so their last changes go out.
+      if (state.inputs) recorders.push(new InputRecorder(target, state.debounce))
+      recorders.push(recorder)
+    }
 
     const detail: StartDetail = { state: state ?? null }
     target.document.documentElement.setAttribute(RECORDING_ATTRIBUTE, JSON.stringify(detail))
@@ -93,7 +106,11 @@ export const replayRecorder = (
 
   const leave = (event: Event): void => {
     const kind = (event as CustomEvent<{ kind?: string }>).detail?.kind
-    if (kind === undefined || !SAME_VIEW.has(kind)) stop()
+    if (kind !== undefined && SAME_VIEW.has(kind)) return
+
+    stop()
+    // Navigating to another LiveView leaves its components, and their state, behind.
+    if (kind === 'redirect') store.clear()
   }
 
   target.addEventListener(`phx:${RECORD_EVENT}`, start)
@@ -101,6 +118,7 @@ export const replayRecorder = (
 
   return () => {
     stop()
+    store.close()
     target.removeEventListener(`phx:${RECORD_EVENT}`, start)
     target.removeEventListener('phx:page-loading-start', leave)
   }

@@ -15,7 +15,9 @@ defmodule PhoenixReplay.Session.TailSampling do
   """
 
   alias PhoenixReplay.{Config, Recording}
-  alias PhoenixReplay.Recording.Event
+  alias PhoenixReplay.Recording.{Event, State}
+
+  @inputs_key State.inputs_key()
 
   @type reason :: :not_interactive | :not_sampled
 
@@ -51,9 +53,9 @@ defmodule PhoenixReplay.Session.TailSampling do
   `:rate`.
 
   A session is interactive once it handled an event, navigated within the
-  LiveView, that is, after more than its initial `handle_params/3`, or
-  changed client state it had reported before; see
-  `PhoenixReplay.Capture.State`.
+  LiveView, that is, after more than its initial `handle_params/3`, had a
+  form control changed, or changed client state it had reported before;
+  see `PhoenixReplay.Capture.State`.
   """
   @spec decision(observation(), Config.keep(), float()) :: :keep | {:discard, reason()}
   def decision(observation, keep, draw) do
@@ -90,7 +92,7 @@ defmodule PhoenixReplay.Session.TailSampling do
     Enum.reduce(entries, acc, fn [_dt, key, _changes], acc ->
       %{
         acc
-        | event?: acc.event? or MapSet.member?(acc.state_keys, key),
+        | event?: acc.event? or key == @inputs_key or MapSet.member?(acc.state_keys, key),
           state_keys: MapSet.put(acc.state_keys, key)
       }
     end)

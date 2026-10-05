@@ -1,11 +1,13 @@
 defmodule PhoenixReplay.Capture.State do
   @moduledoc """
-  Records state that lives only in the browser, such as the refs of a
-  client-side component, which replaying the view's `render/1` cannot
-  rebuild.
+  Records state that lives only in the browser, which replaying the view's
+  `render/1` cannot rebuild.
 
-  Code in the browser reports it with a window event, so it needs no
-  dependency on PhoenixReplay:
+  The client module's `replayRecorder/1` records what is typed and chosen
+  in form controls on its own, under
+  `PhoenixReplay.Recording.State.inputs_key/0`. App code reports other
+  state with `replayState(key, changes)`, and code that cannot import
+  PhoenixReplay, such as another library, with a window event:
 
       window.dispatchEvent(
         new CustomEvent("phx_replay:state", {
@@ -14,11 +16,12 @@ defmodule PhoenixReplay.Capture.State do
       )
 
   `key` names the state, and `changes` holds its fields to merge into what
-  was recorded under `key` before: a shallow delta. The client module's
-  `replayRecorder/1` listens while the page's LiveView is recorded,
-  timestamps each entry and sends them in batches as a `"phx_replay:state"`
-  event, which `PhoenixReplay.Recorder` hands here and halts, so the view
-  never sees it. A batch is:
+  was recorded under `key` before: a shallow delta. The client keeps the
+  latest state of each key, so a recording starts with the state as it
+  is; while the page's LiveView is recorded it timestamps each entry and
+  sends them in batches as a `"phx_replay:state"` event, which
+  `PhoenixReplay.Recorder` hands here and halts, so the view never sees
+  it. A batch is:
 
     * `"span"` — milliseconds from the batch's first entry to sending it
     * `"e"` — entries, `[dt, key, changes]`, `dt` counting milliseconds
@@ -33,9 +36,9 @@ defmodule PhoenixReplay.Capture.State do
   `PhoenixReplay.Redactor` when it is saved.
 
   Each batch is recorded as a `:state` event, outside `:max_events`, up to
-  `:limit` per session. A change to a key reported before makes a session
-  interactive for `:keep`, as typing into a box only the browser knows
-  about is; the first report of each key does not. See
+  `:limit` per session. A changed form control, or a change to a key
+  reported before, makes a session interactive for `:keep`; the first
+  report of any other key, the state the page started with, does not. See
   `PhoenixReplay.Recording.State` for how the player replays them.
   """
 
@@ -53,7 +56,16 @@ defmodule PhoenixReplay.Capture.State do
   @doc "The settings the browser records with, for `Phoenix.LiveView.push_event/3`."
   @spec settings(Config.state()) :: map()
   def settings(state),
-    do: Map.take(state, [:flush, :max_entries, :max_key, :max_entry_bytes, :max_bytes])
+    do:
+      Map.take(state, [
+        :flush,
+        :max_entries,
+        :max_key,
+        :max_entry_bytes,
+        :max_bytes,
+        :inputs,
+        :debounce
+      ])
 
   @doc "Records a batch sent by the browser for the session `pid` records."
   @spec capture(pid(), map(), Config.state()) :: :ok | :dropped | :error

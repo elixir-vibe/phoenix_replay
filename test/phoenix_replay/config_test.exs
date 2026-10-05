@@ -123,6 +123,13 @@ defmodule PhoenixReplay.ConfigTest do
     end
   end
 
+  test "records form controls with client state unless told not to" do
+    assert %{inputs: true, debounce: 300} = Config.new([]).state
+    assert %{inputs: false, flush: 1_000} = Config.new(state: [inputs: false]).state
+    assert_raise ArgumentError, ~r/:inputs/, fn -> Config.new(state: [inputs: :yes]) end
+    assert_raise ArgumentError, ~r/:debounce/, fn -> Config.new(state: [debounce: 0]) end
+  end
+
   test "rejects unknown keys and invalid values" do
     assert_raise ArgumentError, ~r/:max_events/, fn -> Config.new(max_events: 0) end
     assert_raise ArgumentError, ~r/:unknown/, fn -> Config.new(unknown: true) end

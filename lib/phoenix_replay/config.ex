@@ -55,11 +55,17 @@ defmodule PhoenixReplay.Config do
         (default `500`)
       * `:limit` — batches recorded per session (default `3_600`, an hour
         of movement at the default `:flush`)
-    * `:state` — records state that lives only in the browser, which other
-      libraries report with a `phx_replay:state` window event, when
-      `replayRecorder/1` runs in the browser; see
+    * `:state` — records state that lives only in the browser, when the
+      client module's `replayRecorder/1` runs: what is typed and chosen in
+      form controls, and what app code reports with `replayState/2`; see
       `PhoenixReplay.Capture.State`. On by default; `false` records none,
       and a keyword list sets any of:
+      * `:inputs` — whether form controls are recorded (default `true`).
+        Passwords, hidden inputs and card fields are never read; see
+        "Client state" in the recording guide
+      * `:debounce` — milliseconds a form control must stay unchanged
+        before its value is recorded, so typing a sentence is one entry
+        (default `300`)
       * `:flush` — milliseconds between the batches the browser sends
         (default `1_000`)
       * `:max_entries` — entries a batch may hold; a fuller batch is sent
@@ -139,7 +145,9 @@ defmodule PhoenixReplay.Config do
     max_key: 64,
     max_entry_bytes: 8_192,
     max_bytes: 65_536,
-    limit: 3_600
+    limit: 3_600,
+    inputs: true,
+    debounce: 300
   }
   @landing %{params: [], referrer: true, attribution: :first}
   @off [nil, false]
@@ -182,7 +190,9 @@ defmodule PhoenixReplay.Config do
           max_key: pos_integer(),
           max_entry_bytes: pos_integer(),
           max_bytes: pos_integer(),
-          limit: pos_integer()
+          limit: pos_integer(),
+          inputs: boolean(),
+          debounce: pos_integer()
         }
 
   @type landing :: %{
@@ -335,7 +345,7 @@ defmodule PhoenixReplay.Config do
     do: %{config | pointer: switch(:pointer, value, config.pointer, @pointer, &positive?/2)}
 
   defp put({:state, value}, config),
-    do: %{config | state: switch(:state, value, config.state, @state, &positive?/2)}
+    do: %{config | state: switch(:state, value, config.state, @state, &valid_state?/2)}
 
   defp put({:flush, value}, config),
     do: %{config | flush: switch(:flush, value, config.flush, @flush, &positive?/2)}
@@ -391,6 +401,9 @@ defmodule PhoenixReplay.Config do
   defp valid_logs?(:limit, value), do: pos_integer?(value)
 
   defp positive?(_key, value), do: pos_integer?(value)
+
+  defp valid_state?(:inputs, value), do: is_boolean(value)
+  defp valid_state?(key, value), do: positive?(key, value)
 
   defp header(name) when is_binary(name) or is_atom(name) do
     name = name |> to_string() |> String.downcase()

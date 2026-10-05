@@ -6,7 +6,7 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   alias PhoenixReplay.Collector
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.Event
+  alias PhoenixReplay.Recording.{Event, State}
   alias PhoenixReplay.Web.Format
 
   @typedoc "What the event list filters by."
@@ -106,7 +106,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   def changed_keys(%Event{type: type, data: %{assigns: assigns}}) when type in [:mount, :render],
     do: Map.keys(assigns)
 
-  def changed_keys(%Event{type: :state}), do: [PhoenixReplay.Recording.State.assign()]
+  def changed_keys(%Event{type: :state}), do: [State.assign()]
   def changed_keys(_event), do: []
 
   @doc "Whether an event's label contains `query`, ignoring case."
@@ -175,8 +175,10 @@ defmodule PhoenixReplay.Web.Player.Events do
   @spec label(Event.t()) :: String.t()
   def label(%Event{type: :mount}), do: "mount"
 
-  def label(%Event{type: :state, data: %{key: key, changes: changes}}),
-    do: "#{key}: #{changes |> Map.keys() |> Enum.sort() |> Enum.join(", ")}"
+  def label(%Event{type: :state, data: %{key: key, changes: changes}}) do
+    fields = changes |> Map.keys() |> Enum.sort() |> Enum.join(", ")
+    if key == State.inputs_key(), do: "input #{fields}", else: "#{key}: #{fields}"
+  end
 
   def label(%Event{type: :params, data: %{uri: uri}}), do: "navigate → #{uri}"
   def label(%Event{type: :info, data: %{tag: nil}}), do: "handle_info"

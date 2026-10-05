@@ -67,6 +67,39 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     refute render(view) =~ "value="
   end
 
+  test "hands the frame's script the form values recorded up to each position" do
+    inputs = PhoenixReplay.Recording.State.inputs_key()
+
+    recording = Fixtures.counter_recording(id: "typed", clicks: 1)
+
+    typed = %Event{
+      at: 3_000,
+      type: :state,
+      data: %{span: 0, entries: [[0, inputs, %{"#q" => %{"q" => "shoes"}}]]}
+    }
+
+    # The replay places state by its time, after the click at 1 s.
+    save(%{recording | events: [typed | recording.events]})
+
+    # Before anything was typed there is nothing to put back.
+    {:ok, view, _html} = live(build_conn(), "/replay/typed/frame?channel=c-inputs")
+    refute_push_event(view, "phx_replay:inputs", %{})
+
+    seek("c-inputs", 4)
+    render(view)
+    assert_push_event(view, "phx_replay:inputs", %{values: %{"#q" => %{"q" => "shoes"}}})
+
+    # Nothing new to put back: the frame's script is not told again.
+    seek("c-inputs", 4)
+    render(view)
+    refute_push_event(view, "phx_replay:inputs", %{})
+
+    seek("c-inputs", 1)
+    render(view)
+    assert_push_event(view, "phx_replay:inputs", %{values: values})
+    assert values == %{}
+  end
+
   test "renders the recorded view at each position" do
     save(Fixtures.counter_recording(id: "frame", clicks: 2))
     {:ok, view, html} = live(build_conn(), "/replay/frame/frame?channel=c1")
