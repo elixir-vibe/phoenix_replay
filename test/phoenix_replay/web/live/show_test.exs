@@ -113,7 +113,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     assert has_element?(view, ~s(#replay-assigns div[data-assign="count"]))
     assert has_element?(view, ~s(#replay-assigns div[data-assign="note"]))
-    assert has_element?(view, ~s(#replay-assigns details summary[data-assign="items"]))
+    assert has_element?(view, ~s(#replay-assigns details summary [data-assign="items"]))
     assert has_element?(view, ~s(#replay-assigns span.l-number), "0")
     assert has_element?(view, "#theme-toggle[data-theme-toggle]")
   end

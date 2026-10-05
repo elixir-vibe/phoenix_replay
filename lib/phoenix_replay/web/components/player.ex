@@ -486,19 +486,23 @@ defmodule PhoenixReplay.Web.Components.Player do
     >
       <li :for={row <- @rows}>
         <details :if={row.full} class="group">
-          <summary
-            data-assign={row.key}
-            class={[
-              "grid cursor-pointer list-none grid-cols-[0.75rem_minmax(0,8rem)_minmax(0,1fr)] gap-2 px-3.5 py-1.5 hover:bg-hover",
-              row.key in @changed && "bg-accent-soft"
-            ]}
-          >
-            <.icon
-              name="lucide:chevron-right"
-              class="mt-0.5 size-3 text-muted transition-transform group-open:rotate-90"
-            />
-            <span class={["truncate", row.key in @changed && "text-accent"]}>{row.key}</span>
-            <span class="truncate">{row.preview}</span>
+          <summary class="cursor-pointer list-none">
+            <div
+              data-assign={row.key}
+              class={[
+                "grid grid-cols-[0.75rem_minmax(0,8rem)_minmax(0,1fr)] gap-2 px-3.5 py-1.5 hover:bg-hover",
+                row.key in @changed && "bg-accent-soft"
+              ]}
+            >
+              <.icon
+                name="lucide:chevron-right"
+                class="mt-0.5 size-3 text-muted transition-transform group-open:rotate-90"
+              />
+              <span class={["truncate", row.key in @changed && "text-accent"]}>{row.key}</span>
+              <span class="truncate">{row.preview}</span>
+            </div>
+            <%!-- What changed stays in view whether the value is open or not. --%>
+            <.changes :if={row.changes != []} key={row.key} changes={row.changes} more={row.more} />
           </summary>
           <pre
             :if={!row.lines}
@@ -510,12 +514,6 @@ defmodule PhoenixReplay.Web.Components.Player do
             class="mx-3.5 my-1 overflow-x-auto rounded-md bg-canvas py-2 leading-relaxed whitespace-pre-wrap text-ink"
           ><.diff_line :for={line <- row.lines} line={line} /></pre>
         </details>
-        <.changes
-          :if={row.full && row.changes != []}
-          key={row.key}
-          changes={row.changes}
-          more={row.more}
-        />
         <div
           :if={!row.full}
           data-assign={row.key}
