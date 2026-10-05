@@ -13,9 +13,10 @@ defmodule PhoenixReplay.Session.Buffer do
 
     * `{{id, :meta}, pid, recording}` — one per session
     * `{{id, :config}, config}` — the configuration the session records with
-    * `{{id, :seq}, seq, live, bytes}` — events stored so far, LiveView
-      events seen so far including those beyond `:max_events`, and the
-      external size of the events still buffered, which `memory/0` counts
+    * `{{id, :seq}, seq, live, bytes, flushed}` — events stored so far,
+      LiveView events seen so far including those beyond `:max_events`, the
+      external size of the events still buffered, which `memory/0` counts,
+      and the events flushed to storage
     * `{{:process, pid}, id, started_at, max_events}` — finds the session
       of the calling process, small enough to read on every event
     * `{{:collected, id, name}, count, limit}` — events a collector captured
@@ -57,7 +58,7 @@ defmodule PhoenixReplay.Session.Buffer do
     :ets.insert(@table, [
       {{id, :meta}, pid, %{recording | events: []}},
       {{id, :config}, config},
-      {{id, :seq}, 0, 0, 0},
+      {{id, :seq}, 0, 0, 0, 0},
       {{id, :state}, draw, Summary.totals([])},
       {{:process, pid}, id, System.monotonic_time(:millisecond), config.max_events}
     ])
@@ -136,7 +137,7 @@ defmodule PhoenixReplay.Session.Buffer do
   """
   @spec memory() :: non_neg_integer()
   def memory do
-    events = :ets.select(@table, fun(do: ({{_id, :seq}, _seq, _live, bytes} -> bytes)))
+    events = :ets.select(@table, fun(do: ({{_id, :seq}, _seq, _live, bytes, _flushed} -> bytes)))
     :ets.info(@table, :memory) * :erlang.system_info(:wordsize) + Enum.sum(events)
   end
 
@@ -170,9 +171,17 @@ defmodule PhoenixReplay.Session.Buffer do
     end
   end
 
-  @doc "Counts the session's buffered events."
+  @doc """
+  Counts the session's buffered events from its counters, without reading
+  them. An event being written concurrently may already be counted.
+  """
   @spec pending_count(Recording.id()) :: non_neg_integer()
-  def pending_count(id), do: :ets.select_count(@table, events_of(id))
+  def pending_count(id) do
+    case :ets.lookup(@table, {id, :seq}) do
+      [{_key, seq, _live, _bytes, flushed}] -> seq - flushed
+      [] -> 0
+    end
+  end
 
   @doc "Returns the session's draw for `keep: [rate: ...]`, made when it opened."
   @spec draw(Recording.id()) :: {:ok, float()} | :error
@@ -220,7 +229,7 @@ defmodule PhoenixReplay.Session.Buffer do
     bytes = Enum.sum_by(events, &:erlang.external_size/1)
 
     try do
-      :ets.update_counter(@table, {id, :seq}, {4, -bytes})
+      :ets.update_counter(@table, {id, :seq}, [{4, -bytes}, {5, length(chunk)}])
       :ok
     rescue
       # The session closed while its chunk was written.

@@ -105,7 +105,17 @@ defmodule PhoenixReplay.Session.Monitor do
   defp watch(%{tracks: tracks} = state, _pid, id) when is_map_key(tracks, id), do: state
 
   defp watch(state, pid, id) do
+    # A session's configuration is fixed when it opens, so each check reads
+    # it from here rather than copying it out of the buffer.
+    {flush, keep} =
+      case Buffer.config(id) do
+        {:ok, config} -> {if(Storage.chunked?(config.storage), do: config.flush), config.keep}
+        :error -> {nil, nil}
+      end
+
     track = %{
+      flush: flush,
+      keep: keep,
       observation: Keep.new(),
       checked: -1,
       committed?: Buffer.flushed?(id),
@@ -127,9 +137,9 @@ defmodule PhoenixReplay.Session.Monitor do
   # One timer runs while a watched session flushes, at the shortest
   # interval among them, so each session's own `:flush` applies.
   defp keep_ticking(state, id) do
-    case Buffer.config(id) do
-      {:ok, %{flush: %{interval: interval}}} -> schedule_tick(state, min(interval, @max_tick))
-      _no_flush -> state
+    case state.tracks do
+      %{^id => %{flush: %{interval: interval}}} -> schedule_tick(state, min(interval, @max_tick))
+      %{} -> state
     end
   end
 
@@ -142,18 +152,16 @@ defmodule PhoenixReplay.Session.Monitor do
 
   ## Flushing
 
+  defp check(state, _id, %{flush: nil}), do: state
   defp check(state, _id, %{flushing?: true}), do: state
   defp check(state, _id, %{ended?: true}), do: state
 
   defp check(state, id, track) do
-    with {:ok, config} <- Buffer.config(id),
-         %{} = flush <- config.flush,
-         true <- Storage.chunked?(config.storage),
-         true <- due?(Buffer.pending_count(id), flush, track) do
-      track = observe(track, id, config)
+    if due?(Buffer.pending_count(id), track.flush, track) do
+      track = observe(track, id)
       if track.committed?, do: start_flush(state, id, track), else: put_track(state, id, track)
     else
-      _not_due -> state
+      state
     end
   end
 
@@ -162,18 +170,18 @@ defmodule PhoenixReplay.Session.Monitor do
   defp due?(pending, flush, track),
     do: pending >= flush.events or now() - track.flushed_at >= flush.interval
 
-  defp observe(%{committed?: true} = track, _id, _config), do: track
+  defp observe(%{committed?: true} = track, _id), do: track
 
-  defp observe(track, id, config) do
+  defp observe(track, id) do
     events = Buffer.pending(id, track.checked)
-    observation = Keep.observe(track.observation, Enum.map(events, &elem(&1, 1)), config.keep)
+    observation = Keep.observe(track.observation, Enum.map(events, &elem(&1, 1)), track.keep)
     {:ok, draw} = Buffer.draw(id)
 
     %{
       track
       | observation: observation,
         checked: Enum.reduce(events, track.checked, fn {seq, _event}, acc -> max(seq, acc) end),
-        committed?: Keep.decision(observation, config.keep, draw) == :keep
+        committed?: Keep.decision(observation, track.keep, draw) == :keep
     }
   end
 
