@@ -10,16 +10,24 @@ defmodule PhoenixReplay.Web.Player.Events do
   alias PhoenixReplay.Web.Format
 
   @typedoc "What the event list filters by."
-  @type kind :: String.t()
+  @type kind :: :liveview | :telemetry | :logs
 
-  @doc """
-  The kind an event type is filtered as: `"liveview"`, `"telemetry"` or
-  `"logs"`.
-  """
+  @kinds [:liveview, :telemetry, :logs]
+
+  @doc "The kind an event type is filtered as."
   @spec kind(Event.type()) :: kind()
-  def kind(:telemetry), do: "telemetry"
-  def kind(:log), do: "logs"
-  def kind(_type), do: "liveview"
+  def kind(:telemetry), do: :telemetry
+  def kind(:log), do: :logs
+  def kind(_type), do: :liveview
+
+  @doc "Reads a kind sent by the browser, or returns `:error`."
+  @spec parse_kind(String.t()) :: {:ok, kind()} | :error
+  def parse_kind(name) do
+    case Enum.find(@kinds, &(Atom.to_string(&1) == name)) do
+      nil -> :error
+      kind -> {:ok, kind}
+    end
+  end
 
   @doc "The kinds in a recording, LiveView first."
   @spec kinds(Recording.t()) :: [kind()]
@@ -27,7 +35,7 @@ defmodule PhoenixReplay.Web.Player.Events do
     events
     |> Enum.map(&kind(&1.type))
     |> Enum.uniq()
-    |> Enum.sort_by(&(&1 != "liveview"))
+    |> Enum.sort_by(&(&1 != :liveview))
   end
 
   @typedoc "An event with its index in the recording."
@@ -78,9 +86,9 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   @doc "The colour class of a kind's swatch."
   @spec kind_class(kind()) :: String.t()
-  def kind_class("liveview"), do: "bg-kind-event"
-  def kind_class("telemetry"), do: "bg-kind-query"
-  def kind_class("logs"), do: "bg-kind-log"
+  def kind_class(:liveview), do: "bg-kind-event"
+  def kind_class(:telemetry), do: "bg-kind-query"
+  def kind_class(:logs), do: "bg-kind-log"
 
   @doc "The index of the first event that reports an error, or `nil`."
   @spec first_error_index(Recording.t()) :: non_neg_integer() | nil
@@ -136,9 +144,9 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   @doc "A kind's name in the filter."
   @spec kind_label(kind()) :: String.t()
-  def kind_label("liveview"), do: "LiveView"
-  def kind_label("telemetry"), do: "Telemetry"
-  def kind_label("logs"), do: "Logs"
+  def kind_label(:liveview), do: "LiveView"
+  def kind_label(:telemetry), do: "Telemetry"
+  def kind_label(:logs), do: "Logs"
 
   @doc """
   Whether an event was collected from telemetry or logs. Collected events

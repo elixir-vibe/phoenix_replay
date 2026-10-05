@@ -180,15 +180,11 @@ defmodule PhoenixReplay.Web.Live.Show do
     {:noreply, assign(socket, :query, String.trim(query))}
   end
 
-  def handle_event("toggle_kind", %{"kind" => kind}, socket) do
-    hidden = socket.assigns.hidden
-
-    hidden =
-      if MapSet.member?(hidden, kind),
-        do: MapSet.delete(hidden, kind),
-        else: MapSet.put(hidden, kind)
-
-    {:noreply, assign(socket, :hidden, hidden)}
+  def handle_event("toggle_kind", %{"kind" => name}, socket) do
+    case Events.parse_kind(name) do
+      {:ok, kind} -> {:noreply, update(socket, :hidden, &toggle(&1, kind))}
+      :error -> {:noreply, socket}
+    end
   end
 
   def handle_event("delete", _params, socket) do
@@ -432,4 +428,8 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   defp frame_src(%{context: context, id: id, channel: channel}),
     do: Context.path(context, [id, "frame"]) <> "?channel=#{channel}"
+
+  defp toggle(set, member) do
+    if MapSet.member?(set, member), do: MapSet.delete(set, member), else: MapSet.put(set, member)
+  end
 end
