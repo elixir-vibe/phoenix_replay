@@ -201,14 +201,28 @@ defmodule PhoenixReplay.Config do
   `overrides` take precedence over the environment. Module-keyed entries,
   such as an endpoint configured with `otp_app: :phoenix_replay`, belong to
   those modules and are skipped.
+
+  It runs on every request and mount, so the result is kept for each set
+  of `overrides` and built again only when the environment changes.
   """
   @spec load(keyword()) :: t()
   def load(overrides \\ []) when is_list(overrides) do
-    :phoenix_replay
-    |> Application.get_all_env()
-    |> Enum.reject(fn {key, _value} -> module_key?(key) end)
-    |> Kernel.++(overrides)
-    |> new()
+    env =
+      :phoenix_replay
+      |> Application.get_all_env()
+      |> Enum.reject(fn {key, _value} -> module_key?(key) end)
+
+    key = {__MODULE__, :erlang.phash2(overrides)}
+
+    case :persistent_term.get(key, nil) do
+      {^env, ^overrides, config} ->
+        config
+
+      _stale ->
+        config = new(env ++ overrides)
+        :persistent_term.put(key, {env, overrides, config})
+        config
+    end
   end
 
   @doc """
