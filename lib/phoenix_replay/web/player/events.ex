@@ -171,20 +171,69 @@ defmodule PhoenixReplay.Web.Player.Events do
     if Event.error?(event), do: @error_marker, else: type_marker_class(event.type)
   end
 
+  @typedoc "A piece of an event's row: words in the interface's font, or code in monospace."
+  @type part :: {:text, String.t()} | {:code, Phoenix.HTML.safe()}
+
   @doc """
-  What a code event's row shows: its summary highlighted, when a collector
-  said what language it is in, or `nil` for the rest, which show `label/1`.
+  An event's row, as words and code: the action in the interface's font,
+  and what it acted on in monospace, coloured as Lumis colours code. Logs
+  and exit reasons read as text. `label/1` is the same in plain text.
   """
-  @spec code_label(Event.t()) :: Phoenix.HTML.safe() | nil
-  def code_label(%Event{type: :telemetry, data: %{summary: summary} = data})
-      when is_binary(summary) do
-    case language(data) do
-      nil -> nil
-      language -> summary |> String.replace(~r/\s+/, " ") |> Highlight.code(language)
-    end
+  @spec parts(Event.t()) :: [part()]
+  def parts(%Event{type: :mount}), do: [{:text, "mount"}]
+
+  def parts(%Event{type: :event, data: %{name: name, params: params} = data}) do
+    target =
+      case data do
+        %{target: {module, id}} -> [{:text, "→"}, {:code, component_code(module, id)}]
+        %{} -> []
+      end
+
+    [{:text, name} | target] ++ params_parts(params)
   end
 
-  def code_label(%Event{}), do: nil
+  def parts(%Event{type: :params, data: %{uri: uri}}),
+    do: [{:text, "navigate →"}, {:code, escape(uri)}]
+
+  def parts(%Event{type: :info, data: %{tag: nil}}), do: [{:text, "handle_info"}]
+
+  def parts(%Event{type: :info, data: %{tag: tag}}),
+    do: [{:text, "handle_info"}, {:code, Highlight.term(tag, limit: 5, printable_limit: 60)}]
+
+  def parts(%Event{type: :render, data: %{assigns: assigns}}),
+    do: [{:text, "assigns"}, {:code, names_code(assigns)}]
+
+  def parts(%Event{type: :component, data: %{module: module, id: id, assigns: assigns}}),
+    do: [{:code, component_code(module, id)}, {:text, "assigns"}, {:code, names_code(assigns)}]
+
+  def parts(%Event{type: :component_destroyed, data: %{module: module, id: id}}),
+    do: [{:code, component_code(module, id)}, {:text, "removed"}]
+
+  def parts(%Event{type: :telemetry, data: %{summary: summary} = data} = event)
+      when is_binary(summary) do
+    summary =
+      case language(data) do
+        nil -> {:text, summary}
+        language -> {:code, summary |> String.replace(~r/\s+/, " ") |> Highlight.code(language)}
+      end
+
+    [summary | error_parts(event)]
+  end
+
+  def parts(%Event{type: :viewport, data: %{width: width, height: height}}),
+    do: [{:text, "viewport"}, {:code, token("number", "#{width} × #{height}")}]
+
+  def parts(%Event{type: :state, data: %{key: key, changes: changes}}) do
+    if key == State.inputs_key(),
+      do: [{:text, "input"} | Enum.map(changes, &{:code, input_code(&1)})],
+      else: [
+        {:code,
+         {:safe, safe([token("variable-member", key), token("punctuation-delimiter", ":")])}}
+        | Enum.map(Enum.sort(changes), &{:code, field_code(&1)})
+      ]
+  end
+
+  def parts(%Event{} = event), do: [{:text, label(event)}]
 
   @doc "One-line description of an event."
   @spec label(Event.t()) :: String.t()
@@ -323,4 +372,74 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   defp state_value(value) when is_binary(value), do: inspect(String.slice(value, 0, 40))
   defp state_value(value), do: value |> inspect(limit: 5) |> String.slice(0, 40)
+
+  defp error_parts(%Event{data: %{error: error}}) when is_binary(error),
+    do: [{:text, "— " <> error}]
+
+  defp error_parts(%Event{}), do: []
+
+  defp params_parts(params) do
+    case params
+         |> Enum.reject(fn {key, _value} -> String.starts_with?(key, "_") end)
+         |> Enum.flat_map(&flatten_param/1) do
+      [] ->
+        []
+
+      pairs ->
+        code =
+          pairs
+          |> Enum.map(fn {key, value} ->
+            [token("variable-member", key), "=", token("string", String.slice(value, 0, 40))]
+          end)
+          |> Enum.intersperse(token("punctuation-delimiter", ", "))
+
+        [{:code, {:safe, safe(code)}}]
+    end
+  end
+
+  defp names_code(assigns) do
+    names =
+      assigns
+      |> Map.keys()
+      |> Enum.sort()
+      |> Enum.map(&token("string-special-symbol", to_string(&1)))
+      |> Enum.intersperse(token("punctuation-delimiter", ", "))
+
+    {:safe, safe(names)}
+  end
+
+  defp component_code(module, id) do
+    id = if is_binary(id), do: id, else: inspect(id)
+
+    {:safe,
+     safe([
+       token("module", inspect(module)),
+       token("punctuation-special", "#"),
+       token("string", id)
+     ])}
+  end
+
+  defp input_code({selector, %{} = fields}) do
+    values =
+      Enum.map(fields, fn {_name, value} ->
+        Highlight.term(value, limit: 5, printable_limit: 40)
+      end)
+
+    {:safe, safe([token("variable-member", selector), " " | Enum.intersperse(values, ", ")])}
+  end
+
+  defp input_code({selector, _filtered}), do: token("variable-member", selector)
+
+  defp field_code({field, value}),
+    do: {:safe, safe([escape(field), " ", Highlight.term(value, limit: 5, printable_limit: 40)])}
+
+  # A span with one of Lumis's classes, for code built here rather than parsed.
+  defp token(class, text),
+    do: {:safe, ["<span class=\"l-", class, "\">", safe(escape(text)), "</span>"]}
+
+  defp escape(text), do: Phoenix.HTML.html_escape(text)
+
+  defp safe(list) when is_list(list), do: Enum.map(list, &safe/1)
+  defp safe({:safe, data}), do: data
+  defp safe(text) when is_binary(text), do: text
 end

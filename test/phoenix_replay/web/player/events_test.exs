@@ -156,11 +156,47 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
     assert html.(details["Metadata"]) =~ ~s(<span class="l-string">&quot;users&quot;</span>)
 
     # One line in the event list.
-    assert html.(Events.code_label(sql)) =~ ~r/id<\/span> <span class="l-keyword">FROM/
-    assert Events.code_label(%{sql | data: %{sql.data | language: nil}}) == nil
+    assert [{:code, row}] = Events.parts(sql)
+    assert html.(row) =~ ~r/id<\/span> <span class="l-keyword">FROM/
+
+    assert [{:text, "SELECT id\n  FROM users"}] =
+             Events.parts(%{sql | data: %{sql.data | language: nil}})
 
     # Recorded before collectors named a language: Ecto's queries still are SQL.
     legacy = %{sql | data: Map.delete(sql.data, :language)}
-    assert html.(Events.code_label(legacy)) =~ "l-keyword"
+    assert [{:code, legacy_row}] = Events.parts(legacy)
+    assert html.(legacy_row) =~ "l-keyword"
+  end
+
+  test "splits rows into the action and the code it acted on" do
+    text = fn parts ->
+      Enum.map(parts, fn
+        {:text, text} ->
+          {:text, text}
+
+        {:code, safe} ->
+          {:code, safe |> Phoenix.HTML.safe_to_string() |> String.replace(~r/<[^>]+>/, "")}
+      end)
+    end
+
+    assert text.(
+             Events.parts(
+               event(0, :event, %{name: "toggle", params: %{"id" => "7", "_target" => "x"}})
+             )
+           ) ==
+             [{:text, "toggle"}, {:code, "id=7"}]
+
+    assert text.(Events.parts(event(0, :info, %{tag: :task_updated}))) ==
+             [{:text, "handle_info"}, {:code, ":task_updated"}]
+
+    assert text.(Events.parts(event(0, :render, %{assigns: %{tasks: [], filter: "all"}}))) ==
+             [{:text, "assigns"}, {:code, "filter, tasks"}]
+
+    assert text.(Events.parts(event(0, :params, %{params: %{}, uri: "http://x/<b>"}))) ==
+             [{:text, "navigate →"}, {:code, "http://x/&lt;b&gt;"}]
+
+    # Prose stays prose.
+    assert Events.parts(event(0, :log, %{level: :info, message: "Saved", metadata: %{}})) ==
+             [{:text, "[info] Saved"}]
   end
 end

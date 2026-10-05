@@ -416,7 +416,7 @@ defmodule PhoenixReplay.Web.Components.Player do
       assign(assigns,
         ev: event,
         index: index,
-        code: Events.code_label(event),
+        parts: Events.parts(event),
         details: if(index == assigns.current, do: Events.details(event), else: [])
       )
 
@@ -437,8 +437,12 @@ defmodule PhoenixReplay.Web.Components.Player do
       ]}
     >
       <.event_icon type={@ev.type} class="size-3.5 shrink-0 opacity-70" />
-      <span :if={@code} class="min-w-0 flex-1 truncate font-mono text-xs">{@code}</span>
-      <span :if={!@code} class="min-w-0 flex-1 truncate">{Events.label(@ev)}</span>
+      <span class="min-w-0 flex-1 truncate" title={Events.label(@ev)}>
+        <%= for {kind, content} <- @parts do %>
+          <span :if={kind == :text}>{content}</span>
+          <code :if={kind == :code} class="font-mono text-xs">{content}</code>
+        <% end %>
+      </span>
       <span
         :if={duration = Event.duration(@ev)}
         class="shrink-0 font-mono text-[11px] tabular-nums text-muted"
