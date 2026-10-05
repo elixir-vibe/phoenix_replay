@@ -218,3 +218,16 @@ test('forgets reported state when the page navigates to another LiveView', () =>
 
   expect(states(pushed).length).toBe(1)
 })
+
+test("puts back the form values a replay frame pushes, in the app's own layout", () => {
+  setup()
+  const note = document.createElement('textarea')
+  note.id = 'note'
+  document.body.append(note)
+
+  window.dispatchEvent(
+    new CustomEvent('phx:phx_replay:inputs', { detail: { values: { '#note': { note: 'typed' } } } })
+  )
+
+  expect(note.value).toBe('typed')
+})

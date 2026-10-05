@@ -3,7 +3,7 @@ import { LiveSocket } from 'phoenix_live_view'
 
 import { confirmClicks } from './dom/confirm'
 import { copyLinks } from './dom/copy'
-import { replayInputs } from './dom/replay_inputs'
+import { replayInputs } from './client/replay_inputs'
 import { searchShortcut } from './dom/shortcut'
 import { EventList } from './hooks/event_list'
 import { FrameViewport } from './hooks/frame_viewport'
