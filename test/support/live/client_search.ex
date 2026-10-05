@@ -6,6 +6,7 @@ defmodule PhoenixReplay.Test.Live.ClientSearch do
   """
 
   use Phoenix.LiveView
+  @behaviour PhoenixReplay.Replayable
 
   @impl true
   def mount(_params, _session, socket), do: {:ok, assign(socket, title: "Shop", query: nil)}
@@ -22,7 +23,7 @@ defmodule PhoenixReplay.Test.Live.ClientSearch do
   Renders the search box as the browser reported it, deriving `@query`
   from the reported state as views typically do.
   """
-  @spec replay_render(map()) :: Phoenix.LiveView.Rendered.t()
+  @impl PhoenixReplay.Replayable
   def replay_render(assigns) do
     assigns = assign(assigns, :query, get_in(assigns.phoenix_replay_state, ["search", "query"]))
 

@@ -186,9 +186,12 @@ A library that wants to know anyway can: `replayRecorder` dispatches `phx_replay
 
 ### Rendering what the browser did
 
-The replay merges the state recorded up to the current moment into a reserved assign, `@phoenix_replay_state`: a map of each key to its merged fields, string keys throughout, empty before any report. A view whose live render depends on code in the browser defines `replay_render/1`, which the replay calls instead of `render/1` with the same assigns plus that one:
+The replay merges the state recorded up to the current moment into a reserved assign, `@phoenix_replay_state`: a map of each key to its merged fields, string keys throughout, empty before any report. A view whose live render depends on code in the browser defines `replay_render/1`, the optional callback of `PhoenixReplay.Replayable`, which the replay calls instead of `render/1` with the same assigns plus that one:
 
 ```elixir
+@behaviour PhoenixReplay.Replayable
+
+@impl PhoenixReplay.Replayable
 def replay_render(assigns) do
   query = get_in(assigns.phoenix_replay_state, ["search", "query"])
 

@@ -52,6 +52,7 @@ model = [
 # Behaviours and their built-in implementations.
 logic = [
   "PhoenixReplay.Authorization",
+  "PhoenixReplay.Replayable",
   "PhoenixReplay.Collector*",
   "PhoenixReplay.Redactor*",
   "PhoenixReplay.Sanitizer*",
