@@ -22,6 +22,8 @@ defmodule PhoenixReplay.Recording.Timeline do
     * `:assigns` — the view's assigns after it, with the client state
       reported up to it merged into the reserved
       `PhoenixReplay.Recording.State.assign/0`
+    * `:before` — the view's assigns before it, which the event changed
+      into `:assigns`
     * `:components` — LiveComponent assigns after it, keyed by
       `{module, id}`
     * `:url` — the page URL: the last navigation up to it, or the URL the
@@ -35,6 +37,7 @@ defmodule PhoenixReplay.Recording.Timeline do
           index: integer(),
           event: Event.t() | nil,
           assigns: map(),
+          before: map(),
           components: %{{module(), term()} => map()},
           url: String.t() | nil,
           viewport: Recording.viewport() | nil
@@ -49,6 +52,7 @@ defmodule PhoenixReplay.Recording.Timeline do
     :viewport,
     index: -1,
     assigns: %{@state => %{}},
+    before: %{@state => %{}},
     components: %{}
   ]
 
@@ -120,6 +124,7 @@ defmodule PhoenixReplay.Recording.Timeline do
       | index: -1,
         event: nil,
         assigns: %{@state => %{}},
+        before: %{@state => %{}},
         components: %{},
         url: start.url,
         viewport: start.viewport
@@ -127,7 +132,7 @@ defmodule PhoenixReplay.Recording.Timeline do
   end
 
   defp apply_event(timeline, %Event{} = event) do
-    timeline = %{timeline | index: timeline.index + 1, event: event}
+    timeline = %{timeline | index: timeline.index + 1, event: event, before: timeline.assigns}
 
     case event do
       %Event{type: :mount, data: %{assigns: assigns}} ->

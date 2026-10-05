@@ -13,6 +13,7 @@
 - A button in the dashboard's header switches between the light and dark themes, overriding the system's appearance; the browser remembers the choice.
 - SQL, collected metadata and the assigns in the player's **State** tab are highlighted with Lumis in a monospace font, in colours that follow the theme. Collected SQL is monospaced in the event list too. `PhoenixReplay.Collector.Captured` has a `:language` field, `:sql` for `PhoenixReplay.Collector.Ecto`, that turns highlighting on for a collector's summary.
 - In the **State** tab, only values their row cannot show whole are expandable.
+- The **State** tab shows what the current event changed inside each assign, such as `tasks[id: 2].done: false → true`, matching list items by `id`, and an expanded assign marks its removed and added lines.
 - `PhoenixReplay.Storage` has an optional `child_spec/1` callback for a process the backend needs, which the application starts. File storage starts its summary index this way; a file storage used while its index is not running, such as one configured by hand next to another backend, reads summaries from disk.
 
 ### Changed

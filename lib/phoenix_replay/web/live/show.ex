@@ -254,6 +254,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       viewport: timeline.viewport,
       url: timeline.url,
       replayed: shown_assigns(timeline.assigns),
+      before: timeline.before,
       changed: Events.changed_keys(timeline.event)
     )
   end
@@ -417,7 +418,13 @@ defmodule PhoenixReplay.Web.Live.Show do
             query={@query}
             errors_only={@errors_only}
           />
-          <.state :if={@tab == "state"} assigns={@replayed} changed={@changed} at={@at} />
+          <.state
+            :if={@tab == "state"}
+            assigns={@replayed}
+            before={@before}
+            changed={@changed}
+            at={@at}
+          />
           <.visit
             :if={@tab == "visit"}
             recording={@recording}

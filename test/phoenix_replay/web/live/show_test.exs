@@ -118,6 +118,37 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert has_element?(view, "#theme-toggle[data-theme-toggle]")
   end
 
+  test "shows what an event changed inside an assign, and the whole value with changes marked" do
+    recording = Fixtures.counter_recording(id: "changed", clicks: 1)
+    tasks = for id <- 1..3, do: %{id: id, title: "Task #{id}", done: false}
+    done = List.update_at(tasks, 1, &%{&1 | done: true})
+
+    events = [
+      hd(recording.events),
+      %Event{at: 5, type: :render, data: %{assigns: %{tasks: tasks, count: 0}}},
+      %Event{at: 9, type: :event, data: %{name: "toggle", params: %{"id" => "2"}}},
+      %Event{at: 10, type: :render, data: %{assigns: %{tasks: done}}}
+    ]
+
+    Storage.save(Fixtures.storage(), %{recording | events: events})
+    {:ok, view, _html} = live(build_conn(), "/replay/changed?at=3")
+    open_tab(view, "State")
+
+    changes = view |> element(~s([data-changes="tasks"])) |> render()
+    assert changes =~ "tasks[id: 2].done"
+
+    assert changes =~
+             ~s(<span class="l-boolean">false</span> → <span class="l-boolean">true</span>)
+
+    diff = view |> element("[data-diff]") |> render()
+    assert diff =~ ~s(data-op="del")
+    assert diff =~ ~s(data-op="ins")
+
+    # Where the assign first appears, there is nothing to compare it with.
+    render_click(view, "seek", %{"index" => "1"})
+    refute has_element?(view, "[data-changes]")
+  end
+
   test "lists client state in a lane of its own, as steps" do
     recording = Fixtures.counter_recording(id: "stateful", clicks: 1)
     inputs = PhoenixReplay.Recording.State.inputs_key()
