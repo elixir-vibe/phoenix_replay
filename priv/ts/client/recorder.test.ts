@@ -162,16 +162,17 @@ test('keeps recording through page loading that stays on the LiveView', () => {
   expect(states(pushed).flatMap(({ e }) => e).length).toBe(1)
 })
 
-test('stops when the LiveView rejoins or loses its connection', () => {
-  for (const kind of ['initial', 'error', 'redirect']) {
-    const pushed = setup()
-    record()
-    loading(kind)
-    report('k', { n: 1 })
-    stop()
+// initial: the view rejoins; error: it lost its connection; redirect: it
+// navigated to another LiveView.
+test.each(['initial', 'error', 'redirect'])('stops on %s page loading', (kind) => {
+  const pushed = setup()
+  record()
+  loading(String(kind))
+  report('k', { n: 1 })
+  // Stopping flushes what is pending, so a recording still running would send it.
+  stop()
 
-    expect(states(pushed)).toEqual([])
-  }
+  expect(states(pushed)).toEqual([])
 })
 
 test('marks the page while recording, for code that loads later', () => {
