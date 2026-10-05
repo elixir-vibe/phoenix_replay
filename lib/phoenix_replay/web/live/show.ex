@@ -91,7 +91,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   defp loaded(socket, recording) do
     # Stepping and seeking follow LiveView events; the overlay plays the
     # pointer track against the same clock.
-    {recording, pointer} = Pointer.split(recording)
+    {recording, pointer} = Playback.prepare(recording)
 
     socket
     |> assign(
@@ -254,7 +254,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       next_at: next_at(timeline, socket.assigns.duration_ms),
       viewport: timeline.viewport,
       url: timeline.url,
-      replayed: timeline.assigns,
+      replayed: shown_assigns(timeline.assigns),
       changed: Events.changed_keys(timeline.event)
     )
   end
@@ -439,4 +439,10 @@ defmodule PhoenixReplay.Web.Live.Show do
     filters = Map.take(assigns, [:hidden, :query, :errors_only])
     assign(socket, :event_groups, Events.visible(interactions, filters))
   end
+
+  # The client state assign is listed once the browser reported some.
+  defp shown_assigns(%{phoenix_replay_state: state} = assigns) when state == %{},
+    do: Map.delete(assigns, :phoenix_replay_state)
+
+  defp shown_assigns(assigns), do: assigns
 end

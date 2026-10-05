@@ -10,14 +10,18 @@ defmodule PhoenixReplay.Recording.Timeline do
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.Event
+  alias PhoenixReplay.Recording.{Event, State}
+
+  @state State.assign()
 
   @typedoc """
   A position in a recording:
 
     * `:index` — the current event's index, `-1` before the first
     * `:event` — the current event, or `nil`
-    * `:assigns` — the view's assigns after it
+    * `:assigns` — the view's assigns after it, with the client state
+      reported up to it merged into the reserved
+      `PhoenixReplay.Recording.State.assign/0`
     * `:components` — LiveComponent assigns after it, keyed by
       `{module, id}`
     * `:url` — the page URL: the last navigation up to it, or the URL the
@@ -37,7 +41,16 @@ defmodule PhoenixReplay.Recording.Timeline do
         }
 
   @enforce_keys [:events, :start]
-  defstruct [:events, :start, :event, :url, :viewport, index: -1, assigns: %{}, components: %{}]
+  defstruct [
+    :events,
+    :start,
+    :event,
+    :url,
+    :viewport,
+    index: -1,
+    assigns: %{@state => %{}},
+    components: %{}
+  ]
 
   @doc "A timeline of `recording`, before its first event."
   @spec new(Recording.t()) :: t()
@@ -93,7 +106,7 @@ defmodule PhoenixReplay.Recording.Timeline do
       timeline
       | index: -1,
         event: nil,
-        assigns: %{},
+        assigns: %{@state => %{}},
         components: %{},
         url: start.url,
         viewport: start.viewport
@@ -105,7 +118,10 @@ defmodule PhoenixReplay.Recording.Timeline do
 
     case event do
       %Event{type: :mount, data: %{assigns: assigns}} ->
-        %{timeline | assigns: assigns}
+        %{timeline | assigns: Map.put(assigns, @state, timeline.assigns[@state])}
+
+      %Event{type: :state, data: %{key: _key}} ->
+        %{timeline | assigns: Map.update!(timeline.assigns, @state, &State.apply(&1, event))}
 
       %Event{type: :render, data: %{assigns: assigns}} ->
         %{timeline | assigns: Map.merge(timeline.assigns, assigns)}

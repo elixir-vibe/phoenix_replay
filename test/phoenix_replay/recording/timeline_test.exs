@@ -16,9 +16,9 @@ defmodule PhoenixReplay.Recording.TimelineTest do
         %Event{at: 3, type: :render, data: %{assigns: %{b: 2}}}
       ])
 
-    assert Timeline.at(recording, 0).assigns == %{a: 0}
-    assert Timeline.at(recording, 2).assigns == %{a: 1, b: 1}
-    assert Timeline.at(recording, 3).assigns == %{a: 1, b: 2}
+    assert Timeline.at(recording, 0).assigns == %{a: 0, phoenix_replay_state: %{}}
+    assert Timeline.at(recording, 2).assigns == %{a: 1, b: 1, phoenix_replay_state: %{}}
+    assert Timeline.at(recording, 3).assigns == %{a: 1, b: 2, phoenix_replay_state: %{}}
   end
 
   test "duration, indexes and clamping" do

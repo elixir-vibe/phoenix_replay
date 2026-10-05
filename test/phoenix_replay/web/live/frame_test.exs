@@ -25,6 +25,48 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     Playback.seek(channel, index)
   end
 
+  test "replays client state through replay_render/1, under change tracking" do
+    save(%PhoenixReplay.Recording{
+      id: "client",
+      view: PhoenixReplay.Test.Live.ClientSearch,
+      connected_at: 0,
+      events: [
+        %Event{at: 0, type: :mount, data: %{assigns: %{}}},
+        %Event{at: 5, type: :render, data: %{assigns: %{title: "Shop"}}},
+        %Event{
+          at: 300,
+          type: :state,
+          data: %{
+            span: 200,
+            entries: [[0, "search", %{"query" => "sh"}], [200, "search", %{"page" => 2}]]
+          }
+        },
+        %Event{
+          at: 400,
+          type: :state,
+          data: %{span: 0, entries: [[0, "search", %{"query" => "shoes"}]]}
+        }
+      ]
+    })
+
+    {:ok, view, html} = live(build_conn(), "/replay/client/frame?channel=c-state")
+    assert html =~ "<h1>Shop</h1>"
+    refute html =~ "value="
+
+    # The entries land at 100, 300 and 400 ms: indexes 2, 3 and 4.
+    seek("c-state", 2)
+    assert render(view) =~ ~s(value="sh")
+    refute render(view) =~ ~s(<span id="page">2</span>)
+
+    seek("c-state", 4)
+    html = render(view)
+    assert html =~ ~s(value="shoes")
+    assert html =~ ~s(<span id="page">2</span>)
+
+    seek("c-state", 1)
+    refute render(view) =~ "value="
+  end
+
   test "renders the recorded view at each position" do
     save(Fixtures.counter_recording(id: "frame", clicks: 2))
     {:ok, view, html} = live(build_conn(), "/replay/frame/frame?channel=c1")

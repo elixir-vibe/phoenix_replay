@@ -8,6 +8,10 @@ defmodule PhoenixReplay.Web.Live.Frame do
   `socket.private`, except for the single `:phoenix_replay_frame` assign that
   the layout and the fallback template need.
 
+  A view whose live render depends on code in the browser can define
+  `replay_render/1`, which the frame calls in place of `render/1`; see
+  `PhoenixReplay.Web.Rendering.render/2`.
+
   LiveComponents in the template render through
   `PhoenixReplay.Web.Live.ReplayComponent` with their recorded assigns; see
   `PhoenixReplay.Web.Rendering`. A template that fails with the recorded
@@ -21,7 +25,6 @@ defmodule PhoenixReplay.Web.Live.Frame do
   use Phoenix.LiveView
 
   alias PhoenixReplay.Recording.Timeline
-  alias PhoenixReplay.Recording.Pointer
   alias PhoenixReplay.Recordings
   alias PhoenixReplay.Web.{Context, Layouts, Playback, Rendering}
   alias PhoenixReplay.Web.Live.ReplayComponent
@@ -30,11 +33,11 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
-    # Indexed like the player's, without the pointer track.
+    # Indexed like the player's.
     recording =
       if Recordings.live?(id),
         do: nil,
-        else: socket |> Context.fetch_recording!(id) |> Pointer.split() |> elem(0)
+        else: socket |> Context.fetch_recording!(id) |> Playback.prepare() |> elem(0)
 
     if connected?(socket) and is_binary(params["channel"]) do
       :ok = Playback.subscribe(params["channel"])
@@ -96,7 +99,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
   end
 
   def render(%{@private => %{error: nil, view: view, components: states}} = assigns),
-    do: assigns |> view.render() |> Rendering.rewrite(states)
+    do: view |> Rendering.render(assigns) |> Rendering.rewrite(states)
 
   def render(assigns) do
     ~H"""

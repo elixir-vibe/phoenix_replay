@@ -10,9 +10,9 @@ defmodule PhoenixReplay.Web.Player.Events do
   alias PhoenixReplay.Web.Format
 
   @typedoc "What the event list filters by."
-  @type kind :: :liveview | :telemetry | :logs
+  @type kind :: :liveview | :state | :telemetry | :logs
 
-  @kinds [:liveview, :telemetry, :logs]
+  @kinds [:liveview, :state, :telemetry, :logs]
 
   # Events that start an interaction; the rest follow the one before them.
   @starts [:mount, :event, :params, :info]
@@ -22,6 +22,7 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   @doc "The kind an event type is filtered as."
   @spec kind(Event.type()) :: kind()
+  def kind(:state), do: :state
   def kind(:telemetry), do: :telemetry
   def kind(:log), do: :logs
   def kind(_type), do: :liveview
@@ -92,6 +93,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   @doc "The colour class of a kind's swatch."
   @spec kind_class(kind()) :: String.t()
   def kind_class(:liveview), do: "bg-kind-event"
+  def kind_class(:state), do: "bg-kind-component"
   def kind_class(:telemetry), do: "bg-kind-query"
   def kind_class(:logs), do: "bg-kind-log"
 
@@ -104,6 +106,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   def changed_keys(%Event{type: type, data: %{assigns: assigns}}) when type in [:mount, :render],
     do: Map.keys(assigns)
 
+  def changed_keys(%Event{type: :state}), do: [PhoenixReplay.Recording.State.assign()]
   def changed_keys(_event), do: []
 
   @doc "Whether an event's label contains `query`, ignoring case."
@@ -142,6 +145,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   @doc "A kind's name in the filter."
   @spec kind_label(kind()) :: String.t()
   def kind_label(:liveview), do: "LiveView"
+  def kind_label(:state), do: "Client state"
   def kind_label(:telemetry), do: "Telemetry"
   def kind_label(:logs), do: "Logs"
 
@@ -170,6 +174,10 @@ defmodule PhoenixReplay.Web.Player.Events do
   @doc "One-line description of an event."
   @spec label(Event.t()) :: String.t()
   def label(%Event{type: :mount}), do: "mount"
+
+  def label(%Event{type: :state, data: %{key: key, changes: changes}}),
+    do: "#{key}: #{changes |> Map.keys() |> Enum.sort() |> Enum.join(", ")}"
+
   def label(%Event{type: :params, data: %{uri: uri}}), do: "navigate → #{uri}"
   def label(%Event{type: :info, data: %{tag: nil}}), do: "handle_info"
   def label(%Event{type: :info, data: %{tag: tag}}), do: "handle_info #{inspect(tag)}"
@@ -242,6 +250,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   defp type_marker_class(:log), do: "size-1 bg-kind-log"
   defp type_marker_class(:exit), do: @error_marker
   defp type_marker_class(:viewport), do: "size-1 bg-kind-render"
+  defp type_marker_class(:state), do: "size-1 bg-kind-component"
 
   defp component_label(module, id) when is_binary(id), do: "#{inspect(module)}##{id}"
   defp component_label(module, id), do: "#{inspect(module)}##{inspect(id)}"
