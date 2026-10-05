@@ -74,7 +74,9 @@ defmodule PhoenixReplay.RedactorTest do
     test = self()
 
     assert {:ok, redacted} =
-             Redactor.redact_recording(recording, @cards, &send(test, {:progress, &1, &2}))
+             Redactor.redact_recording(recording, @cards,
+               progress: &send(test, {:progress, &1, &2})
+             )
 
     assert redacted.url == "http://x/[REDACTED]"
     assert redacted.params == %{"card" => "[REDACTED]"}

@@ -77,7 +77,7 @@ defmodule PhoenixReplay.Recordings do
   def fetch(%Config{storage: storage}, id, opts \\ []) do
     with {:ok, recording} <- Buffer.fetch(id),
          {:ok, config} <- Buffer.config(id) do
-      complete(recording, config, Keyword.get(opts, :progress, fn _done, _total -> :ok end))
+      complete(recording, config, Keyword.take(opts, [:progress]))
     else
       :error -> Storage.fetch(storage, id)
     end
@@ -88,16 +88,12 @@ defmodule PhoenixReplay.Recordings do
   buffer and puts the chunks already flushed to storage, which were
   redacted when they were written, before them.
 
-  `progress` is called as the buffered events are redacted.
+  Takes the `:progress` option of
+  `PhoenixReplay.Redactor.redact_recording/3`.
   """
-  @spec complete(Recording.t(), Config.t(), Redactor.progress()) ::
-          {:ok, Recording.t()} | {:error, term()}
-  def complete(
-        %Recording{} = recording,
-        %Config{} = config,
-        progress \\ fn _done, _total -> :ok end
-      ) do
-    with {:ok, redacted} <- redact(recording, config.redact, progress),
+  @spec complete(Recording.t(), Config.t(), keyword()) :: {:ok, Recording.t()} | {:error, term()}
+  def complete(%Recording{} = recording, %Config{} = config, opts \\ []) do
+    with {:ok, redacted} <- Redactor.redact_recording(recording, config.redact, opts),
          {:ok, flushed} <- flushed_events(recording.id, config.storage) do
       {:ok, %{redacted | events: flushed ++ redacted.events}}
     end
@@ -132,13 +128,6 @@ defmodule PhoenixReplay.Recordings do
   @doc "Subscribes the caller to `:recordings_changed` messages."
   @spec subscribe() :: :ok | {:error, term()}
   def subscribe, do: Phoenix.PubSub.subscribe(PhoenixReplay.PubSub, @topic)
-
-  defp redact(recording, redactor, progress) do
-    case Redactor.redact_recording(recording, redactor, progress) do
-      {:ok, redacted} -> {:ok, redacted}
-      {:error, _reason} -> {:error, :redaction_failed}
-    end
-  end
 
   defp redact_url(%Summary{url: nil} = summary), do: summary
 

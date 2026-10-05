@@ -61,10 +61,7 @@ defmodule PhoenixReplay.Router do
   """
   @spec __live_sessions__(String.t(), keyword()) :: {atom(), atom(), keyword(), keyword()}
   def __live_sessions__(base_path, opts) do
-    case Keyword.keys(opts) -- @options do
-      [] -> :ok
-      unknown -> raise ArgumentError, "unknown phoenix_replay options: #{inspect(unknown)}"
-    end
+    Keyword.validate!(opts, @options)
 
     context = %{
       base_path: base_path,

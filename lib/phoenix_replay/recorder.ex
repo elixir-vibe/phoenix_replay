@@ -65,14 +65,7 @@ defmodule PhoenixReplay.Recorder do
   def on_mount(:default, params, session, socket), do: on_mount([], params, session, socket)
 
   def on_mount(opts, params, session, socket) when is_list(opts) do
-    case Keyword.keys(opts) -- @session_options do
-      [] ->
-        :ok
-
-      unknown ->
-        raise ArgumentError, "unknown PhoenixReplay.Recorder options: #{inspect(unknown)}"
-    end
-
+    Keyword.validate!(opts, @session_options)
     config = Config.load(opts)
 
     if connected?(socket) and sampled?(config.sample_rate) and memory?(config.max_memory),

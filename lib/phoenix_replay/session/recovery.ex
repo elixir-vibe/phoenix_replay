@@ -13,7 +13,7 @@ defmodule PhoenixReplay.Session.Recovery do
   require Logger
 
   alias PhoenixReplay.{Config, Storage, Telemetry}
-  alias PhoenixReplay.Recording.Event
+  alias PhoenixReplay.Recording.{Event, Timeline}
 
   @reason "The node stopped before the session ended. The recording ends at its last chunk written to storage."
 
@@ -36,8 +36,9 @@ defmodule PhoenixReplay.Session.Recovery do
   end
 
   defp interrupted(recording) do
-    at = Enum.reduce(recording.events, 0, &max(&1.at, &2))
-    exit = %Event{at: at, type: :exit, data: %{reason: @reason}}
-    %{recording | events: List.insert_at(recording.events, -1, exit)}
+    exit = %Event{at: Timeline.duration_ms(recording), type: :exit, data: %{reason: @reason}}
+    # The exit ends the recording; once per recovered session.
+    # credo:disable-for-next-line Credo.Check.Refactor.AppendSingleItem
+    %{recording | events: recording.events ++ [exit]}
   end
 end

@@ -31,7 +31,9 @@ defmodule PhoenixReplay.Collector.Ecto do
   def events(opts) do
     repo = Keyword.fetch!(opts, :repo)
     prefix = Keyword.fetch!(repo.config(), :telemetry_prefix)
-    [List.insert_at(prefix, -1, :query)]
+    # Telemetry names the event after the repo's prefix; once, at attach time.
+    # credo:disable-for-next-line Credo.Check.Refactor.AppendSingleItem
+    [prefix ++ [:query]]
   end
 
   @impl true

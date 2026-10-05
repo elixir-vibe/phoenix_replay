@@ -145,23 +145,28 @@ if Code.ensure_loaded?(Ecto.Query) do
 
     # The criteria SQL can check: all but text and the event name.
     defp matching(filter, page_opts) do
-      now = Keyword.fetch!(page_opts, :now)
-
       [
-        filter.view && dynamic([r], r.view == ^filter.view),
-        (after_ms = Filter.started_after(filter, now)) &&
-          dynamic([r], r.connected_at >= ^after_ms),
-        filter.min_events && dynamic([r], r.event_count >= ^filter.min_events),
-        filter.errors && dynamic([r], r.error_count > 0),
-        filter.tab && dynamic([r], r.tab == ^filter.tab),
-        (until = page_opts[:until]) &&
-          dynamic([r], coalesce(r.saved_at, r.connected_at) <= ^until),
-        (since = page_opts[:since]) &&
-          dynamic([r], coalesce(r.saved_at, r.connected_at) > ^since)
+        view: filter.view,
+        started_after: Filter.started_after(filter, Keyword.fetch!(page_opts, :now)),
+        min_events: filter.min_events,
+        errors: filter.errors,
+        tab: filter.tab,
+        until: page_opts[:until],
+        since: page_opts[:since]
       ]
-      |> Enum.filter(& &1)
-      |> Enum.reduce(from(r in @table), &where(&2, ^&1))
+      |> Enum.reject(fn {_criterion, value} -> value in [nil, false] end)
+      |> Enum.reduce(from(r in @table), fn {criterion, value}, query ->
+        where(query, ^criterion(criterion, value))
+      end)
     end
+
+    defp criterion(:view, view), do: dynamic([r], r.view == ^view)
+    defp criterion(:started_after, ms), do: dynamic([r], r.connected_at >= ^ms)
+    defp criterion(:min_events, count), do: dynamic([r], r.event_count >= ^count)
+    defp criterion(:errors, true), do: dynamic([r], r.error_count > 0)
+    defp criterion(:tab, tab), do: dynamic([r], r.tab == ^tab)
+    defp criterion(:until, ms), do: dynamic([r], coalesce(r.saved_at, r.connected_at) <= ^ms)
+    defp criterion(:since, ms), do: dynamic([r], coalesce(r.saved_at, r.connected_at) > ^ms)
 
     # Event names of the most recent recordings only: they are stored encoded.
     @facet_rows 500

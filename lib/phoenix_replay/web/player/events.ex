@@ -106,27 +106,33 @@ defmodule PhoenixReplay.Web.Player.Events do
   """
   @spec details(Event.t()) :: [{String.t(), String.t()}]
   def details(%Event{type: :telemetry, data: data} = event) do
-    [
+    present([
       {"Event", Collector.name(data.event)},
-      data.summary && {"Summary", data.summary},
-      (duration = Event.duration(event)) && {"Duration", Format.milliseconds(duration)},
-      data.error && {"Error", data.error},
-      data.metadata != %{} && {"Metadata", inspect(data.metadata, pretty: true, limit: 50)}
-    ]
-    |> Enum.filter(& &1)
+      {"Summary", data.summary},
+      {"Duration", event |> Event.duration() |> duration()},
+      {"Error", data.error},
+      {"Metadata", metadata(data.metadata)}
+    ])
   end
 
   def details(%Event{type: :log, data: data}) do
-    [
+    present([
       {"Level", to_string(data.level)},
       {"Message", data.message},
-      data.metadata != %{} && {"Metadata", inspect(data.metadata, pretty: true, limit: 50)}
-    ]
-    |> Enum.filter(& &1)
+      {"Metadata", metadata(data.metadata)}
+    ])
   end
 
   def details(%Event{type: :exit, data: %{reason: reason}}), do: [{"Reason", reason}]
   def details(%Event{}), do: []
+
+  defp present(details), do: Enum.reject(details, fn {_name, value} -> value == nil end)
+
+  defp duration(nil), do: nil
+  defp duration(ms), do: Format.milliseconds(ms)
+
+  defp metadata(metadata) when metadata == %{}, do: nil
+  defp metadata(metadata), do: inspect(metadata, pretty: true, limit: 50)
 
   @doc "A kind's name in the filter."
   @spec kind_label(kind()) :: String.t()
