@@ -4,10 +4,6 @@ import { DOWN, type Move, type Press, TOUCH, type Track } from '../client/pointe
 import { lastAtOrBefore } from '../timeline'
 import { TIME_EVENT } from './scrubber'
 
-/** How long a press ripple lasts, in milliseconds. */
-const RIPPLE_MS = 600
-/** How much of the path behind the cursor is drawn, in milliseconds. */
-const TRAIL_MS = 500
 /** Samples further apart are not interpolated between: the pointer rested. */
 const MAX_GAP_MS = 1_000
 const SVG = 'http://www.w3.org/2000/svg'
@@ -19,8 +15,11 @@ const ARROW = 'M0 0V16.5L4.6 12.2L7.6 18.8L10.3 17.6L7.4 11.1H13.2Z'
  * pressed element when the replayed page has it; a fingertip for each
  * touch that is down. It also scrolls the replayed page as recorded.
  *
- * The element carries the track as JSON in `data-track` and the recorded
- * viewport in `data-width` and `data-height`, and sits beside the frame
+ * The element carries the track as JSON in `data-track`, the recorded
+ * viewport in `data-width` and `data-height`, and how long the path behind
+ * the cursor and a press's ripple are drawn, in milliseconds, in
+ * `data-trail` and `data-ripple`, from `PhoenixReplay.Recording.PointerTrack`,
+ * whose values the video export plans with too. It sits beside the frame
  * as a `[data-frame-overlay]`, which FrameViewport sizes like the frame.
  * It follows the time the Scrubber announces, and reads its size on every
  * draw, so whoever holds it may resize it. It scrolls the page only while
@@ -34,11 +33,15 @@ export class Pointer extends ViewHook {
   private moves = new Map<number, Move[]>()
   private svg?: SVGSVGElement
   private at?: number
+  private trailMs = 0
+  private rippleMs = 0
   private readonly onTime = (event: Event): void =>
     this.render((event as CustomEvent<number>).detail)
 
   mounted(): void {
     this.track = { ...this.track, ...(JSON.parse(this.el.dataset.track ?? '{}') as Partial<Track>) }
+    this.trailMs = Number(this.el.dataset.trail)
+    this.rippleMs = Number(this.el.dataset.ripple)
 
     for (const move of this.track.moves) {
       const slot = this.moves.get(move[3]) ?? []
@@ -78,13 +81,13 @@ export class Pointer extends ViewHook {
     this.scroll(ms)
 
     const mouse = this.moves.get(0) ?? []
-    const trail = mouse.filter(([at]) => at > ms - TRAIL_MS && at <= ms)
+    const trail = mouse.filter(([at]) => at > ms - this.trailMs && at <= ms)
     if (trail.length > 1) svg.append(this.trail(trail))
 
     for (const press of this.track.presses) {
       const [at, kind] = press
-      if (kind === DOWN && at <= ms && ms - at < RIPPLE_MS)
-        svg.append(this.ripple(press, (ms - at) / RIPPLE_MS))
+      if (kind === DOWN && at <= ms && ms - at < this.rippleMs)
+        svg.append(this.ripple(press, (ms - at) / this.rippleMs))
     }
 
     for (const [slot, [x, y]] of this.touchesDown(ms)) svg.append(this.fingertip(slot, x, y))

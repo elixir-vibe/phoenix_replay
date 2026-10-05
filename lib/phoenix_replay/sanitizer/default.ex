@@ -23,18 +23,7 @@ defmodule PhoenixReplay.Sanitizer.Default do
                 cardnumber credit_card creditcard one_time)
   # Short names that would match inside other words, so only whole words.
   @sensitive_words ~w(cvv cvc csc ssn pin otp)
-  @opaque_structs [
-    Date,
-    DateTime,
-    Decimal,
-    MapSet,
-    NaiveDateTime,
-    Range,
-    Regex,
-    Time,
-    URI,
-    Version
-  ]
+  @opaque_structs PhoenixReplay.Recording.Value.opaque_structs()
 
   @impl true
   def sanitize_assigns(assigns) when is_map(assigns), do: sanitize_map(assigns)

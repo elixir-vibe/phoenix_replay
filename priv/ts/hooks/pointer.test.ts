@@ -28,7 +28,7 @@ const overlay = (): HTMLElement => {
   const box = html(`
     <div>
       <iframe srcdoc="<body style='height: 3000px'></body>" style="width: 200px; height: 200px"></iframe>
-      <div data-frame-overlay data-follow-scroll data-width="200" data-height="200" data-track='${JSON.stringify(track)}'></div>
+      <div data-frame-overlay data-follow-scroll data-width="200" data-height="200" data-trail="500" data-ripple="600" data-track='${JSON.stringify(track)}'></div>
     </div>
   `)
   document.body.append(box)

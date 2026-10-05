@@ -18,15 +18,7 @@ defmodule PhoenixReplay.Export.Schedule do
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{PointerTrack, Timeline}
-
-  # How long the player's pointer overlay animates after a move and a
-  # press; see `priv/ts/hooks/pointer.ts`.
-  @trail_ms 500
-  @ripple_ms 600
-
-  # The size a recording without a viewport is shown at.
-  @default_viewport %{width: 1280, height: 800, dpr: 1}
+  alias PhoenixReplay.Recording.{Client, PointerTrack, Timeline}
 
   @typedoc """
   One screenshot: the event `index` and the moment `at` of the recording
@@ -107,7 +99,7 @@ defmodule PhoenixReplay.Export.Schedule do
   # Every viewport the recording had, by event index: the client's until
   # the first `:viewport` event.
   defp viewports(%Recording{events: events, client: client}, rotated?) do
-    initial = client.viewport || @default_viewport
+    initial = client.viewport || Client.default_viewport()
 
     events
     |> Enum.scan(initial, fn
@@ -123,7 +115,7 @@ defmodule PhoenixReplay.Export.Schedule do
 
     case viewports do
       [] ->
-        Map.take(@default_viewport, [:width, :height])
+        Map.take(Client.default_viewport(), [:width, :height])
 
       viewports ->
         %{
@@ -138,8 +130,11 @@ defmodule PhoenixReplay.Export.Schedule do
 
   # The spans of recording time during which the pointer overlay animates.
   defp busy(%{moves: moves, presses: presses}) do
-    (Enum.map(moves, fn [at | _rest] -> {at, at + @trail_ms} end) ++
-       Enum.map(presses, fn [at | _rest] -> {at, at + @ripple_ms} end))
+    trail = PointerTrack.trail_ms()
+    ripple = PointerTrack.ripple_ms()
+
+    (Enum.map(moves, fn [at | _rest] -> {at, at + trail} end) ++
+       Enum.map(presses, fn [at | _rest] -> {at, at + ripple} end))
     |> merge()
   end
 

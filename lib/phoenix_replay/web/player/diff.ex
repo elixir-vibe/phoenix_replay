@@ -25,9 +25,8 @@ defmodule PhoenixReplay.Web.Player.Diff do
 
   @context 2
 
-  # Values compared whole: their fields mean nothing apart, as the minute
-  # of a timestamp does not.
-  @whole [Date, DateTime, Decimal, MapSet, NaiveDateTime, Range, Regex, Time, URI, Version]
+  # Values compared whole: their fields mean nothing apart.
+  @whole PhoenixReplay.Recording.Value.opaque_structs()
 
   @doc "The places where `after_value` differs from `before`, in order."
   @spec changes(term(), term()) :: [change()]

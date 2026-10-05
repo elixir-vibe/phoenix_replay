@@ -633,6 +633,8 @@ defmodule PhoenixReplay.Web.Components.Player do
           phx-update="ignore"
           data-frame-overlay
           data-track={JSON.encode!(@pointer)}
+          data-trail={PointerTrack.trail_ms()}
+          data-ripple={PointerTrack.ripple_ms()}
           data-rotated={@rotated}
           data-follow-scroll={@following?}
           data-width={@viewport.width}

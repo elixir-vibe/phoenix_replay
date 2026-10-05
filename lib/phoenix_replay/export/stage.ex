@@ -17,10 +17,8 @@ defmodule PhoenixReplay.Export.Stage do
   use Phoenix.LiveView
 
   alias PhoenixReplay.Export.Access
-  alias PhoenixReplay.Recording.{PointerTrack, Timeline}
+  alias PhoenixReplay.Recording.{Client, PointerTrack, Timeline}
   alias PhoenixReplay.Web.{Context, Layouts}
-
-  @default_viewport %{width: 1280, height: 800}
 
   @impl true
   def mount(%{"token" => token} = params, _session, socket) do
@@ -35,7 +33,7 @@ defmodule PhoenixReplay.Export.Stage do
        assets: Layouts.dashboard_assets(context),
        page_title: "Replay",
        frame_src: Context.path(context, ["frame", token, id]) <> "?" <> query,
-       viewport: recording.client.viewport || @default_viewport,
+       viewport: recording.client.viewport || Client.default_viewport(),
        track: track,
        pointer?: PointerTrack.any?(track),
        hidden?: params["pointer"] == "false",
@@ -71,6 +69,8 @@ defmodule PhoenixReplay.Export.Stage do
           data-follow-scroll
           data-rotated={@rotated?}
           data-track={JSON.encode!(@track)}
+          data-trail={PointerTrack.trail_ms()}
+          data-ripple={PointerTrack.ripple_ms()}
           data-width={@viewport.width}
           data-height={@viewport.height}
           style={"position: absolute; inset: 0; pointer-events: none; visibility: #{if @hidden?, do: "hidden", else: "visible"};"}

@@ -34,6 +34,12 @@ defmodule PhoenixReplay.Recording.Client do
 
   @campaign_keys ~w(utm_source utm_medium utm_campaign)
 
+  @default_viewport %{width: 1280, height: 800, dpr: 1}
+
+  @doc "The viewport a recording without one is shown at, such as in an export."
+  @spec default_viewport() :: PhoenixReplay.Recording.viewport()
+  def default_viewport, do: @default_viewport
+
   @doc """
   Brings a client context stored by an earlier version up to date: plain
   maps before 0.6, which named `:navigated_from` `:referer`.
