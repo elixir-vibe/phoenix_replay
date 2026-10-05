@@ -34,6 +34,10 @@ defmodule PhoenixReplay.Web.FormatTest do
     assert Format.viewport(%{width: 390, height: 844, dpr: 3}) == "390 × 844 @3x"
     assert Format.viewport(%{width: 1440, height: 900, dpr: 1}) == "1440 × 900"
     assert Format.viewport(%{width: 412, height: 915, dpr: 2.625}) == "412 × 915 @2.6x"
+    assert Format.orientation(%{width: 390, height: 844}) == :portrait
+    assert Format.orientation(%{width: 844, height: 390}) == :landscape
+    # As CSS has it, a square viewport is portrait.
+    assert Format.orientation(%{width: 600, height: 600}) == :portrait
 
     assert Format.path_of("http://www.example.com/tasks?filter=all") == "/tasks?filter=all"
   end

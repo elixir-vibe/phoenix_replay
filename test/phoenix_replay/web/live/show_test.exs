@@ -448,6 +448,30 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       assert device =~ "· Mobile Safari on iOS"
     end
 
+    test "shows whether the viewport is portrait or landscape at each moment" do
+      recording = Fixtures.counter_recording(id: "rotated")
+
+      rotated = %Event{
+        at: PhoenixReplay.Recording.Timeline.duration_ms(recording) + 1,
+        type: :viewport,
+        data: %{width: 844, height: 390, dpr: 3}
+      }
+
+      Storage.save(Fixtures.storage(), %{
+        recording
+        | client: client(%{width: 390, height: 844, dpr: 3}, nil),
+          events: List.insert_at(recording.events, -1, rotated)
+      })
+
+      {:ok, view, _html} = live(build_conn(), "/replay/rotated?at=0")
+      assert has_element?(view, ~s(#replay-orientation[data-orientation="portrait"]), "portrait")
+
+      render_click(view, "seek", %{"index" => length(recording.events)})
+      assert has_element?(view, ~s(#replay-viewport[data-width="844"][data-height="390"]))
+      assert has_element?(view, ~s(#replay-orientation[data-orientation="landscape"]))
+      assert render(view) =~ "landscape"
+    end
+
     test "shows how the visit started" do
       recording = Fixtures.counter_recording(id: "visit")
 

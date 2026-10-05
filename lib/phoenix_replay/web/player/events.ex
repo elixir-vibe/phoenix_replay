@@ -220,8 +220,12 @@ defmodule PhoenixReplay.Web.Player.Events do
     [summary | error_parts(event)]
   end
 
-  def parts(%Event{type: :viewport, data: %{width: width, height: height}}),
-    do: [{:text, "viewport"}, {:code, token("number", "#{width} × #{height}")}]
+  def parts(%Event{type: :viewport, data: %{width: width, height: height} = viewport}),
+    do: [
+      {:text, "viewport"},
+      {:code, token("number", "#{width} × #{height}")},
+      {:text, Atom.to_string(Format.orientation(viewport))}
+    ]
 
   def parts(%Event{type: :state, data: %{key: key, changes: changes}}) do
     if key == State.inputs_key(),
@@ -266,8 +270,8 @@ defmodule PhoenixReplay.Web.Player.Events do
   def label(%Event{type: :log, data: %{level: level, message: message}}),
     do: "[#{level}] #{message}"
 
-  def label(%Event{type: :viewport, data: %{width: width, height: height}}),
-    do: "viewport #{width} × #{height}"
+  def label(%Event{type: :viewport, data: %{width: width, height: height} = viewport}),
+    do: "viewport #{width} × #{height} #{Format.orientation(viewport)}"
 
   def label(%Event{type: :exit, data: %{reason: reason}}),
     do: "exited: " <> (reason |> String.split("\n", parts: 2) |> hd())

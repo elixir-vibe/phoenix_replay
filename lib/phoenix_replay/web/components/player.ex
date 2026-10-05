@@ -156,7 +156,10 @@ defmodule PhoenixReplay.Web.Components.Player do
   @spec replay_frame(map()) :: Phoenix.LiveView.Rendered.t()
   def replay_frame(assigns) do
     assigns =
-      assign(assigns, :pointer?, assigns.pointer != nil and PointerTrack.any?(assigns.pointer))
+      assign(assigns,
+        pointer?: assigns.pointer != nil and PointerTrack.any?(assigns.pointer),
+        orientation: assigns.viewport && Format.orientation(assigns.viewport)
+      )
 
     ~H"""
     <section
@@ -176,6 +179,21 @@ defmodule PhoenixReplay.Web.Components.Player do
           {@url || "—"}
         </span>
         <span class="hidden whitespace-nowrap lg:inline">Replayed from recorded assigns</span>
+        <span
+          :if={@viewport}
+          id="replay-orientation"
+          data-orientation={@orientation}
+          title={"The viewport at this moment is #{@orientation}"}
+          class="inline-flex items-center gap-1.5 whitespace-nowrap"
+        >
+          <.icon :if={@orientation == :portrait} name="lucide:rectangle-vertical" class="size-3.5" />
+          <.icon
+            :if={@orientation == :landscape}
+            name="lucide:rectangle-horizontal"
+            class="size-3.5"
+          />
+          <span class="hidden capitalize sm:inline">{@orientation}</span>
+        </span>
         <span
           :if={@viewport}
           id="replay-viewport-scale"

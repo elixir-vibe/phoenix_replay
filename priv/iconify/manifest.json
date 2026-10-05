@@ -255,6 +255,30 @@
     },
     {
       "hidden": false,
+      "name": "lucide:rectangle-horizontal",
+      "left": 0,
+      "width": 24,
+      "body": "<rect width=\"20\" height=\"12\" x=\"2\" y=\"6\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" rx=\"2\"/>",
+      "height": 24,
+      "top": 0,
+      "rotate": 0,
+      "h_flip": false,
+      "v_flip": false
+    },
+    {
+      "hidden": false,
+      "name": "lucide:rectangle-vertical",
+      "left": 0,
+      "width": 24,
+      "body": "<rect width=\"12\" height=\"20\" x=\"6\" y=\"2\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" rx=\"2\"/>",
+      "height": 24,
+      "top": 0,
+      "rotate": 0,
+      "h_flip": false,
+      "v_flip": false
+    },
+    {
+      "hidden": false,
       "name": "lucide:rocket",
       "left": 0,
       "width": 24,
