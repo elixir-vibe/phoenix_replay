@@ -112,6 +112,8 @@ Off by default; `pointer: true` uses these defaults. Needs `replayRecorder(liveS
 ```elixir
 config :phoenix_replay,
   state: [
+    inputs: true,
+    debounce: 300,
     flush: 1_000,
     max_entries: 200,
     max_key: 64,
@@ -121,7 +123,7 @@ config :phoenix_replay,
   ]
 ```
 
-On by default; `state: false` records none. Needs `replayRecorder(liveSocket)` in the browser, and code that reports with a `phx_replay:state` window event. See [Recording](recording.md#client-state).
+On by default; `state: false` records none, and `inputs: false` records everything but form controls. Needs `replayRecorder(liveSocket)` in the browser. See [Recording](recording.md#client-state).
 
 ### Retention
 

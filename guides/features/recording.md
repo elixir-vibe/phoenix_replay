@@ -123,40 +123,51 @@ The player's clock runs to the end of the pointer track and of any client state,
 
 ## Client state
 
-Replay re-renders your view with its recorded assigns, so it cannot show state that lives only in the browser: the refs of a Vue or React component, a client-side search box, a draft kept in JavaScript. Code in the browser can report such state, and the replay shows it.
+Replay re-renders your view with its recorded assigns, so on its own it cannot show what lives only in the browser. PhoenixReplay covers that in three tiers, from no code to a little:
 
-Client state is recorded by default whenever `replayRecorder` runs; `state: false` turns it off, globally or per live session. The limits are configurable:
+1. **Form controls, automatically.** What users type and choose is recorded and put back into the replay, with no app code.
+2. **Your own client state, with one function.** State your JavaScript holds, such as a draft or a client-side selection, is one `replayState` call.
+3. **Libraries and JavaScript-driven effects.** A library reports with a DOM event, needing no dependency on PhoenixReplay, and a view renders what the browser did with `replay_render/1`.
 
-```elixir
-config :phoenix_replay,
-  state: [
-    flush: 1_000,            # ms between the batches the browser sends
-    max_entries: 200,        # entries a batch holds before it is sent early
-    max_key: 64,             # bytes a key may have
-    max_entry_bytes: 8_192,  # JSON size of one entry's changes; larger ones are dropped
-    max_bytes: 65_536,       # JSON size a batch holds before it is sent early
-    limit: 3_600             # batches recorded per session
-  ]
+All of it is recorded by default whenever `replayRecorder` runs; `state: false` turns it off, globally or per live session.
+
+### Form controls
+
+Text typed into inputs and textareas, checkboxes and radios, and options chosen in selects are recorded as users change them, whether or not the form has a `phx-change`, and the replay puts them back into the page after each render. A handler that validates without storing the value in assigns no longer replays as an empty box. Each control waits for a pause, `:debounce` milliseconds, so a typed sentence is one step on the player's timeline, not one per key.
+
+Some controls are never read in the browser at all, so their values never leave it:
+
+- password and hidden inputs, file inputs and buttons,
+- fields marked as card fields with `autocomplete="cc-…"`,
+- anything inside an element with a `data-phx-replay-ignore` attribute:
+
+```heex
+<div data-phx-replay-ignore>
+  <.input field={@form[:ssn]} label="Social security number" />
+</div>
 ```
 
-State goes through your `PhoenixReplay.Sanitizer`'s `sanitize_params/1` when it arrives and through your `PhoenixReplay.Redactor` when the session is saved. It does not count towards `:max_events`. Changing a key reported before makes a session interactive, as typing into a box only the browser knows about is; the first report of each key, the state the page started with, does not.
+The rest are recorded under their `name`, so your `PhoenixReplay.Sanitizer` filters names such as `token` or `api_key` the way it filters event params. `state: [inputs: false]` turns form controls off and keeps the rest of client state.
+
+The replay finds each control again by its `id`, or by its form's `id` and its own `name`; a checkbox also by its `value`, as checkboxes often share a name. A control with neither an `id` nor a form `id` and `name` is not recorded. Controls that a component renders under a changing `id` are not found again either.
+
+**The replay shows values, not what your JavaScript did with them.** If a script filters a list as the user types into a search box, the replay puts the query back into the box, but the list still shows every row, which looks like a wrong replay. Render that effect yourself with `replay_render/1`; see [Rendering what the browser did](#rendering-what-the-browser-did).
+
+### Your own client state
+
+State your JavaScript holds is one call. `replayState` merges its fields into what was reported under the key before, so report only what changed:
+
+```js
+import { replayState } from "phoenix_replay"
+
+replayState("draft", { body: editor.getText() })
+```
+
+Report whenever the state changes, without checking whether the page is recorded: PhoenixReplay keeps the latest state of each key, and a recording starts with the state as it is. State reported on one LiveView is forgotten when the page navigates to another.
 
 ### For library authors
 
-A library reports state with plain DOM events, so it needs no dependency on PhoenixReplay, in Elixir or in JavaScript.
-
-**Knowing when to report.** `replayRecorder` dispatches `phx_replay:start` on `window` when the page's LiveView is recorded, and `phx_replay:stop` when recording ends: when the page navigates to another LiveView, or loses its connection. A recorded LiveView starts again when it mounts; patches and events pushed with page loading keep the recording going. `phx_replay:start`'s detail is `{state: settings | null}`, the limits above with snake_case names, or `null` when client state is off.
-
-Code that loads after the start can ask instead: while recording, `<html>` carries a `data-phx-replay` attribute holding the same detail as JSON.
-
-```js
-const recording = document.documentElement.dataset.phxReplay
-if (recording) reportEverything(JSON.parse(recording))
-```
-
-Report everything you hold on start, or when you load during a recording, then changes as they happen. Reports made while nothing is recorded are ignored, so a library can also report unconditionally.
-
-**Reporting.** Dispatch `phx_replay:state` on `window`:
+A library that cannot import PhoenixReplay reports the same way with a DOM event on `window`, so it needs no dependency on it, in Elixir or in JavaScript:
 
 ```js
 window.dispatchEvent(
@@ -166,21 +177,45 @@ window.dispatchEvent(
 )
 ```
 
-`key` is a non-empty string naming the state, such as a component's id. `changes` is a JSON object of fields to merge into what was recorded under `key` before, a shallow delta: send only what changed. It is copied when reported. Reports that are not a key and a JSON object within the limits are dropped.
+`key` is a non-empty string naming the state, such as a component's id. `changes` is a JSON object of fields to merge into what was reported under `key` before, a shallow delta. It is copied when reported. Reports that are not a key and a JSON object within the limits are dropped. As with `replayState`, there is no need to know when recording starts.
 
-**Replaying.** The replay merges the changes recorded up to the current moment into a reserved assign, `@phoenix_replay_state`: a map of each key to its merged fields, string keys throughout, empty before any report. A view whose live render depends on code in the browser defines `replay_render/1`, which the replay calls instead of `render/1` with the same assigns plus that one:
+A library that wants to know anyway can: `replayRecorder` dispatches `phx_replay:start` on `window` when the page's LiveView is recorded, with `{state: settings | null}` as its detail, and `phx_replay:stop` when recording ends, and `<html>` carries a `data-phx-replay` attribute holding the same detail as JSON while recording.
+
+### Rendering what the browser did
+
+The replay merges the state recorded up to the current moment into a reserved assign, `@phoenix_replay_state`: a map of each key to its merged fields, string keys throughout, empty before any report. A view whose live render depends on code in the browser defines `replay_render/1`, which the replay calls instead of `render/1` with the same assigns plus that one:
 
 ```elixir
 def replay_render(assigns) do
-  ~H"""
-  <input value={@phoenix_replay_state["search"]["query"]} />
-  """
+  query = get_in(assigns.phoenix_replay_state, ["search", "query"])
+
+  assigns
+  |> assign(:visible, Enum.filter(assigns.tasks, &(query in [nil, ""] or &1.title =~ query)))
+  |> render_list()
 end
 ```
 
-The assigns are change-tracked as in a live render, so `@` access in `~H` works as usual. Each report is a step on the player's timeline, in a lane of its own, so seeking to a moment shows the state as it was then. Don't name an assign of your own `:phoenix_replay_state`.
+The assigns are change-tracked as in a live render, so `@` access in `~H` works as usual. Each report is a step on the player's timeline, in a lane of its own, so seeking to a moment shows the state as it was then. Form control values are under the `"phx_replay:inputs"` key, `%{selector => %{name => value}}`. Don't name an assign of your own `:phoenix_replay_state`.
 
-The browser state PhoenixReplay does not record yet: focus, typing that never reaches a `phx-change`, and `Phoenix.LiveView.JS` commands, which the replay does not re-run.
+### Limits
+
+```elixir
+config :phoenix_replay,
+  state: [
+    inputs: true,            # record form controls
+    debounce: 300,           # ms a control must stay unchanged before it is recorded
+    flush: 1_000,            # ms between the batches the browser sends
+    max_entries: 200,        # entries a batch holds before it is sent early
+    max_key: 64,             # bytes a key may have
+    max_entry_bytes: 8_192,  # JSON size of one entry's changes; larger ones are dropped
+    max_bytes: 65_536,       # JSON size a batch holds before it is sent early
+    limit: 3_600             # batches recorded per session
+  ]
+```
+
+Client state goes through your `PhoenixReplay.Sanitizer`'s `sanitize_params/1` when it arrives and through your `PhoenixReplay.Redactor` when the session is saved. It does not count towards `:max_events`. A changed form control makes a session interactive, as does a change to a key reported before; the first report of any other key, the state the page started with, does not.
+
+PhoenixReplay does not record focus, or `Phoenix.LiveView.JS` commands applied on the client, which the replay does not re-run.
 
 ## Which sessions are kept
 
@@ -226,4 +261,5 @@ Each event fires after the session has left the buffer, so handlers see the fini
 Replay reconstructs the assigns of LiveViews and LiveComponents. It does not reconstruct:
 
 - streams and uploads, whose contents are not kept in assigns,
-- client-only state: scroll position, unsubmitted input without `phx-change`, JavaScript hook state, and `Phoenix.LiveView.JS` commands applied on the client.
+- what your JavaScript did with client state, such as rows a script filtered, unless the view renders it with `replay_render/1`; see [Client state](#client-state),
+- focus, and `Phoenix.LiveView.JS` commands applied on the client.

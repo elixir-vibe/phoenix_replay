@@ -16,6 +16,6 @@ This gives a few properties that DOM recording cannot:
 
 ## What it does not record
 
-PhoenixReplay sees what LiveView sees. It does not record client-only state: scroll position, text typed into inputs without `phx-change`, JavaScript hooks' internal state, or styles changed by `Phoenix.LiveView.JS` commands on the client. Streams and uploads are not replayed, since their contents are not kept in assigns. See [Recording](recording.md#limitations).
+PhoenixReplay records what LiveView sees, plus what users type and choose in form controls, whether or not the form has a `phx-change`, and, when `:pointer` is on, the pointer and scrolling. It does not record what your JavaScript does with client state, such as rows a script filtered, unless your view renders it with `replay_render/1`, nor focus or styles changed by `Phoenix.LiveView.JS` commands on the client. Passwords, hidden inputs and card fields are never read. Streams and uploads are not replayed, since their contents are not kept in assigns. See [Client state](recording.md#client-state) and [Recording](recording.md#limitations).
 
 For bugs that live in server state — wrong data shown, a form that validated unexpectedly, a flow that ended up somewhere it should not — the assigns timeline is usually the shortest path to the cause.
