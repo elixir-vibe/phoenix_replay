@@ -145,7 +145,13 @@ defmodule PhoenixReplay.Web.Player.Diff do
   defp step({:key, key}, acc) when is_atom(key), do: "#{acc}.#{key}"
   defp step({:key, key}, acc), do: "#{acc}[#{inspect(key)}]"
   defp step({:index, index}, acc), do: "#{acc}[#{index}]"
-  defp step({:id, id}, acc), do: "#{acc}[id: #{inspect(id, limit: 3, printable_limit: 24)}]"
+  defp step({:id, id}, acc), do: "#{acc}[id: #{short_id(id)}]"
+
+  # Long ids, such as UUIDs, are told apart by their start.
+  defp short_id(id) when is_binary(id) and byte_size(id) > 12,
+    do: ~s("#{String.slice(id, 0, 8)}…")
+
+  defp short_id(id), do: inspect(id, limit: 3, printable_limit: 24)
 
   # Keeps the changed lines and a little context around them.
   defp fold(lines) do

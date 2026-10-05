@@ -62,6 +62,9 @@ defmodule PhoenixReplay.Web.Player.DiffTest do
   test "writes paths as Elixir-like access" do
     assert Diff.path(:tasks, id: "0f4e", key: :done) == ~s(tasks[id: "0f4e"].done)
     assert Diff.path(:form, key: "email", index: 2) == ~s(form["email"][2])
+
+    assert Diff.path(:tasks, id: "0f4e6d12-073b-4805-96ca-720262628371") ==
+             ~s(tasks[id: "0f4e6d12…"])
   end
 
   test "marks the changed lines of the pretty-printed values, folding the rest" do

@@ -642,7 +642,7 @@ defmodule PhoenixReplay.Web.Components.Player do
     <ul data-changes={@key} class="mx-3.5 mb-1.5 ml-8 space-y-0.5">
       <li :for={change <- @changes} class="flex min-w-0 items-baseline gap-2">
         <span class={["w-3 shrink-0 text-center", change_class(change)]}>{change_mark(change)}</span>
-        <span class="shrink-0 text-muted">{Diff.path(@key, elem(change, 1))}</span>
+        <span class="max-w-1/2 shrink-0 truncate text-muted">{Diff.path(@key, elem(change, 1))}</span>
         <span class="min-w-0 truncate">{change_values(change)}</span>
       </li>
       <li :if={@more > 0} class="ml-5 text-muted">and {@more} more</li>
