@@ -89,10 +89,6 @@ if Code.ensure_loaded?(Ecto.Query) do
       )
 
       :ok
-    rescue
-      # A database error, such as a dropped connection, is a failed save the
-      # finalizer retries, not a crash.
-      error -> {:error, error}
     end
 
     @impl true

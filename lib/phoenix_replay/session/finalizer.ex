@@ -67,10 +67,12 @@ defmodule PhoenixReplay.Session.Finalizer do
     end
   end
 
-  # A backend that raises instead of returning an error is retried too.
+  # A backend that raises, as Ecto does when the database is unreachable,
+  # is retried like one that returns an error.
   defp save(storage, recording) do
     Storage.save(storage, recording)
   rescue
-    error -> {:error, error}
+    # reach:disable-next-line bare_rescue -- a storage backend may raise anything
+    exception -> {:error, exception}
   end
 end

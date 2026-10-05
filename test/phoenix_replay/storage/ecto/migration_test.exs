@@ -61,12 +61,21 @@ defmodule PhoenixReplay.Storage.Ecto.MigrationTest do
     assert {:ok, ^recording} = PhoenixReplay.Storage.Ecto.fetch("old", repo: Repo)
   end
 
-  test "reports a database error as a failed save instead of raising" do
+  test "retries a database error, then drops the recording" do
+    config =
+      PhoenixReplay.Config.new(
+        storage: {PhoenixReplay.Storage.Ecto, repo: Repo},
+        persist: [attempts: 2, backoff: 0]
+      )
+
     # No table: every insert fails.
-    assert {:error, %Exqlite.Error{}} =
-             PhoenixReplay.Storage.Ecto.save(PhoenixReplay.Test.Fixtures.counter_recording(),
-               repo: Repo
-             )
+    ExUnit.CaptureLog.capture_log(fn ->
+      assert {:error, %Exqlite.Error{}} =
+               PhoenixReplay.Session.Finalizer.persist(
+                 PhoenixReplay.Test.Fixtures.counter_recording(),
+                 config
+               )
+    end)
   end
 
   test "upgrades the released table and back" do
