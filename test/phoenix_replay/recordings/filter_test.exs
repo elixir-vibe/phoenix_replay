@@ -16,7 +16,7 @@ defmodule PhoenixReplay.Recordings.FilterTest do
   defp ids(params, summaries) do
     params
     |> Filter.from_params()
-    |> then(&Filter.apply(summaries, &1, @now))
+    |> then(&Filter.select(summaries, &1, @now))
     |> Enum.map(& &1.id)
   end
 

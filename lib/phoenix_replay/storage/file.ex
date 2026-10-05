@@ -251,11 +251,9 @@ defmodule PhoenixReplay.Storage.File do
   # Reads the summaries of `ids`: from the index where it has them, from
   # disk otherwise. Files other nodes removed leave the index too.
   defp summaries(dir, ids) do
-    known = Index.ids(dir)
-    listed = MapSet.new(ids)
-    Enum.each(known, fn id -> unless MapSet.member?(listed, id), do: Index.delete(dir, id) end)
+    known = MapSet.new(Index.ids(dir))
+    known |> MapSet.difference(MapSet.new(ids)) |> Enum.each(&Index.delete(dir, &1))
 
-    known = MapSet.new(known)
     unread = Enum.reject(ids, &MapSet.member?(known, &1))
     Index.put(dir, Enum.flat_map(unread, fn id -> Enum.map(read_summary(dir, id), &{id, &1}) end))
 

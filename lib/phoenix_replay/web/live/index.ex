@@ -114,7 +114,7 @@ defmodule PhoenixReplay.Web.Live.Index do
     stored = count.(%Filter{})
     {saved, total, page} = saved_page(socket, now, allow)
     buffered = MapSet.new(live ++ ending, & &1.id)
-    shown = Filter.apply(live ++ ending, filter, now)
+    shown = Filter.select(live ++ ending, filter, now)
 
     socket
     |> assign(

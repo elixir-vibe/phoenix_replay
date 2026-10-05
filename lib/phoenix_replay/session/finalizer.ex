@@ -6,8 +6,9 @@ defmodule PhoenixReplay.Session.Finalizer do
   redaction and the backoff sleeps block only that task. The events still
   in the buffer are redacted with the session's `PhoenixReplay.Redactor`
   and joined to the chunks already flushed to storage, see
-  `PhoenixReplay.Recordings.complete/3`. If that fails, nothing is saved. Attempts and backoff come from the
-  `:persist` configuration; the delay grows linearly with the attempt number.
+  `PhoenixReplay.Recordings.complete/3`. If that fails, nothing is saved.
+  Attempts and backoff come from the `:persist` configuration; the delay
+  grows linearly with the attempt number.
   """
 
   require Logger

@@ -136,8 +136,9 @@ defmodule PhoenixReplay.Web.Live.Frame do
   # they get their recorded assigns directly.
   defp refresh_components(socket, states) do
     if connected?(socket) do
-      for {module, id} <- Map.keys(states),
-          do: send_update(ReplayComponent, id: {module, id}, __replay_states__: states)
+      Enum.each(Map.keys(states), fn {module, id} ->
+        send_update(ReplayComponent, id: {module, id}, __replay_states__: states)
+      end)
     end
 
     socket

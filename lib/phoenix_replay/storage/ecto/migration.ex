@@ -14,8 +14,8 @@ if Code.ensure_loaded?(Ecto.Migration) do
         end
 
     Pin the version, so the migration does the same thing after later
-    releases add versions. The table is versioned, and each PhoenixReplay release that changes it
-    adds a version:
+    releases add versions. The table is versioned, and each PhoenixReplay
+    release that changes it adds a version:
 
       1. the table PhoenixReplay 0.4 created
       2. `error_count`, `tab`, `viewport`, `device` and `source`, which

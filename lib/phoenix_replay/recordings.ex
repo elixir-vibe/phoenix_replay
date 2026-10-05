@@ -30,7 +30,7 @@ defmodule PhoenixReplay.Recordings do
   @doc "Summaries of the sessions still recording that match `filter`, most recent first."
   @spec live(Filter.t(), integer()) :: [Summary.t()]
   def live(%Filter{} = filter, now) do
-    Buffer.summaries() |> Enum.map(&redact_url/1) |> Filter.apply(filter, now)
+    Buffer.summaries() |> Enum.map(&redact_url/1) |> Filter.select(filter, now)
   end
 
   @doc """

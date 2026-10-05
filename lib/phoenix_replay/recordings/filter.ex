@@ -72,8 +72,8 @@ defmodule PhoenixReplay.Recordings.Filter do
   def empty?(%__MODULE__{} = filter), do: to_params(filter) == %{}
 
   @doc "Keeps the summaries matching every criterion. `now` is in Unix milliseconds."
-  @spec apply([Summary.t()], t(), integer()) :: [Summary.t()]
-  def apply(summaries, %__MODULE__{} = filter, now) do
+  @spec select([Summary.t()], t(), integer()) :: [Summary.t()]
+  def select(summaries, %__MODULE__{} = filter, now) do
     Enum.filter(summaries, &matches?(&1, filter, now))
   end
 
@@ -104,7 +104,7 @@ defmodule PhoenixReplay.Recordings.Filter do
 
     matching =
       summaries
-      |> __MODULE__.apply(filter, Keyword.fetch!(opts, :now))
+      |> select(filter, Keyword.fetch!(opts, :now))
       |> Enum.filter(fn summary ->
         (is_nil(until) or Summary.stored_at(summary) <= until) and
           (is_nil(since) or Summary.stored_at(summary) > since)
