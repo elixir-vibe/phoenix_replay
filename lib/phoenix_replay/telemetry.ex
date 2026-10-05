@@ -21,8 +21,8 @@ defmodule PhoenixReplay.Telemetry do
   Collector failures are emitted where they happen:
 
     * `[:phoenix_replay, :collector, :exception]` — a
-      `PhoenixReplay.Collector` or the log handler raised while handling an
-      event, which was not recorded. Metadata: `%{collector: module, event:
+      `PhoenixReplay.Collector`, the log handler or LiveComponent recording
+      raised while handling an event, which was not recorded. Metadata: `%{collector: module, event:
       [atom], kind: atom, reason: term, stacktrace: list}`.
   """
 

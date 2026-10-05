@@ -47,7 +47,10 @@ defmodule PhoenixReplay.Capture.Logs do
     :ok
   end
 
-  @doc false
+  @doc """
+  The `:logger` handler callback: records `event` in the session of the
+  process that logged it, or of the LiveView that started it.
+  """
   @spec log(:logger.log_event(), :logger.handler_config()) :: :ok
   def log(%{level: level, meta: meta} = event, %{config: logs}) do
     case Buffer.attribute([self() | Collectors.callers()]) do

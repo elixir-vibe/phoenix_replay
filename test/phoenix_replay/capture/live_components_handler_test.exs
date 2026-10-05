@@ -1,8 +1,6 @@
 defmodule PhoenixReplay.Capture.LiveComponentsHandlerTest do
   use ExUnit.Case, async: true
 
-  import ExUnit.CaptureLog
-
   alias PhoenixReplay.Capture.LiveComponents
   alias PhoenixReplay.Config
   alias PhoenixReplay.Session.Buffer
@@ -13,7 +11,7 @@ defmodule PhoenixReplay.Capture.LiveComponentsHandlerTest do
     def sanitize_assigns(assigns), do: assigns
   end
 
-  test "logs a failure instead of raising, so :telemetry keeps the handler" do
+  test "reports a failure instead of raising, so :telemetry keeps the handler" do
     recording = %{Fixtures.counter_recording() | events: []}
     :ok = Buffer.open(recording, self(), Config.new(sanitizer: RaisingSanitizer))
     on_exit(fn -> Buffer.close(recording.id) end)
@@ -25,17 +23,15 @@ defmodule PhoenixReplay.Capture.LiveComponentsHandlerTest do
       params: %{}
     }
 
-    log =
-      capture_log(fn ->
-        assert :ok =
-                 LiveComponents.handle_event(
-                   [:phoenix, :live_component, :handle_event, :start],
-                   %{},
-                   metadata,
-                   nil
-                 )
-      end)
+    ref =
+      :telemetry_test.attach_event_handlers(self(), [[:phoenix_replay, :collector, :exception]])
 
-    assert log =~ "broken sanitizer"
+    on_exit(fn -> :telemetry.detach(ref) end)
+
+    event = [:phoenix, :live_component, :handle_event, :start]
+    assert :ok = LiveComponents.handle_event(event, %{}, metadata, nil)
+
+    assert_received {[:phoenix_replay, :collector, :exception], ^ref, %{},
+                     %{collector: LiveComponents, event: ^event, reason: %RuntimeError{}}}
   end
 end

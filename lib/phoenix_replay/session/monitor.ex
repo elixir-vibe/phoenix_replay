@@ -39,7 +39,11 @@ defmodule PhoenixReplay.Session.Monitor do
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
-  @doc false
+  @doc """
+  Gives the monitor time to drain on shutdown: the application waits for
+  recordings being saved or written when it stops.
+  """
+  @spec child_spec(keyword()) :: Supervisor.child_spec()
   def child_spec(opts) do
     %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}, shutdown: @drain_timeout + 5_000}
   end

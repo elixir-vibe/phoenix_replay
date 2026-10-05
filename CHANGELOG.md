@@ -17,6 +17,7 @@
 
 ### Fixed
 
+- A LiveComponent whose recording fails, such as with a raising sanitizer, is reported with `[:phoenix_replay, :collector, :exception]`, as collectors are, instead of logged.
 - A save that raised, such as an Ecto save while the database is down, is retried like one that returned an error, rather than dropping the recording.
 - `[:phoenix_replay, :recording, :persisted]` and `:recovered` count events without pointer batches, as the summary does.
 
