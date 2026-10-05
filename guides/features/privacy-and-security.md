@@ -21,7 +21,8 @@ Everything recorded passes through a `PhoenixReplay.Sanitizer` before it is stor
 
 `PhoenixReplay.Sanitizer.Default`:
 
-- replaces the values of keys containing `password`, `token`, `secret`, `api_key`, `apikey`, `private_key`, `credential`, `card_number`, `credit_card` or `one_time`, in any case, or with `cvv`, `cvc`, `csc`, `ssn`, `pin` or `otp` as a word of their own (`card_cvv`, `pinCode`, but not `shipping`), with `"[FILTERED]"`; keys are kept so templates still render,
+- replaces the values of keys containing `password`, `token`, `secret`, `api_key`, `apikey`, `private_key`, `credential`, `card_number`, `credit_card` or `one_time`, in any case, with `"[FILTERED]"`; keys are kept so templates still render,
+- in params and form values, also filters keys with `cvv`, `cvc`, `csc`, `ssn`, `pin` or `otp` as a word of their own (`card_cvv`, `pinCode`, but not `shipping`); assigns keep those, since an assign such as `:pin` is rarely a secret and a filtered one can break the replay,
 - recurses into maps, lists, tuples and structs, including Ecto schemas,
 - compacts `Ecto.Changeset` and `Phoenix.HTML.Form` runtime metadata,
 - drops LiveView internals that cannot be replayed.

@@ -56,6 +56,16 @@ defmodule PhoenixReplay.Sanitizer.DefaultTest do
            } = Default.sanitize_params(params)
   end
 
+  test "keeps assigns that only have a short name as a word, which params filter" do
+    values = %{pin: %{lat: 1, lng: 2}, otp_app: :my_app, pin_code: "1234", password: "x"}
+
+    assert %{pin: %{lat: 1}, otp_app: :my_app, pin_code: "1234", password: "[FILTERED]"} =
+             Default.sanitize_assigns(values)
+
+    assert %{pin: "[FILTERED]", otp_app: "[FILTERED]", pin_code: "[FILTERED]"} =
+             Default.sanitize_params(values)
+  end
+
   test "recurses into structs, lists and tuples" do
     account = %Account{name: "n", api_key: "k", profile: %{secret_answer: "s"}}
 
