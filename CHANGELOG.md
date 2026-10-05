@@ -2,42 +2,39 @@
 
 ## Unreleased
 
+Pointer, touch and form recording, client state, and a richer player.
+
 ### Added
 
-- Pointer, touch and scroll recording, off by default. `:pointer` turns it on, globally or per live session, with every interval and cap configurable: `:sample`, `:scroll`, `:flush`, `:max_points` and `:limit`. The client module's new `replayRecorder(liveSocket)` records only while a recorded LiveView asks for it, keeps recording through patches and events pushed with page loading, and sends batches over the LiveView socket as an event the recorder halts before the view sees it. The installer wires it.
-- Touches are recorded with touch events, so every finger of a swipe or a pinch is followed while the browser scrolls or zooms, where pointer events are cancelled. The zoom a pinch causes is not recorded.
-- A resized window or a rotated phone is recorded as a `:viewport` event when it settles, rather than with the user's next click or key press, while `replayRecorder` runs.
-- The player's frame bar shows whether the viewport is portrait or landscape at the current moment, and viewport events in the list name the orientation they switched to.
-- The player draws the pointer over the replay: the cursor with a short trail, a ripple for each press, placed on the pressed element when the replay has it, and a fingertip for each touch, and it scrolls the replayed page as recorded. **Pointer** in the frame's bar toggles them.
-- Form controls are recorded and replayed with no app code: what users type and choose in inputs, textareas, checkboxes, radios and selects, with or without `phx-change`. Each control waits for a pause (`state: [debounce: 300]`) so typing is one step on the timeline, and the replay puts the values back after each render. Passwords, hidden and file inputs, `autocomplete="cc-…"` fields and anything inside `data-phx-replay-ignore` are never read in the browser; the rest are recorded under their names, so the sanitizer filters them as it filters event params. `state: [inputs: false]` turns this off.
-- Client state: app code reports state the server never sees with `replayState(key, changes)` from the client module, and libraries that cannot import PhoenixReplay with a `phx_replay:state` window event. The client keeps the latest state of each key, so a recording starts with the state as it is and reporters need not know when it starts. The server validates, sanitizes and caps it; `:state` configures the limits, and it is on by default.
-- `phx_replay:start` and `phx_replay:stop` window events, and a `data-phx-replay` attribute on `<html>`, tell code in the browser when the page's LiveView is recorded.
-- The replay merges client state up to the current moment into the reserved `@phoenix_replay_state` assign, and calls a view's optional `replay_render/1` instead of `render/1` when it defines one. The player shows client state as steps in a lane of their own.
-- A button in the dashboard's header switches between the light and dark themes, overriding the system's appearance; the browser remembers the choice.
-- SQL, collected metadata and the assigns in the player's **State** tab are highlighted with Lumis in a monospace font, in colours that follow the theme. Rows in the event list show the action in the interface's font and what it acted on in monospace, coloured the same way: event params, message tags, assign names, components, URLs, client state and collected SQL. Log messages stay prose. `PhoenixReplay.Collector.Captured` has a `:language` field, `:sql` for `PhoenixReplay.Collector.Ecto`, that turns highlighting on for a collector's summary.
-- In the **State** tab, only values their row cannot show whole are expandable.
-- Everything clickable in the dashboard shows the pointing-hand cursor: buttons, tabs, switches, menus, selects and checkbox labels.
-- The player shows the pointer overlay's toggle as a switch, and covers the replay with a loader until its frame has connected, instead of a blank box.
-- The **State** tab shows what the current event changed inside each assign, such as `tasks[id: 2].done: false → true`, matching list items by `id`, and an expanded assign marks its removed and added lines.
-- `PhoenixReplay.Storage` has an optional `child_spec/1` callback for a process the backend needs, which the application starts. File storage starts its summary index this way; a file storage used while its index is not running, such as one configured by hand next to another backend, reads summaries from disk.
+- Pointer, touch and scroll recording, off by default: `pointer: true`, globally or per live session, with `:sample`, `:scroll`, `:flush`, `:max_points` and `:limit` to tune it. Call the client module's new `replayRecorder(liveSocket)`; the installer adds it. Every finger of a multi-touch gesture is followed. The zoom a pinch causes is not recorded.
+- Form controls are recorded and replayed with no app code: what users type and choose in inputs, textareas, checkboxes, radios and selects, with or without `phx-change`, once they pause (`state: [debounce: 300]`). Passwords, hidden and file inputs, `autocomplete="cc-…"` fields and anything inside `data-phx-replay-ignore` are never read; other values pass through the sanitizer like event params. `state: [inputs: false]` turns this off.
+- Client state the server never sees: report it with `replayState(key, changes)`, or with a `phx_replay:state` window event from code that cannot import the client module. The replay merges it into the reserved `@phoenix_replay_state` assign, and calls a view's optional `replay_render/1` instead of `render/1` when it defines one. `:state` configures its limits.
+- `phx_replay:start` and `phx_replay:stop` window events, and a `data-phx-replay` attribute on `<html>`, tell browser code when the page is recorded.
+- The player draws the recorded pointer over the replay: the cursor with a short trail, a ripple for each press and a fingertip for each touch, and scrolls the page as recorded. **Pointer** switches it off.
+- The player shows whether the viewport is portrait or landscape at each moment, and **Rotate** shows the replay in the other orientation, laying the page out again for it.
+- The **State** tab shows what each event changed inside an assign, such as `tasks[id: 2].done: false → true`, matching list items by `id`.
+- SQL, collected metadata, assigns and the code in event rows are highlighted in a monospace font, in colours that follow the theme, with [Lumis](https://hexdocs.pm/lumis), a new dependency. A collector turns it on for its summary with `PhoenixReplay.Collector.Captured`'s new `:language` field.
+- A button in the dashboard's header switches between the light and dark themes.
+- `PhoenixReplay.Storage` has an optional `child_spec/1` callback for a process a backend needs, which the application starts.
 
 ### Changed
 
-- Modules are renamed so no two differ only by a suffix or share a name across namespaces. `PhoenixReplay.Recordings` is now `PhoenixReplay.Catalog`, `PhoenixReplay.Recordings.Filter` is `PhoenixReplay.Recording.Filter`, which storage backends that implement `query/3` use, `PhoenixReplay.Recordings.Retention` is `PhoenixReplay.Storage.Retention`, and `PhoenixReplay.Recording.Keep` is `PhoenixReplay.Session.TailSampling`. Completing a running session's recording moved from `Recordings.complete/3` to `PhoenixReplay.Session.Finalizer.complete/3`. The `:retention` and `:keep` options are unchanged.
-- A recording's `client` is a `PhoenixReplay.Recording.Client` struct, and its landing a `PhoenixReplay.Recording.Client.Landing`. The URL of the LiveView that live-navigated to the session is `navigated_from`, formerly `referer`, so it no longer reads like the landing's HTTP `referrer`. Recordings stored by earlier versions are brought up to date when read.
-- Overriding `:flush`, `:pointer`, `:logs` or `:landing` in a live session merges the override into the global configuration, as the other options already did, instead of starting from the defaults. `nil` and `false` switch any of these options off; `true` switches one on with the global configuration or the defaults.
-- LiveView internals (`:__changed__`, `:uploads`, `:streams`, and a component's `:myself` and `:flash`) are left out of recorded assigns before the sanitizer runs, so a custom `PhoenixReplay.Sanitizer` no longer has to drop them.
-- `PhoenixReplay.Storage.File.query/3` is gone; the storage facade pages file storage from `list/1`.
+- Resizes and rotations are recorded as soon as they settle, rather than with the user's next click or key press, while `replayRecorder` runs.
+- Modules are renamed: `PhoenixReplay.Recordings` is now `PhoenixReplay.Catalog`, `PhoenixReplay.Recordings.Filter` is `PhoenixReplay.Recording.Filter`, `PhoenixReplay.Recordings.Retention` is `PhoenixReplay.Storage.Retention`, `PhoenixReplay.Recording.Keep` is `PhoenixReplay.Session.TailSampling`, and `Recordings.complete/3` is `PhoenixReplay.Session.Finalizer.complete/3`. The `:retention` and `:keep` options are unchanged.
+- A recording's `client` is a `PhoenixReplay.Recording.Client` struct, and its `referer` is now `navigated_from`, so it no longer reads like the landing's HTTP referrer. Older recordings are upgraded when read.
+- Overriding `:flush`, `:pointer`, `:logs` or `:landing` in a live session merges into the global configuration instead of starting from the defaults. `nil` and `false` switch one off; `true` switches it on.
+- LiveView internals such as `:__changed__`, `:uploads` and `:streams` are dropped from recorded assigns before the sanitizer runs, so custom sanitizers no longer need to.
+- `PhoenixReplay.Storage.File.query/3` is gone; file storage is paged from `list/1`.
+- In the dashboard, everything clickable shows the pointing-hand cursor, only values too long for their row in the **State** tab expand, and a loader covers the replay until its frame has connected.
 
 ### Fixed
 
-- Scrubbing to a moment between two events keeps that moment, instead of snapping back to the earlier event, and the thumb stays under the pointer while dragging.
-- Pausing the player keeps the time playback reached between two events, instead of jumping back to the last one, and resuming or changing speed plays on from there.
-- Switching the player from 100% back to Fit after scrolling the replay eases from the scrolled view into the fitted one, instead of leaving the page shifted out of view.
+- Scrubbing to a moment between two events keeps that moment instead of snapping back to the earlier event.
+- Pausing keeps the time playback reached instead of jumping back to the last event.
+- Switching from 100% back to Fit after scrolling the replay no longer leaves the page shifted out of view.
 - Collected details no longer break words mid-way, such as SQL table names.
-- A LiveComponent whose recording fails, such as with a raising sanitizer, is reported with `[:phoenix_replay, :collector, :exception]`, as collectors are, instead of logged.
-- A save that raised, such as an Ecto save while the database is down, is retried like one that returned an error, rather than dropping the recording.
-- `[:phoenix_replay, :recording, :persisted]` and `:recovered` count events without pointer batches, as the summary does.
+- A LiveComponent whose recording fails, such as with a raising sanitizer, is reported with `[:phoenix_replay, :collector, :exception]` instead of logged.
+- A save that raised, such as an Ecto save while the database is down, is retried instead of dropping the recording.
 
 ## 0.5.1 - 2026-10-04
 
