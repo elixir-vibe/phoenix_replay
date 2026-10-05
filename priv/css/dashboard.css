@@ -119,6 +119,20 @@
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
   }
+
+  /*
+    Tailwind 4 leaves buttons with the default arrow. Whatever acts on a
+    click points: buttons and the elements that act like them.
+  */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="switch"],
+  summary,
+  select,
+  label:has(> input[type="checkbox"], > input[type="radio"]) {
+    cursor: pointer;
+  }
 }
 
 /*
