@@ -60,6 +60,8 @@ defmodule PhoenixReplay.Web.Live.Show do
         errors_only: false,
         tab: "events",
         frame_mode: "fit",
+        # Shows the replay turned to the other orientation than recorded.
+        rotated?: false,
         # A link to a moment opens the player there.
         start_at: Params.integer(params["at"], nil)
       )
@@ -174,6 +176,9 @@ defmodule PhoenixReplay.Web.Live.Show do
   def handle_event("frame_mode", %{"value" => mode}, socket) when mode in ~w(fit actual) do
     {:noreply, assign(socket, :frame_mode, mode)}
   end
+
+  def handle_event("rotate", _params, socket),
+    do: {:noreply, update(socket, :rotated?, &not/1)}
 
   def handle_event("tab", %{"value" => tab}, socket) when tab in ~w(events state visit) do
     {:noreply, assign(socket, :tab, tab)}
@@ -383,6 +388,7 @@ defmodule PhoenixReplay.Web.Live.Show do
           url={@url}
           viewport={@viewport}
           mode={@frame_mode}
+          rotated={@rotated?}
           below="replay-playback"
           pointer={@pointer}
           ready={@frame_ready?}

@@ -472,6 +472,36 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       assert render(view) =~ "landscape"
     end
 
+    test "rotates the replay to the other orientation, without the pointer" do
+      recording = Fixtures.counter_recording(id: "turned")
+
+      pointer = %Event{
+        at: 0,
+        type: :pointer,
+        data: %{span: 100, moves: [100, 5, 5, 0], presses: [], scrolls: []}
+      }
+
+      Storage.save(Fixtures.storage(), %{
+        recording
+        | client: client(%{width: 390, height: 844, dpr: 3}, nil),
+          events: [pointer | recording.events]
+      })
+
+      {:ok, view, _html} = live(build_conn(), "/replay/turned")
+      refute has_element?(view, "#replay-pointer-switch[disabled]")
+
+      view |> element("#replay-rotate") |> render_click()
+      assert has_element?(view, ~s(#replay-rotate[aria-pressed="true"]))
+      assert has_element?(view, ~s(#replay-viewport[data-width="844"][data-height="390"]))
+      assert has_element?(view, ~s(#replay-orientation[data-orientation="landscape"]))
+      assert has_element?(view, "#replay-pointer-switch[disabled]")
+      assert has_element?(view, "#replay-pointer[data-rotated]")
+
+      view |> element("#replay-rotate") |> render_click()
+      assert has_element?(view, ~s(#replay-viewport[data-width="390"][data-height="844"]))
+      refute has_element?(view, "#replay-pointer[data-rotated]")
+    end
+
     test "shows how the visit started" do
       recording = Fixtures.counter_recording(id: "visit")
 

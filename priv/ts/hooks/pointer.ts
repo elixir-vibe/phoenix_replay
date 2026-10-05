@@ -22,13 +22,16 @@ const ARROW = 'M0 0V16.5L4.6 12.2L7.6 18.8L10.3 17.6L7.4 11.1H13.2Z'
  * The element carries the track as JSON in `data-track` and the recorded
  * viewport in `data-width` and `data-height`, and sits beside the frame
  * as a `[data-frame-overlay]`, which FrameViewport sizes like the frame.
- * It follows the time the Scrubber announces.
+ * It follows the time the Scrubber announces. While the element has
+ * `data-rotated`, the frame shows the other orientation than recorded, so
+ * nothing is drawn and the page is not scrolled.
  */
 export class Pointer extends ViewHook {
   private track: Track = { moves: [], presses: [], scrolls: [] }
   private moves = new Map<number, Move[]>()
   private svg?: SVGSVGElement
   private scrolled = ''
+  private at?: number
   private readonly onTime = (event: Event): void =>
     this.render((event as CustomEvent<number>).detail)
 
@@ -52,6 +55,7 @@ export class Pointer extends ViewHook {
 
   updated(): void {
     this.size()
+    if (this.at !== undefined) this.render(this.at)
   }
 
   destroyed(): void {
@@ -63,8 +67,16 @@ export class Pointer extends ViewHook {
     const svg = this.svg
     if (!svg) return
 
-    this.scroll(ms)
+    this.at = ms
     svg.replaceChildren()
+
+    if (this.el.dataset.rotated !== undefined) {
+      // Scrolls again as recorded once the frame turns back.
+      this.scrolled = ''
+      return
+    }
+
+    this.scroll(ms)
 
     const mouse = this.moves.get(0) ?? []
     const trail = mouse.filter(([at]) => at > ms - TRAIL_MS && at <= ms)
