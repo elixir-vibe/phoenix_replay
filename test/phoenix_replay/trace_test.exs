@@ -31,6 +31,17 @@ defmodule PhoenixReplay.TraceTest do
     assert Trace.find(live: true) == []
 
     assert_raise ArgumentError, ~r/unknown keys \[:typo\]/, fn -> Trace.find(typo: 1) end
+
+    # Only the windows the dashboard offers; others would fail counting back.
+    assert ids(within: "24h") |> Enum.sort() == ["failing", "traced"]
+
+    assert_raise ArgumentError, ~s(:within must be one of 1h, 24h, 7d, got: "2h"), fn ->
+      Trace.find(within: "2h")
+    end
+
+    assert_raise ArgumentError, ~r/:min_events must be a positive integer/, fn ->
+      Trace.find(min_events: 0)
+    end
   end
 
   test "lists events with the player's indexes, grouped under what caused them",
@@ -68,6 +79,15 @@ defmodule PhoenixReplay.TraceTest do
     refute Map.has_key?(Trace.state("traced", 3).assigns, :phoenix_replay_state)
     # Events that set no assigns change nothing.
     assert %{changed: [], assigns: %{count: 1}} = Trace.state("traced", 4)
+  end
+
+  test "refuses to show a moment of a recording without events" do
+    :ok =
+      Storage.save(Fixtures.storage(), %{Fixtures.counter_recording(id: "empty") | events: []})
+
+    assert_raise ArgumentError, "recording empty has no events to show a moment of", fn ->
+      Trace.state("empty", 0)
+    end
   end
 
   test "says which recording it cannot find" do

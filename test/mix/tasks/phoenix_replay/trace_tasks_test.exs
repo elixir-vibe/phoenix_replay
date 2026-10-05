@@ -30,6 +30,10 @@ defmodule Mix.Tasks.PhoenixReplay.TraceTasksTest do
 
     assert capture_io(fn -> Mix.Tasks.PhoenixReplay.List.run(["--text", "nothing-like-it"]) end) =~
              "[]"
+
+    assert_raise Mix.Error, ~r/:within must be one of/, fn ->
+      Mix.Tasks.PhoenixReplay.List.run(["--within", "2h"])
+    end
   end
 
   test "prints a recording's events, or the view at one" do

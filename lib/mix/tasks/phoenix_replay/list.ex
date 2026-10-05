@@ -31,9 +31,13 @@ defmodule Mix.Tasks.PhoenixReplay.List do
     {opts, _rest} = OptionParser.parse!(args, strict: @switches)
     Mix.Task.run("app.start")
 
-    opts
-    |> Keyword.put(:live, false)
-    |> Trace.find()
-    |> IO.inspect(pretty: true, limit: :infinity)
+    try do
+      opts
+      |> Keyword.put(:live, false)
+      |> Trace.find()
+      |> IO.inspect(pretty: true, limit: :infinity)
+    rescue
+      error in ArgumentError -> Mix.raise(Exception.message(error))
+    end
   end
 end

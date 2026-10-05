@@ -137,6 +137,10 @@ defmodule PhoenixReplay.Trace do
   @spec state(Recording.t() | Recording.id(), non_neg_integer()) :: state()
   def state(recording, index) do
     playback = playback(recording)
+
+    if playback.events == [],
+      do: raise(ArgumentError, "recording #{playback.id} has no events to show a moment of")
+
     timeline = Timeline.at(playback, index)
     {client_state, assigns} = Map.pop(timeline.assigns, State.assign(), %{})
 
@@ -199,12 +203,31 @@ defmodule PhoenixReplay.Trace do
       query: filters[:text],
       view: view_name(filters[:view]),
       event: filters[:event],
-      within: filters[:within],
-      min_events: filters[:min_events],
+      within: within(filters[:within]),
+      min_events: min_events(filters[:min_events]),
       errors: filters[:errors] == true,
       tab: filters[:tab]
     }
   end
+
+  # A window the dashboard offers, so the filter can count back from now.
+  defp within(nil), do: nil
+
+  defp within(window) do
+    if window in Filter.windows(),
+      do: window,
+      else:
+        raise(
+          ArgumentError,
+          ":within must be one of #{Enum.join(Filter.windows(), ", ")}, got: #{inspect(window)}"
+        )
+  end
+
+  defp min_events(nil), do: nil
+  defp min_events(count) when is_integer(count) and count > 0, do: count
+
+  defp min_events(count),
+    do: raise(ArgumentError, ":min_events must be a positive integer, got: #{inspect(count)}")
 
   # A view module, or its name as the dashboard shows it.
   defp view_name(view) when is_atom(view) and not is_nil(view), do: inspect(view)
