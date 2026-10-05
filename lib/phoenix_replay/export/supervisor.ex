@@ -10,7 +10,7 @@ defmodule PhoenixReplay.Export.Supervisor do
 
   use Supervisor
 
-  @doc false
+  @doc "Starts the export supervisor, as the application does."
   @spec start_link(keyword()) :: Supervisor.on_start()
   def start_link(_opts), do: Supervisor.start_link(__MODULE__, nil, name: __MODULE__)
 

@@ -23,7 +23,7 @@ defmodule PhoenixReplay.Export.Server do
 
   @topic "phoenix_replay:export:"
 
-  @doc false
+  @doc "Starts the export queue, registered under this module's name."
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 

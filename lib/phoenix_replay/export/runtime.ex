@@ -15,7 +15,7 @@ defmodule PhoenixReplay.Export.Runtime do
   @typedoc "Where the browser loads the stage from, and the Playwright connection."
   @type t :: %{url: String.t(), connection: GenServer.name()}
 
-  @doc false
+  @doc "Starts the supervisor the endpoint and Playwright are started under on demand."
   @spec start_link(keyword()) :: Supervisor.on_start()
   def start_link(_opts), do: DynamicSupervisor.start_link(__MODULE__, nil, name: __MODULE__)
 
