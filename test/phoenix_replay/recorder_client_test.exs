@@ -85,4 +85,21 @@ defmodule PhoenixReplay.RecorderClientTest do
 
     refute Enum.any?(recording.events, &(&1.type == :event))
   end
+
+  test "records a viewport the browser sends on its own, once per change", %{sessions: sessions} do
+    {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/counter")
+
+    landscape = %{"width" => 844, "height" => 390, "dpr" => 3}
+    render_hook(view, "phx_replay:viewport", landscape)
+    render_hook(view, "phx_replay:viewport", landscape)
+    render_hook(view, "phx_replay:viewport", %{"width" => "wide"})
+
+    assert render(view) =~ "count"
+    assert {:ok, recording} = Buffer.fetch(id)
+
+    assert [%{type: :viewport, data: %{width: 844, height: 390, dpr: 3}}] =
+             Enum.filter(recording.events, &(&1.type == :viewport))
+
+    refute Enum.any?(recording.events, &(&1.type == :event))
+  end
 end

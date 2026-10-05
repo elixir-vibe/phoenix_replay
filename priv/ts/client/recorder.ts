@@ -28,6 +28,7 @@ import { InputRecorder } from './inputs'
 import { replayInputs } from './replay_inputs'
 import { type PointerSettings, PointerRecorder, type Push } from './pointer'
 import { type StateSettings, StateRecorder, StateStore } from './state'
+import { ViewportRecorder } from './viewport'
 
 /** Dispatched on `window` when recording starts. */
 export const START_EVENT = 'phx_replay:start'
@@ -90,7 +91,8 @@ export const replayRecorder = (
     stop()
     const { pointer, state } = (event as CustomEvent<Partial<RecordSettings>>).detail ?? {}
 
-    recorders = pointer ? [new PointerRecorder(push, target, pointer)] : []
+    recorders = [new ViewportRecorder(push, target)]
+    if (pointer) recorders.push(new PointerRecorder(push, target, pointer))
 
     if (state) {
       const recorder = new StateRecorder(push, target, state)

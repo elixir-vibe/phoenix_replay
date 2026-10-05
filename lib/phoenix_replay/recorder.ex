@@ -57,6 +57,7 @@ defmodule PhoenixReplay.Recorder do
   @record_event "phx_replay:record"
   @pointer_event Pointer.event()
   @state_event State.event()
+  @viewport_event Browser.viewport_event()
   @session_options [
     :sample_rate,
     :keep,
@@ -156,6 +157,11 @@ defmodule PhoenixReplay.Recorder do
       _not_recording -> :ok
     end
 
+    {:halt, socket}
+  end
+
+  defp handle_event(@viewport_event, params, socket) do
+    :ok = Browser.viewport(params)
     {:halt, socket}
   end
 

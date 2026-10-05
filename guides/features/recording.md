@@ -24,7 +24,7 @@ A recording is a list of `PhoenixReplay.Recording.Event` structs, each with a mi
 | `:telemetry` | A telemetry event captured by a [collector](telemetry-and-logs.md) |
 | `:log` | A log message, when [log collection](telemetry-and-logs.md#collecting-logs) is on |
 | `:exit` | The formatted reason of a LiveView that exited abnormally |
-| `:viewport` | The browser's viewport changed, as seen with the user's next interaction |
+| `:viewport` | The browser's viewport changed: a resized window or a rotated phone |
 
 The recording also keeps the view module, URL, sanitized params and session, and the start time. Everything passes through the configured sanitizer first; see [Privacy and Security](privacy-and-security.md).
 
@@ -49,7 +49,7 @@ socket "/live", Phoenix.LiveView.Socket,
 `mix igniter.install phoenix_replay` makes both changes for the setup Phoenix generates. With them, a recording's `PhoenixReplay.Recording.Client` holds:
 
 - **the viewport** — width, height and pixel ratio when the LiveView connected. The player renders the replay at that size, keeping its aspect ratio: **Fit** scales it down until the whole viewport fits the window, centring a phone on a neutral stage, and **100%** shows it at true size in a scrolling box. A rotated phone eases into its new size, unless the viewer prefers reduced motion.
-- **resizes** — the viewport also travels with each click and key press, and a change is recorded as a `:viewport` event, so the replay follows a rotated phone or a resized window. Your `handle_event/3` receives the extra `"_replay"` param; recorded params leave it out.
+- **resizes** — a resized window or a rotated phone is recorded as a `:viewport` event when it settles, a fifth of a second after it stops changing, as long as `replayRecorder` runs; see [Pointer, touches and scrolling](#pointer-touches-and-scrolling). The viewport also travels with each click and key press, which catches changes without `replayRecorder`. Your `handle_event/3` receives the extra `"_replay"` param; recorded params leave it out.
 - **the user agent** — shown in the player as, for example, "Safari on iOS".
 - **the tab** — an id kept in the tab's `sessionStorage`. Navigating to another LiveView starts a new recording; the tab id ties them into one journey, and the player links the previous and next sessions of the tab.
 - **the previous page** — the URL of the LiveView that live-navigated here (`client.navigated_from`).
@@ -117,7 +117,9 @@ config :phoenix_replay,
   ]
 ```
 
-At the defaults, a moving pointer costs about 20 samples a second, a few hundred bytes, and a still one nothing. Mouse, pen and touch are recorded alike, each finger on its own, and presses note the nearest element with an `id`, so the player can place them on it even if the replayed page lays out a little differently. Batches come from the browser, so the server drops anything malformed and caps each one at `:max_points`. They do not count towards `:max_events`, and pointer movement alone does not make a session interactive.
+At the defaults, a moving pointer costs about 20 samples a second, a few hundred bytes, and a still one nothing. Mouse, pen and touch are recorded alike, each finger on its own and through scrolls and pinches, which the browser handles itself, and presses note the nearest element with an `id`, so the player can place them on it even if the replayed page lays out a little differently. Batches come from the browser, so the server drops anything malformed and caps each one at `:max_points`. They do not count towards `:max_events`, and pointer movement alone does not make a session interactive.
+
+The fingers of a pinch are replayed, but not the zoom it causes: the page's pinch-zoom level is not recorded.
 
 The player's clock runs to the end of the pointer track and of any client state, not only to the last LiveView event, so movement after the last event still plays.
 

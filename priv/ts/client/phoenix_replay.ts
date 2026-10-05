@@ -17,6 +17,8 @@
  * `./recorder`.
  */
 
+import { type ReplayViewport, viewport } from './viewport'
+
 export { RECORDING_ATTRIBUTE, replayRecorder, START_EVENT, STOP_EVENT } from './recorder'
 export type { RecordSettings, RecorderSocket, StartDetail } from './recorder'
 export type { PointerSettings } from './pointer'
@@ -24,19 +26,9 @@ export { IGNORE_ATTRIBUTE, INPUTS_KEY } from './inputs'
 export { replayState, STATE_EVENT } from './state'
 export type { StateReport, StateSettings } from './state'
 
-export interface ReplayViewport {
-  width: number
-  height: number
-  dpr: number
-}
+export type { ReplayViewport } from './viewport'
 
 const TAB_KEY = 'phoenix_replay:tab'
-
-const viewport = (): ReplayViewport => ({
-  width: window.innerWidth,
-  height: window.innerHeight,
-  dpr: window.devicePixelRatio
-})
 
 const randomId = (): string =>
   typeof crypto.randomUUID === 'function'
