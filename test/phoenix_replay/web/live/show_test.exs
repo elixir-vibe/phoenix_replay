@@ -44,6 +44,21 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     recording
   end
 
+  # Waits for playback to stop by itself.
+  defp played(view, tries \\ 50) do
+    case assigns(view) do
+      %{playing: nil} = assigns ->
+        assigns
+
+      _playing when tries > 0 ->
+        Process.sleep(10)
+        played(view, tries - 1)
+
+      assigns ->
+        assigns
+    end
+  end
+
   # Delivers the pending playback step now. Playback tests use recordings
   # with hour-long gaps, so the real timer cannot fire during the test.
   defp advance(view) do
@@ -197,9 +212,11 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
         events: Enum.map(recording.events, &%{&1 | at: 0})
     })
 
+    # With no gaps the real timers play it at once: through every event,
+    # not stopping at the first that shares its time.
     {:ok, view, _html} = live(build_conn(), "/replay/same?at=0")
     render_click(view, "toggle")
-    assert %{playing: {_timer, _ref}} = advance(view)
+    assert %{index: 3, playing: nil} = played(view)
   end
 
   test "plays to the end at the chosen speed" do
