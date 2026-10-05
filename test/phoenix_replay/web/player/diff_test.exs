@@ -25,6 +25,10 @@ defmodule PhoenixReplay.Web.Player.DiffTest do
              {:changed, [key: :done], false, true}
            ]
 
+    # Timestamps and the like change whole.
+    assert [{:changed, [key: :at], ~U[2026-10-05 09:56:00Z], ~U[2026-10-05 10:06:00Z]}] =
+             Diff.changes(%{at: ~U[2026-10-05 09:56:00Z]}, %{at: ~U[2026-10-05 10:06:00Z]})
+
     # A different kind of value is one change, not a walk.
     assert [{:changed, [], %Task{}, %{id: 1}}] = Diff.changes(%Task{id: 1}, %{id: 1})
   end

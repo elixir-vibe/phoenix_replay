@@ -5,7 +5,8 @@ defmodule PhoenixReplay.Web.Player.Diff do
   `changes/2` walks the value before and after and names each place that
   differs by its path, such as `tasks[id: "0f4e…"].completed`: map keys,
   struct fields, tuple elements, and list items, matched by their `id`
-  when every item has one and by position otherwise. `lines/2` compares
+  when every item has one and by position otherwise. Dates, times,
+  decimals and similar values change whole. `lines/2` compares
   the two pretty-printed with `List.myers_difference/2`, for reading the
   whole value with its changes marked.
   """
@@ -23,6 +24,10 @@ defmodule PhoenixReplay.Web.Player.Diff do
   @type line :: {:eq | :del | :ins, String.t()} | {:skip, pos_integer()}
 
   @context 2
+
+  # Values compared whole: their fields mean nothing apart, as the minute
+  # of a timestamp does not.
+  @whole [Date, DateTime, Decimal, MapSet, NaiveDateTime, Range, Regex, Time, URI, Version]
 
   @doc "The places where `after_value` differs from `before`, in order."
   @spec changes(term(), term()) :: [change()]
@@ -48,7 +53,7 @@ defmodule PhoenixReplay.Web.Player.Diff do
 
   defp walk(same, same, _path), do: []
 
-  defp walk(%module{} = before, %module{} = after_value, path),
+  defp walk(%module{} = before, %module{} = after_value, path) when module not in @whole,
     do: walk_map(Map.from_struct(before), Map.from_struct(after_value), path)
 
   defp walk(%_{} = before, after_value, path),
