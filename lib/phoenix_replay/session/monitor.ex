@@ -201,7 +201,7 @@ defmodule PhoenixReplay.Session.Monitor do
     with {:ok, recording} <- Buffer.fetch(id),
          {:ok, config} <- Buffer.config(id),
          :keep <- keep(id, recording, config) do
-      :ok = Buffer.saving(id)
+      :ok = Buffer.mark_saving(id)
 
       task =
         Task.Supervisor.async_nolink(PhoenixReplay.TaskSupervisor, Finalizer, :finish, [

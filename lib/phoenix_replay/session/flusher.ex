@@ -26,7 +26,7 @@ defmodule PhoenixReplay.Session.Flusher do
              %{redacted | events: []},
              Enum.zip(seqs, redacted.events)
            ) do
-      Buffer.flushed(id, chunk)
+      Buffer.remove_flushed(id, chunk)
     else
       [] -> :ok
       :error -> :ok

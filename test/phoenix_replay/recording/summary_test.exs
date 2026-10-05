@@ -37,6 +37,7 @@ defmodule PhoenixReplay.Recording.SummaryTest do
             data: %{name: name, params: %{}}
           }
 
-    assert Summary.event_names(events) == ~w(delete inc save)
+    assert Summary.totals(events).event_names == ~w(delete inc save)
+    assert Summary.totals(events, Summary.totals(events)).event_count == 8
   end
 end

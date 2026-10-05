@@ -11,23 +11,22 @@ defmodule PhoenixReplay.Session.Buffer do
 
   Rows:
 
-    * `{{id, :meta}, pid, config, recording}` — one per session
+    * `{{id, :meta}, pid, recording}` — one per session
+    * `{{id, :config}, config}` — the configuration the session records with
     * `{{id, :seq}, seq, live, bytes}` — events stored so far, LiveView
       events seen so far including those beyond `:max_events`, and the
       external size of the events still buffered, which `memory/0` counts
-    * `{{:process, pid}, id, started_at, config}` — finds the session of the
-      calling process
+    * `{{:process, pid}, id, started_at, max_events}` — finds the session
+      of the calling process, small enough to read on every event
     * `{{:collected, id, name}, count, limit}` — events a collector captured
       for the session, including those beyond its `:limit`
     * `{{id, :state}, draw, flushed}` — the session's draw for
-      `keep: [rate: ...]`, made when it opens, and totals of the events
-      already flushed to storage, written only by the process flushing it
+      `keep: [rate: ...]`, made when it opens, and the
+      `t:PhoenixReplay.Recording.Summary.totals/0` of the events already
+      flushed to storage, written only by the process flushing it
     * `{{id, seq}, event}` — one per event not yet flushed, `seq` counting
       up from `0`
     * `{{id, :saving}, true}` — the session ended and a task is saving it
-
-  Integer keys sort before atoms, so each session's events precede its
-  metadata rows in the ordered set.
   """
 
   import Ex2ms
@@ -38,18 +37,8 @@ defmodule PhoenixReplay.Session.Buffer do
 
   @table __MODULE__
 
-  @typedoc "Totals of the events a session has flushed to storage."
-  @type flushed :: %{
-          event_count: non_neg_integer(),
-          error_count: non_neg_integer(),
-          event_names: [String.t()],
-          duration_ms: non_neg_integer()
-        }
-
-  @no_flushed %{event_count: 0, error_count: 0, event_names: [], duration_ms: 0}
-
   @typedoc "A buffered session found by `attribute/1`."
-  @opaque session :: {Recording.id(), integer(), Config.t()}
+  @opaque session :: {Recording.id(), integer()}
 
   @doc "Creates the named table. Called once from `PhoenixReplay.Application`."
   @spec create_table() :: :ok
@@ -66,10 +55,11 @@ defmodule PhoenixReplay.Session.Buffer do
   @spec open(Recording.t(), pid(), Config.t(), float()) :: :ok
   def open(%Recording{id: id} = recording, pid, %Config{} = config, draw \\ :rand.uniform()) do
     :ets.insert(@table, [
-      {{id, :meta}, pid, config, %{recording | events: []}},
+      {{id, :meta}, pid, %{recording | events: []}},
+      {{id, :config}, config},
       {{id, :seq}, 0, 0, 0},
-      {{id, :state}, draw, @no_flushed},
-      {{:process, pid}, id, System.monotonic_time(:millisecond), config}
+      {{id, :state}, draw, Summary.totals([])},
+      {{:process, pid}, id, System.monotonic_time(:millisecond), config.max_events}
     ])
 
     :ok
@@ -78,9 +68,11 @@ defmodule PhoenixReplay.Session.Buffer do
   @doc "Returns the id and configuration of the session `pid` records, if any."
   @spec session(pid()) :: {:ok, Recording.id(), Config.t()} | :error
   def session(pid) do
-    case :ets.lookup(@table, {:process, pid}) do
-      [{_key, id, _started_at, config}] -> {:ok, id, config}
-      [] -> :error
+    with [{_key, id, _started_at, _max_events}] <- :ets.lookup(@table, {:process, pid}),
+         {:ok, config} <- config(id) do
+      {:ok, id, config}
+    else
+      _none -> :error
     end
   end
 
@@ -93,8 +85,8 @@ defmodule PhoenixReplay.Session.Buffer do
   @spec record(pid(), Event.type(), map()) :: :ok | :full | :error
   def record(pid, type, data) do
     case :ets.lookup(@table, {:process, pid}) do
-      [{_key, id, started_at, config}] ->
-        if :ets.update_counter(@table, {id, :seq}, {3, 1}) <= config.max_events,
+      [{_key, id, started_at, max_events}] ->
+        if :ets.update_counter(@table, {id, :seq}, {3, 1}) <= max_events,
           do: write(id, started_at, type, data),
           else: :full
 
@@ -113,9 +105,11 @@ defmodule PhoenixReplay.Session.Buffer do
   def attribute([]), do: :error
 
   def attribute([pid | rest]) do
-    case :ets.lookup(@table, {:process, pid}) do
-      [{_key, id, started_at, config}] -> {:ok, {id, started_at, config}, config}
-      [] -> attribute(rest)
+    with [{_key, id, started_at, _max_events}] <- :ets.lookup(@table, {:process, pid}),
+         {:ok, config} <- config(id) do
+      {:ok, {id, started_at}, config}
+    else
+      _none -> attribute(rest)
     end
   end
 
@@ -127,7 +121,7 @@ defmodule PhoenixReplay.Session.Buffer do
   Collected events do not count towards `:max_events`.
   """
   @spec collect(session(), Event.type(), map(), String.t(), pos_integer()) :: :ok | :dropped
-  def collect({id, started_at, _config}, type, data, name, limit) do
+  def collect({id, started_at}, type, data, name, limit) do
     key = {:collected, id, name}
 
     if :ets.update_counter(@table, key, {2, 1}, {key, 0, limit}) <= limit,
@@ -150,8 +144,8 @@ defmodule PhoenixReplay.Session.Buffer do
   @spec put_url(Recording.id(), String.t()) :: :ok
   def put_url(id, url) do
     case :ets.lookup(@table, {id, :meta}) do
-      [{key, pid, config, recording}] ->
-        :ets.insert(@table, {key, pid, config, %{recording | url: url}})
+      [{key, pid, recording}] ->
+        :ets.insert(@table, {key, pid, %{recording | url: url}})
 
       [] ->
         :ok
@@ -171,14 +165,14 @@ defmodule PhoenixReplay.Session.Buffer do
   @spec meta(Recording.id()) :: {:ok, Recording.t()} | :error
   def meta(id) do
     case :ets.lookup(@table, {id, :meta}) do
-      [{_key, _pid, _config, recording}] -> {:ok, %{recording | dropped: dropped(id)}}
+      [{_key, _pid, recording}] -> {:ok, %{recording | dropped: dropped(id)}}
       [] -> :error
     end
   end
 
   @doc "Counts the session's buffered events."
   @spec pending_count(Recording.id()) :: non_neg_integer()
-  def pending_count(id), do: event_count(id)
+  def pending_count(id), do: :ets.select_count(@table, events_of(id))
 
   @doc "Returns the session's draw for `keep: [rate: ...]`, made when it opened."
   @spec draw(Recording.id()) :: {:ok, float()} | :error
@@ -214,22 +208,14 @@ defmodule PhoenixReplay.Session.Buffer do
   end
 
   @doc """
-  Removes events written to storage by the session's flusher, and adds
-  them to its flushed totals.
+  Removes events written to storage by the session's flusher, and counts
+  them into its flushed totals.
   """
-  @spec flushed(Recording.id(), Storage.chunk()) :: :ok
-  def flushed(id, chunk) do
+  @spec remove_flushed(Recording.id(), Storage.chunk()) :: :ok
+  def remove_flushed(id, chunk) do
     [{key, draw, totals}] = :ets.lookup(@table, {id, :state})
     events = Enum.map(chunk, fn {_seq, event} -> event end)
-
-    totals = %{
-      event_count: totals.event_count + Enum.count(events, &(&1.type != :pointer)),
-      error_count: totals.error_count + Enum.count(events, &Event.error?/1),
-      event_names: Enum.sort(Enum.uniq(totals.event_names ++ Summary.event_names(events))),
-      duration_ms: Enum.reduce(events, totals.duration_ms, &max(&1.at, &2))
-    }
-
-    :ets.insert(@table, {key, draw, totals})
+    :ets.insert(@table, {key, draw, Summary.totals(events, totals)})
     Enum.each(chunk, fn {seq, _event} -> :ets.delete(@table, {id, seq}) end)
     bytes = Enum.sum_by(events, &:erlang.external_size/1)
 
@@ -249,7 +235,7 @@ defmodule PhoenixReplay.Session.Buffer do
   @spec fetch(Recording.id()) :: {:ok, Recording.t()} | :error
   def fetch(id) do
     case :ets.lookup(@table, {id, :meta}) do
-      [{_key, _pid, _config, recording}] ->
+      [{_key, _pid, recording}] ->
         {:ok, %{recording | events: events(id), dropped: dropped(id)}}
 
       [] ->
@@ -260,8 +246,8 @@ defmodule PhoenixReplay.Session.Buffer do
   @doc "Returns the configuration the session was started with."
   @spec config(Recording.id()) :: {:ok, Config.t()} | :error
   def config(id) do
-    case :ets.lookup(@table, {id, :meta}) do
-      [{_key, _pid, config, _recording}] -> {:ok, config}
+    case :ets.lookup(@table, {id, :config}) do
+      [{_key, config}] -> {:ok, config}
       [] -> :error
     end
   end
@@ -270,7 +256,7 @@ defmodule PhoenixReplay.Session.Buffer do
   @spec sessions() :: [{Recording.id(), pid()}]
   def sessions do
     @table
-    |> :ets.select(fun(do: ({{id, :meta}, pid, _config, _recording} -> {id, pid})))
+    |> :ets.select(fun(do: ({{id, :meta}, pid, _recording} -> {id, pid})))
     |> Enum.reject(fn {id, _pid} -> :ets.member(@table, {id, :saving}) end)
   end
 
@@ -278,27 +264,23 @@ defmodule PhoenixReplay.Session.Buffer do
   Marks the session as being saved, so a restarted
   `PhoenixReplay.Session.Monitor` leaves it to the task saving it.
   """
-  @spec saving(Recording.id()) :: :ok
-  def saving(id) do
+  @spec mark_saving(Recording.id()) :: :ok
+  def mark_saving(id) do
     :ets.insert(@table, {{id, :saving}, true})
     :ok
   end
 
-  @doc "Summarizes every buffered session, most recent first."
+  @doc """
+  Summarizes every buffered session, most recent first, counting the
+  events flushed to storage and those still buffered.
+  """
   @spec summaries() :: [Summary.t()]
   def summaries do
     @table
-    |> :ets.select(fun(do: ({{_id, :meta}, pid, _config, recording} -> {pid, recording})))
+    |> :ets.select(fun(do: ({{_id, :meta}, pid, recording} -> {pid, recording})))
     |> Enum.map(fn {pid, recording} ->
-      flushed = flushed_totals(recording.id)
-
-      %{
-        Summary.new(recording, live?: Process.alive?(pid))
-        | event_count: flushed.event_count + shown_count(recording.id),
-          event_names: Enum.sort(Enum.uniq(flushed.event_names ++ event_names(recording.id))),
-          error_count: flushed.error_count + error_count(recording.id),
-          duration_ms: max(flushed.duration_ms, duration_ms(recording.id))
-      }
+      totals = Summary.totals(events(recording.id), flushed_totals(recording.id))
+      Map.merge(Summary.new(recording, live?: Process.alive?(pid)), totals)
     end)
     |> Summary.sort()
   end
@@ -311,6 +293,7 @@ defmodule PhoenixReplay.Session.Buffer do
     :ets.delete(@table, {id, :seq})
     :ets.delete(@table, {id, :state})
     :ets.delete(@table, {id, :saving})
+    :ets.delete(@table, {id, :config})
     :ets.delete(@table, {id, :meta})
     :ets.select_delete(@table, events_of(id))
     :ok
@@ -319,7 +302,7 @@ defmodule PhoenixReplay.Session.Buffer do
   defp flushed_totals(id) do
     case :ets.lookup(@table, {id, :state}) do
       [{_key, _draw, totals}] -> totals
-      [] -> @no_flushed
+      [] -> Summary.totals([])
     end
   end
 
@@ -353,25 +336,6 @@ defmodule PhoenixReplay.Session.Buffer do
     :ets.select(@table, fun(do: ({{^id, seq}, event} when is_integer(seq) -> event)))
   end
 
-  defp event_count(id) do
-    :ets.select_count(@table, events_of(id))
-  end
-
-  # Events a summary counts: pointer batches are not shown as events.
-  defp shown_count(id) do
-    :ets.select_count(
-      @table,
-      fun(do: ({{^id, seq}, %{type: type}} when is_integer(seq) and type != :pointer -> true))
-    )
-  end
-
-  defp event_names(id) do
-    @table
-    |> :ets.select(fun(do: ({{^id, _seq}, %{type: :event, data: %{name: name}}} -> name)))
-    |> Enum.uniq()
-    |> Enum.sort()
-  end
-
   defp dropped(id) do
     @table
     |> :ets.select(
@@ -380,26 +344,5 @@ defmodule PhoenixReplay.Session.Buffer do
       end
     )
     |> Map.new()
-  end
-
-  defp error_count(id) do
-    @table
-    |> :ets.select(
-      fun do
-        {{^id, _seq}, %{type: type}} = row
-        when type == :telemetry or type == :log or type == :exit ->
-          row
-      end
-    )
-    |> Enum.count(fn {_key, event} -> Event.error?(event) end)
-  end
-
-  defp duration_ms(id) do
-    with {^id, seq} when is_integer(seq) <- :ets.prev(@table, {id, :meta}),
-         [{_key, %Event{at: at}}] <- :ets.lookup(@table, {id, seq}) do
-      at
-    else
-      _none -> 0
-    end
   end
 end

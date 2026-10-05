@@ -23,7 +23,7 @@ defmodule PhoenixReplay.Session.BufferTest do
     assert {id, self()} in Buffer.sessions()
   end
 
-  test "summarizes sessions without decoding events", %{recording: %{id: id}} do
+  test "summarizes buffered sessions", %{recording: %{id: id}} do
     Buffer.append(id, 0, %Event{at: 0, type: :mount, data: %{assigns: %{}}})
     Buffer.append(id, 1, %Event{at: 250, type: :info, data: %{tag: nil}})
     Buffer.append(id, 2, %Event{at: 260, type: :event, data: %{name: "save", params: %{}}})
@@ -74,7 +74,7 @@ defmodule PhoenixReplay.Session.BufferTest do
     assert [{2, %Event{type: :info}}] = Buffer.pending(id, 1)
 
     chunk = Enum.take(Buffer.pending(id), 2)
-    :ok = Buffer.flushed(id, chunk)
+    :ok = Buffer.remove_flushed(id, chunk)
 
     assert Buffer.flushed?(id)
     assert Buffer.pending_count(id) == 1
@@ -109,7 +109,7 @@ defmodule PhoenixReplay.Session.BufferTest do
     # ETS alone counts the binary by reference, a few bytes.
     assert Buffer.memory() - before >= 2_000_000
 
-    :ok = Buffer.flushed(id, Buffer.pending(id))
+    :ok = Buffer.remove_flushed(id, Buffer.pending(id))
     assert Buffer.memory() - before < 100_000
   end
 
@@ -136,7 +136,7 @@ defmodule PhoenixReplay.Session.BufferTest do
     recording: %{id: id}
   } do
     assert {id, self()} in Buffer.sessions()
-    :ok = Buffer.saving(id)
+    :ok = Buffer.mark_saving(id)
     refute {id, self()} in Buffer.sessions()
   end
 end

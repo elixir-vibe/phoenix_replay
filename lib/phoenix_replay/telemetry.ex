@@ -35,7 +35,7 @@ defmodule PhoenixReplay.Telemetry do
     :telemetry.execute(
       [:phoenix_replay, :recording, :persisted],
       %{
-        event_count: Summary.event_count(recording.events),
+        event_count: Summary.totals(recording.events).event_count,
         duration_ms: Timeline.duration_ms(recording)
       },
       %{id: recording.id, view: recording.view}
@@ -48,7 +48,7 @@ defmodule PhoenixReplay.Telemetry do
     :telemetry.execute(
       [:phoenix_replay, :recording, :recovered],
       %{
-        event_count: Summary.event_count(recording.events),
+        event_count: Summary.totals(recording.events).event_count,
         duration_ms: Timeline.duration_ms(recording)
       },
       %{id: recording.id, view: recording.view}
