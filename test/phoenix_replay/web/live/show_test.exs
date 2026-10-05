@@ -464,9 +464,9 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
                ~s(#replay-viewport[data-width="390"][data-height="844"][data-mode="fit"])
              )
 
-      view |> element(~s(button[value="actual"])) |> render_click()
+      view |> element(~s(#replay-view-items button[value="actual"])) |> render_click()
       assert has_element?(view, ~s(#replay-viewport[data-mode="actual"]))
-      assert has_element?(view, ~s(button[value="actual"][aria-pressed="true"]))
+      assert has_element?(view, ~s(button[value="actual"][aria-checked="true"]))
       open_tab(view, "Visit")
       device = view |> element("#replay-device") |> render()
       assert device =~ "390 × 844 @3x"
@@ -516,7 +516,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       refute has_element?(view, "#replay-pointer-switch[disabled]")
 
       view |> element("#replay-rotate") |> render_click()
-      assert has_element?(view, ~s(#replay-rotate[aria-pressed="true"]))
+      assert has_element?(view, ~s(#replay-rotate[aria-checked="true"]))
       assert has_element?(view, ~s(#replay-viewport[data-width="844"][data-height="390"]))
       assert has_element?(view, ~s(#replay-orientation[data-orientation="landscape"]))
       assert has_element?(view, "#replay-pointer-switch[disabled]")

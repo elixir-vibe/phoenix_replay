@@ -61,7 +61,7 @@ Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&ev
 
 The header names the view, the page and when the session started, with its duration and event count. When the session had errors, **"2 errors · jump to first"** takes you to the first one. **Copy link to 0:07** copies a link to the current moment: `/admin/replay/<id>?at=<index>` opens the player there.
 
-The replayed page sits under a bar showing its URL at that moment. When the browser's viewport was recorded, the page renders at that size, fitted to the window or at 100% in a scrolling box, and the bar shows its size and scale.
+The replayed page sits under a bar showing its URL at that moment. When the browser's viewport was recorded, the page renders at that size, and the bar shows its orientation, size and scale. That chip opens the **View** menu: fit the page to the window or show it at its actual size in a scrolling box, or **Rotate** it to the other orientation.
 
 Below it, play at 1×, 2×, 5× or 10×, step to the previous or next event, and see the time to the hundredth of a second. The timeline has a lane of markers per kind of event, LiveView, Telemetry and Logs, with errors larger and red. Click or drag it to seek, or focus it and use `←`, `→` and `Space`.
 
@@ -71,7 +71,7 @@ The panel beside it has three tabs:
 - **State** lists the assigns at that moment, marking the ones the selected event set. Open one to see its full value.
 - **Visit** shows the device, the other sessions of the same browser tab, the page the user came from, and how the visit started: its campaign, referrer, landing page and kept headers.
 
-When the session recorded the pointer, it is drawn over the replay: the cursor, moved between samples with a short trail, a ripple where it pressed, on the pressed element when the replayed page has it, and a fingertip for each touch. The replayed page scrolls as the user's did. **Pointer** in the frame's bar hides or shows them. See [Pointer, touches and scrolling](recording.md#pointer-touches-and-scrolling).
+When the session recorded the pointer, it is drawn over the replay: the cursor, moved between samples with a short trail, a ripple where it pressed, on the pressed element when the replayed page has it, and a fingertip for each touch. The replayed page scrolls as the user's did. The cursor button in the frame's bar hides or shows them. See [Pointer, touches and scrolling](recording.md#pointer-touches-and-scrolling).
 
 Each viewer drives a private frame, so several people can watch the same recording independently.
 

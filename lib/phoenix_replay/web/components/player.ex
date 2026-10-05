@@ -271,77 +271,110 @@ defmodule PhoenixReplay.Web.Components.Player do
     >
       <style id="replay-viewport-style" phx-update="ignore">
       </style>
-      <div class="flex items-center gap-3 border-b border-line bg-chrome px-3 py-2 text-xs text-muted">
-        <span class="min-w-0 flex-1 truncate rounded-md border border-line bg-surface px-2.5 py-1 font-mono">
+      <%!-- The URL takes the room; the view's controls fold into a menu. --%>
+      <div class="@container flex items-center gap-2 border-b border-line bg-chrome px-3 py-2 text-xs text-muted">
+        <span
+          id="replay-url"
+          title={@url}
+          class="min-w-[40%] flex-1 truncate rounded-md border border-line bg-surface px-2.5 py-1 font-mono"
+        >
           {@url || "—"}
         </span>
-        <span class="hidden whitespace-nowrap lg:inline">Replayed from recorded assigns</span>
         <span
-          :if={@viewport}
-          id="replay-orientation"
-          data-orientation={@orientation}
-          title={
-            if @rotated,
-              do: "Rotated to #{@orientation} from the recorded viewport",
-              else: "The viewport at this moment is #{@orientation}"
-          }
-          class="inline-flex items-center gap-1.5 whitespace-nowrap"
+          title="Replayed from recorded assigns: the view renders again, rather than a capture of the screen"
+          aria-label="Replayed from recorded assigns"
+          class="inline-flex shrink-0"
         >
-          <.icon :if={@orientation == :portrait} name="lucide:rectangle-vertical" class="size-3.5" />
-          <.icon
-            :if={@orientation == :landscape}
-            name="lucide:rectangle-horizontal"
-            class="size-3.5"
-          />
-          <span class="hidden capitalize sm:inline">{@orientation}</span>
+          <.icon name="lucide:info" class="size-3.5" />
         </span>
-        <span
-          :if={@viewport}
-          id="replay-viewport-scale"
-          phx-update="ignore"
-          data-scale-label
-          class="hidden font-mono tabular-nums sm:inline"
-        ></span>
-        <button
-          :if={@viewport}
-          id="replay-rotate"
-          type="button"
-          phx-click="rotate"
-          aria-pressed={to_string(@rotated)}
-          title="Show the replay in the other orientation"
-          class="inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-muted transition-colors hover:text-ink aria-pressed:bg-accent/15 aria-pressed:text-accent pointer-coarse:h-11"
-        >
-          <.icon name="lucide:rotate-cw-square" class="size-3.5" />
-          <span class="hidden sm:inline">Rotate</span>
-        </button>
-        <%!-- A switch: the knob slides and fills when the pointer is shown. --%>
+        <%!-- The pointer is switched often, so it stays out of the menu. --%>
         <button
           :if={@pointer? and @viewport}
           id="replay-pointer-switch"
           type="button"
           role="switch"
           aria-checked="true"
+          aria-label="Pointer"
           disabled={@rotated}
-          title={@rotated && "The pointer was recorded in the other orientation"}
+          title={
+            if @rotated,
+              do: "The pointer was recorded in the other orientation",
+              else: "Show the pointer"
+          }
           phx-click={
             %JS{}
             |> JS.toggle_class("hidden", to: "#replay-pointer")
             |> JS.toggle_attribute({"aria-checked", "true", "false"})
           }
-          class="group inline-flex h-7 items-center gap-2 rounded-md px-1.5 text-muted transition-colors hover:text-ink aria-checked:text-ink disabled:opacity-40 disabled:hover:text-muted pointer-coarse:h-11"
+          class="inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-hover hover:text-ink aria-checked:bg-accent/15 aria-checked:text-accent disabled:opacity-40 disabled:hover:bg-transparent pointer-coarse:size-11"
         >
-          <.icon name="lucide:mouse-pointer-2" class="size-3.5" /> Pointer
-          <span class="relative inline-block h-4 w-7 rounded-full bg-line transition-colors group-aria-checked:bg-accent">
-            <span class="absolute top-0.5 left-0.5 size-3 rounded-full bg-surface shadow-sm transition-transform group-aria-checked:translate-x-3"></span>
-          </span>
+          <.icon name="lucide:mouse-pointer-2" class="size-3.5" />
         </button>
-        <.segmented
+        <.menu
           :if={@viewport}
-          label="Frame size"
-          options={[{"fit", "Fit"}, {"actual", "100%"}]}
-          value={@mode}
-          event="frame_mode"
-        />
+          id="replay-view"
+          label="View"
+          trigger_class="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-line bg-surface px-2 text-muted transition-colors hover:bg-hover hover:text-ink aria-expanded:text-ink pointer-coarse:h-11"
+        >
+          <:trigger>
+            <span
+              id="replay-orientation"
+              data-orientation={@orientation}
+              title={
+                if @rotated,
+                  do: "Rotated to #{@orientation} from the recorded viewport",
+                  else: "The viewport at this moment is #{@orientation}"
+              }
+              class="inline-flex"
+            >
+              <.icon
+                :if={@orientation == :portrait}
+                name="lucide:rectangle-vertical"
+                class="size-3.5"
+              />
+              <.icon
+                :if={@orientation == :landscape}
+                name="lucide:rectangle-horizontal"
+                class="size-3.5"
+              />
+              <span class="sr-only">{@orientation}</span>
+            </span>
+            <span
+              id="replay-viewport-scale"
+              phx-update="ignore"
+              data-scale-label
+              class="hidden font-mono whitespace-nowrap tabular-nums @[34rem]:inline"
+            ></span>
+            <.icon name="lucide:chevron-down" class="size-3" />
+          </:trigger>
+          <:item :for={{value, label} <- [{"fit", "Fit to window"}, {"actual", "Actual size"}]}>
+            <button
+              type="button"
+              role="menuitemradio"
+              value={value}
+              aria-checked={to_string(value == @mode)}
+              phx-click={JS.push("frame_mode", value: %{value: value}) |> close_menu("replay-view")}
+              class="group"
+            >
+              <.icon name="lucide:check" class="size-4 opacity-0 group-aria-checked:opacity-100" />
+              {label}
+            </button>
+          </:item>
+          <:item>
+            <button
+              id="replay-rotate"
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={to_string(@rotated)}
+              title="Show the replay in the other orientation"
+              phx-click={JS.push("rotate") |> close_menu("replay-view")}
+              class="group"
+            >
+              <.icon name="lucide:check" class="size-4 opacity-0 group-aria-checked:opacity-100" />
+              Rotate
+            </button>
+          </:item>
+        </.menu>
       </div>
       <div id="replay-viewport-box" class="relative bg-canvas">
         <iframe id="replay-frame" title="Replay" src={@src} class="block h-[600px] w-full border-0"></iframe>

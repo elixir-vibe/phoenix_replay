@@ -325,10 +325,16 @@ defmodule PhoenixReplay.Web.Components.Core do
 
   @doc """
   A button that opens a short list of actions, closed again by a click
-  elsewhere or Escape. `label` names the button.
+  elsewhere or Escape. `label` names the button; `trigger_class` styles
+  it, by default as an icon button.
   """
   attr :id, :string, required: true
   attr :label, :string, required: true
+
+  attr :trigger_class, :string,
+    default:
+      "inline-flex size-9 items-center justify-center rounded-md border border-line text-muted transition-colors hover:bg-hover hover:text-ink pointer-coarse:size-11"
+
   slot :trigger, required: true
 
   slot :item, required: true do
@@ -354,7 +360,7 @@ defmodule PhoenixReplay.Web.Components.Core do
         aria-expanded="false"
         aria-controls={"#{@id}-items"}
         phx-click={toggle_menu(@id)}
-        class="inline-flex size-9 items-center justify-center rounded-md border border-line text-muted transition-colors hover:bg-hover hover:text-ink pointer-coarse:size-11"
+        class={@trigger_class}
       >
         {render_slot(@trigger)}
       </button>
