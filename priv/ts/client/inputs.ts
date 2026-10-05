@@ -87,6 +87,9 @@ const field = (el: Control): string => el.name || el.id || 'value'
 /** Records form controls while started; see `replayRecorder`. */
 export class InputRecorder {
   private readonly pending = new Map<string, [Control, ReturnType<typeof setTimeout>]>()
+  // What was last reported for each control, so leaving a box, which fires
+  // `change` after the typing was reported, adds no second entry.
+  private readonly reported = new Map<string, string>()
   private readonly onInput = (event: Event): void => this.changed(event.target)
 
   /** Reports the controls the user already changed, then each change after a pause. */
@@ -136,7 +139,14 @@ export class InputRecorder {
 
   private report(el: Control): void {
     const selector = identify(el)
-    if (selector) replayState(INPUTS_KEY, { [selector]: { [field(el)]: read(el) } }, this.target)
+    if (!selector) return
+
+    const value = read(el)
+    const encoded = JSON.stringify(value)
+    if (this.reported.get(selector) === encoded) return
+
+    this.reported.set(selector, encoded)
+    replayState(INPUTS_KEY, { [selector]: { [field(el)]: value } }, this.target)
   }
 }
 

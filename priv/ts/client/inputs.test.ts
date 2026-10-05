@@ -147,3 +147,18 @@ test('puts values back, resets what is no longer recorded, and skips filtered on
   expect(value('#note')).toBe('rendered')
   expect(value('#q')).toBe('shoes')
 })
+
+test('adds nothing when a box is left after its typing was recorded', async () => {
+  page('<input id="search" name="q">')
+  const reports = listen()
+  recorder = new InputRecorder(window, 10)
+
+  type('#search', 'shoes')
+  await wait(30)
+  ;(document.querySelector('#search') as HTMLInputElement).dispatchEvent(
+    new Event('change', { bubbles: true })
+  )
+  await wait(30)
+
+  expect(reports).toEqual([{ '#search': { q: 'shoes' } }])
+})
