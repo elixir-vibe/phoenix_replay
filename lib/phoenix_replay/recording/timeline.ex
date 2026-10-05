@@ -67,7 +67,7 @@ defmodule PhoenixReplay.Recording.Timeline do
   def viewport_at(%Recording{events: events, client: client}, index) do
     events
     |> Enum.take(index + 1)
-    |> Enum.reduce(client[:viewport], fn
+    |> Enum.reduce(client.viewport, fn
       %Event{type: :viewport, data: viewport}, _acc -> viewport
       %Event{}, acc -> acc
     end)

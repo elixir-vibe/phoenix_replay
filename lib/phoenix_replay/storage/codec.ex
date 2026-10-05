@@ -8,6 +8,8 @@ defmodule PhoenixReplay.Storage.Codec do
   has never seen fails to decode instead of growing the atom table.
   """
 
+  alias PhoenixReplay.Recording
+
   @frame_marker "PRF1"
 
   @doc "Encodes a term."
@@ -19,7 +21,8 @@ defmodule PhoenixReplay.Storage.Codec do
   module, or into a list when `shape` is `:list`.
 
   Structs are rebuilt with `struct/2`, so data written before a field was
-  added gets the field's default.
+  added gets the field's default, and recordings go through
+  `PhoenixReplay.Recording.upgrade/1`.
 
   Recordings hold module names, such as the structs in assigns, and safe
   decoding refuses atoms the VM has not created yet. In development, where
@@ -106,7 +109,10 @@ defmodule PhoenixReplay.Storage.Codec do
   defp shape(term, :list) when is_list(term), do: {:ok, term}
 
   defp shape(%{__struct__: struct} = term, struct),
-    do: {:ok, struct(struct, Map.from_struct(term))}
+    do: {:ok, struct |> struct(Map.from_struct(term)) |> upgrade()}
 
   defp shape(_term, _shape), do: {:error, :undecodable}
+
+  defp upgrade(%Recording{} = recording), do: Recording.upgrade(recording)
+  defp upgrade(term), do: term
 end

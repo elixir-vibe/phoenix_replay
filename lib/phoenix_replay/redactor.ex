@@ -72,18 +72,18 @@ defmodule PhoenixReplay.Redactor do
     with {:ok, url} <- redact_term(recording.url, redactor),
          {:ok, params} <- redact_term(recording.params, redactor),
          {:ok, session} <- redact_term(recording.session, redactor),
-         {:ok, referer} <- redact_term(recording.client[:referer], redactor),
-         {:ok, user_agent} <- redact_term(recording.client[:user_agent], redactor),
-         {:ok, headers} <- redact_term(recording.client[:headers], redactor),
-         {:ok, landing} <- redact_term(recording.client[:landing], redactor),
+         {:ok, navigated_from} <- redact_term(recording.client.navigated_from, redactor),
+         {:ok, user_agent} <- redact_term(recording.client.user_agent, redactor),
+         {:ok, headers} <- redact_term(recording.client.headers, redactor),
+         {:ok, landing} <- redact_term(recording.client.landing, redactor),
          {:ok, events} <- redact_events(recording.events, redactor, progress, total) do
-      client =
-        Map.merge(recording.client, %{
-          referer: referer,
+      client = %{
+        recording.client
+        | navigated_from: navigated_from,
           user_agent: user_agent,
           headers: headers,
           landing: landing
-        })
+      }
 
       {:ok,
        %{recording | url: url, params: params, session: session, client: client, events: events}}

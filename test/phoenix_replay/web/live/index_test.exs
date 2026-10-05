@@ -5,6 +5,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
   import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Config, Recordings, Storage}
+  alias PhoenixReplay.Recording.Client.Landing
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
 
@@ -50,14 +51,14 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
   test "shows the device and source of each session" do
     recording = Fixtures.counter_recording(id: "phone")
 
-    client =
-      Map.merge(recording.client, %{
-        viewport: %{width: 390, height: 844, dpr: 3},
+    client = %{
+      recording.client
+      | viewport: %{width: 390, height: 844, dpr: 3},
         user_agent:
           "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 " <>
             "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
-        landing: %{path: "/", at: 0, params: %{"utm_source" => "hn"}, referrer: nil}
-      })
+        landing: %Landing{path: "/", at: 0, params: %{"utm_source" => "hn"}}
+    }
 
     Storage.save(Fixtures.storage(), %{recording | client: client})
     {:ok, view, _html} = live(build_conn(), "/replay?errors=1&view=X")

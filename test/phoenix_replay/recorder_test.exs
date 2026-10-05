@@ -140,20 +140,18 @@ defmodule PhoenixReplay.RecorderTest do
       |> Plug.Conn.put_private(:live_view_connect_info, %{user_agent: @iphone})
     end
 
-    test "records the viewport, user agent, tab and referer the client sent", %{
+    test "records the viewport, user agent, tab and previous page the client sent", %{
       sessions: sessions
     } do
       {:ok, _view, _html, id} = Sessions.live(sessions, client_conn(), "/counter")
 
       assert {:ok, %{client: client}} = Buffer.fetch(id)
 
-      assert client == %{
+      assert client == %PhoenixReplay.Recording.Client{
                viewport: %{width: 390, height: 844, dpr: 3},
                user_agent: @iphone,
                tab: "tab-1",
-               referer: "http://www.example.com/form",
-               headers: %{},
-               landing: nil
+               navigated_from: "http://www.example.com/form"
              }
     end
 
@@ -161,9 +159,8 @@ defmodule PhoenixReplay.RecorderTest do
       conn = put_connect_params(build_conn(), %{"_live_referer" => "undefined"})
       {:ok, _view, _html, id} = Sessions.live(sessions, conn, "/counter")
 
-      assert {:ok,
-              %{client: %{viewport: nil, user_agent: nil, tab: nil, referer: nil, landing: nil}}} =
-               Buffer.fetch(id)
+      assert {:ok, %{client: %PhoenixReplay.Recording.Client{} = client}} = Buffer.fetch(id)
+      assert client == %PhoenixReplay.Recording.Client{}
     end
 
     test "records viewport changes sent with events, leaving them out of params", %{

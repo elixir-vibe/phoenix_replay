@@ -47,7 +47,7 @@ defmodule PhoenixReplay.RecordingsTest do
 
   test "lists running sessions matching a filter", %{config: config} do
     recording = Fixtures.counter_recording(id: "running", connected_at: 1)
-    Buffer.open(%{recording | client: Map.put(recording.client, :tab, "t9")}, self(), config)
+    Buffer.open(%{recording | client: %{recording.client | tab: "t9"}}, self(), config)
     on_exit(fn -> Buffer.close("running") end)
 
     assert [%{id: "running", live?: true}] =

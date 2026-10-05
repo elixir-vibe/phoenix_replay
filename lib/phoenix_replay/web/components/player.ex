@@ -515,9 +515,9 @@ defmodule PhoenixReplay.Web.Components.Player do
     assigns =
       assign(assigns,
         user_agent: client.user_agent,
-        referer: client.referer,
-        landing: client[:landing],
-        headers: client[:headers] || %{}
+        navigated_from: client.navigated_from,
+        landing: client.landing,
+        headers: client.headers
       )
 
     ~H"""
@@ -555,9 +555,11 @@ defmodule PhoenixReplay.Web.Components.Player do
         </div>
       </section>
 
-      <section :if={@referer} aria-labelledby="replay-referer-heading">
-        <h3 id="replay-referer-heading" class={heading()}>Came from</h3>
-        <code class="font-mono text-xs break-all" title={@referer}>{Format.path_of(@referer)}</code>
+      <section :if={@navigated_from} aria-labelledby="replay-navigated-from-heading">
+        <h3 id="replay-navigated-from-heading" class={heading()}>Came from</h3>
+        <code class="font-mono text-xs break-all" title={@navigated_from}>
+          {Format.path_of(@navigated_from)}
+        </code>
       </section>
 
       <section

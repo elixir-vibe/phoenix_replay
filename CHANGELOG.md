@@ -6,6 +6,18 @@
 
 - Pointer, touch and scroll recording, off by default. `:pointer` turns it on, globally or per live session, with every interval and cap configurable: `:sample`, `:scroll`, `:flush`, `:max_points` and `:limit`. The client module's new `replayPointer(liveSocket)` records only while a recorded LiveView asks for it, and sends batches over the LiveView socket as an event the recorder halts before the view sees it. The installer wires it.
 - The player draws the pointer over the replay: the cursor with a short trail, a ripple for each press, placed on the pressed element when the replay has it, and a fingertip for each touch, and it scrolls the replayed page as recorded. **Pointer** in the frame's bar toggles them.
+- `PhoenixReplay.Storage` has an optional `child_spec/1` callback for a process the backend needs, which the application starts. File storage starts its summary index this way.
+
+### Changed
+
+- A recording's `client` is a `PhoenixReplay.Recording.Client` struct, and its landing a `PhoenixReplay.Recording.Client.Landing`. The URL of the LiveView that live-navigated to the session is `navigated_from`, formerly `referer`, so it no longer reads like the landing's HTTP `referrer`. Recordings stored by earlier versions are brought up to date when read.
+- Overriding `:flush`, `:pointer`, `:logs` or `:landing` in a live session merges the override into the global configuration, as the other options already did, instead of starting from the defaults. `nil` and `false` switch any of these options off; `true` switches one on with the global configuration or the defaults.
+- `PhoenixReplay.Storage.File.query/3` is gone; the storage facade pages file storage from `list/1`.
+
+### Fixed
+
+- A save that raised, such as an Ecto save while the database is down, is retried like one that returned an error, rather than dropping the recording.
+- `[:phoenix_replay, :recording, :persisted]` and `:recovered` count events without pointer batches, as the summary does.
 
 ## 0.5.1 - 2026-10-04
 

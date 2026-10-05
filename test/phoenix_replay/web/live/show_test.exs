@@ -5,6 +5,8 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Config, Storage}
+  alias PhoenixReplay.Recording.Client
+  alias PhoenixReplay.Recording.Client.Landing
   alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
@@ -246,12 +248,12 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   end
 
   describe "client context" do
-    defp client(viewport, tab, referer \\ nil) do
-      %{
+    defp client(viewport, tab, navigated_from \\ nil) do
+      %Client{
         viewport: viewport,
         user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1",
         tab: tab,
-        referer: referer
+        navigated_from: navigated_from
       }
     end
 
@@ -281,16 +283,16 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     test "shows how the visit started" do
       recording = Fixtures.counter_recording(id: "visit")
 
-      client =
-        Map.merge(recording.client, %{
-          headers: %{"accept-language" => "de-DE"},
-          landing: %{
+      client = %{
+        recording.client
+        | headers: %{"accept-language" => "de-DE"},
+          landing: %Landing{
             path: "/pricing",
             at: 1_700_000_000_000,
             params: %{"utm_source" => "google", "utm_medium" => "cpc"},
             referrer: "https://www.google.com/search"
           }
-        })
+      }
 
       Storage.save(Fixtures.storage(), %{recording | client: client})
       {:ok, view, _html} = live(build_conn(), "/replay/visit")
@@ -305,9 +307,13 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     test "links the sessions of one browser tab" do
       for {id, at} <- [{"first", 1}, {"second", 2}, {"third", 3}] do
-        referer = if id != "first", do: "http://localhost/counter"
+        navigated_from = if id != "first", do: "http://localhost/counter"
         recording = Fixtures.counter_recording(id: id, connected_at: at)
-        Storage.save(Fixtures.storage(), %{recording | client: client(nil, "tab-9", referer)})
+
+        Storage.save(Fixtures.storage(), %{
+          recording
+          | client: client(nil, "tab-9", navigated_from)
+        })
       end
 
       {:ok, view, _html} = live(build_conn(), "/replay/second")

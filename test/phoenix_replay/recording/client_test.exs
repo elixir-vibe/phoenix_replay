@@ -2,6 +2,7 @@ defmodule PhoenixReplay.Recording.ClientTest do
   use ExUnit.Case, async: true
 
   alias PhoenixReplay.Recording.Client
+  alias PhoenixReplay.Recording.Client.Landing
 
   test "names the browser and system of a user agent" do
     assert Client.device(
@@ -26,7 +27,9 @@ defmodule PhoenixReplay.Recording.ClientTest do
   end
 
   test "names where a visit came from" do
-    landing = fn params, referrer -> %{landing: %{params: params, referrer: referrer}} end
+    landing = fn params, referrer ->
+      %Client{landing: %Landing{path: "/", at: 0, params: params, referrer: referrer}}
+    end
 
     assert Client.source(landing.(%{"utm_source" => "google", "utm_medium" => "cpc"}, nil)) ==
              "google / cpc"
@@ -35,7 +38,7 @@ defmodule PhoenixReplay.Recording.ClientTest do
              "news.ycombinator.com"
 
     assert Client.source(landing.(%{"ref" => "x"}, nil)) == nil
-    assert Client.source(%{landing: nil}) == nil
+    assert Client.source(%Client{}) == nil
     assert Client.referrer_host("not a url") == nil
   end
 

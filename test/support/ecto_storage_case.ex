@@ -8,6 +8,7 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
     repo = Keyword.fetch!(opts, :repo)
 
     quote do
+      alias PhoenixReplay.Recording.Client.Landing
       alias PhoenixReplay.Storage.Ecto, as: EctoStorage
       alias PhoenixReplay.Test.Fixtures
 
@@ -19,14 +20,14 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
       test "stores the device, viewport and source with the summary", %{opts: opts} do
         recording = Fixtures.counter_recording(id: "phone")
 
-        client =
-          Map.merge(recording.client, %{
-            viewport: %{width: 390, height: 844, dpr: 3},
+        client = %{
+          recording.client
+          | viewport: %{width: 390, height: 844, dpr: 3},
             user_agent:
               "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 " <>
                 "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
-            landing: %{path: "/", at: 0, params: %{"utm_source" => "hn"}, referrer: nil}
-          })
+            landing: %Landing{path: "/", at: 0, params: %{"utm_source" => "hn"}}
+        }
 
         :ok = EctoStorage.save(%{recording | client: client}, opts)
 
@@ -92,7 +93,7 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
               | url: extra[:url] || recording.url,
                 view: extra[:view] || recording.view,
                 events: recording.events ++ List.wrap(extra[:error]),
-                client: Map.put(recording.client, :tab, extra[:tab])
+                client: %{recording.client | tab: extra[:tab]}
             }
 
             :ok = EctoStorage.save(recording, opts)

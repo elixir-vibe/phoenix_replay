@@ -43,7 +43,7 @@ defmodule PhoenixReplay.Recording.TimelineTest do
         %Event{at: 1, type: :viewport, data: vp.(800)},
         %Event{at: 2, type: :event, data: %{name: "x", params: %{}}}
       ])
-      | client: %{viewport: vp.(1200), user_agent: nil, tab: nil, referer: nil}
+      | client: %PhoenixReplay.Recording.Client{viewport: vp.(1200)}
     }
 
     assert Timeline.viewport_at(recording, 0) == vp.(1200)

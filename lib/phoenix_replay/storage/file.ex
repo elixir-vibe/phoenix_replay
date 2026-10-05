@@ -185,7 +185,7 @@ defmodule PhoenixReplay.Storage.File do
       |> Enum.sort_by(fn {seq, _event} -> seq end)
       |> Enum.map(fn {_seq, event} -> event end)
 
-    %{recording | events: events}
+    Recording.upgrade(%{recording | events: events})
   end
 
   defp write_synced(path, data) do
