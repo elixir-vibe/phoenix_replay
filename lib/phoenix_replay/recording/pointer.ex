@@ -41,11 +41,9 @@ defmodule PhoenixReplay.Recording.Pointer do
 
   @doc """
   Splits a recording into the recording without its `:pointer` events and
-  their track, each list ordered by time:
-
-    * moves `[at, x, y, slot]`
-    * presses `[at, kind, x, y, slot, type, target, fx, fy]`
-    * scrolls `[at, x, y]`
+  their track: moves, presses and scrolls as the batches held them (see
+  `PhoenixReplay.Capture.Pointer`), unflattened, with each `dt` replaced by
+  `at`, the offset from the session's start, and each list ordered by it.
   """
   @spec split(Recording.t()) :: {Recording.t(), t()}
   def split(%Recording{events: events} = recording) do

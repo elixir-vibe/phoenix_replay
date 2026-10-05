@@ -1,13 +1,7 @@
 import { afterEach, expect, test } from 'volt:test'
 
 import { type PointerSettings, replayPointer } from './pointer'
-
-interface Batch {
-  span: number
-  m: number[]
-  p: unknown[][]
-  s: number[]
-}
+import type { Batch } from './pointer_track'
 
 let stop = (): void => {}
 
@@ -101,7 +95,8 @@ test("anchors presses to an element with a lasting id, not LiveView's own", () =
   pointer('pointerdown', 600, 600)
   leave('redirect')
 
-  expect(batches[0]?.p[0]?.[6]).toBe(null)
+  const [, , , , , , target] = batches[0]?.p[0] ?? []
+  expect(target).toBe(null)
 })
 
 test('records presses on the nearest element with an id, and where within it', () => {
@@ -126,7 +121,7 @@ test('gives each finger its own slot, and sends a full batch early', () => {
   pointer('pointerdown', 40, 40, { pointerType: 'touch', pointerId: 9 })
 
   expect(batches.length).toBe(1)
-  const slots = batches[0]?.p.map((press) => press[4])
+  const slots = batches[0]?.p.map(([, , , , slot]) => slot)
   expect(slots).toEqual([1, 2])
 })
 

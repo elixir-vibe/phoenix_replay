@@ -1,18 +1,8 @@
 import { ViewHook } from 'phoenix_live_view'
+
+import { DOWN, type Move, type Press, TOUCH, type Track } from '../client/pointer_track'
+import { lastAtOrBefore } from '../timeline'
 import { TIME_EVENT } from './scrubber'
-
-/** `[at, x, y, slot]`: a pointer position, slot `0` the mouse or pen. */
-type Move = [number, number, number, number]
-/** `[at, kind, x, y, slot, type, target, fx, fy]`: `kind` 0 down, 1 up; `type` 0 mouse, 1 touch, 2 pen. */
-type Press = [number, number, number, number, number, number, string | null, number, number]
-/** `[at, x, y]`: the page's scroll offset. */
-type Scroll = [number, number, number]
-
-interface Track {
-  moves: Move[]
-  presses: Press[]
-  scrolls: Scroll[]
-}
 
 /** How long a press ripple lasts, in milliseconds. */
 const RIPPLE_MS = 600
@@ -20,7 +10,6 @@ const RIPPLE_MS = 600
 const TRAIL_MS = 500
 /** Samples further apart are not interpolated between: the pointer rested. */
 const MAX_GAP_MS = 1_000
-const TOUCH = 1
 const SVG = 'http://www.w3.org/2000/svg'
 const ARROW = 'M0 0V16.5L4.6 12.2L7.6 18.8L10.3 17.6L7.4 11.1H13.2Z'
 
@@ -83,7 +72,7 @@ export class Pointer extends ViewHook {
 
     for (const press of this.track.presses) {
       const [at, kind] = press
-      if (kind === 0 && at <= ms && ms - at < RIPPLE_MS)
+      if (kind === DOWN && at <= ms && ms - at < RIPPLE_MS)
         svg.append(this.ripple(press, (ms - at) / RIPPLE_MS))
     }
 
@@ -104,7 +93,7 @@ export class Pointer extends ViewHook {
   }
 
   private scroll(ms: number): void {
-    const latest = this.track.scrolls[lastAtOrBefore(this.track.scrolls, ms)]
+    const latest = this.track.scrolls[lastAtOrBefore(this.track.scrolls, ms, sampleAt)]
     if (!latest) return
 
     const [, x, y] = latest
@@ -121,7 +110,7 @@ export class Pointer extends ViewHook {
 
     for (const [at, kind, x, y, slot, type] of this.track.presses) {
       if (at > ms || type !== TOUCH) continue
-      if (kind === 0) down.set(slot, [x, y])
+      if (kind === DOWN) down.set(slot, [x, y])
       else down.delete(slot)
     }
 
@@ -135,7 +124,11 @@ export class Pointer extends ViewHook {
 
   // The cursor hides while the last press was a touch.
   private touching(ms: number): boolean {
-    return this.track.presses[lastAtOrBefore(this.track.presses, ms)]?.[5] === TOUCH
+    const last = this.track.presses[lastAtOrBefore(this.track.presses, ms, sampleAt)]
+    if (!last) return false
+
+    const [, , , , , type] = last
+    return type === TOUCH
   }
 
   // On the pressed element when the replay has it, as a re-render can lay
@@ -202,32 +195,11 @@ const element = (name: string, attributes: Record<string, string>): SVGElement =
   return node
 }
 
-/** The index of the last sample at or before `ms`, or `-1`. Samples are ordered by time. */
-export const lastAtOrBefore = (
-  samples: ReadonlyArray<readonly number[] | Press>,
-  ms: number
-): number => {
-  let low = 0
-  let high = samples.length - 1
-  let found = -1
-
-  while (low <= high) {
-    const middle = (low + high) >> 1
-    const at = samples[middle]?.[0]
-    if (typeof at === 'number' && at <= ms) {
-      found = middle
-      low = middle + 1
-    } else {
-      high = middle - 1
-    }
-  }
-
-  return found
-}
+const sampleAt = ([at]: readonly [number, ...unknown[]]): number => at
 
 /** Where the pointer was at `ms`, between the samples around it, or `null` before the first. */
 export const position = (moves: Move[], ms: number): [number, number] | null => {
-  const index = lastAtOrBefore(moves, ms)
+  const index = lastAtOrBefore(moves, ms, sampleAt)
   const current = moves[index]
   if (!current) return null
 

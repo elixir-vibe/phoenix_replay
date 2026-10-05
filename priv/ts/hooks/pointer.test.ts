@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'volt:test'
 
+import type { Move, Track } from '../client/pointer_track'
 import { html, mountHook } from '../test/hooks'
 import { Pointer, position } from './pointer'
 import { TIME_EVENT } from './scrubber'
@@ -8,7 +9,7 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-const track = {
+const track: Track = {
   moves: [
     [100, 10, 10, 0],
     [200, 30, 50, 0],
@@ -42,7 +43,7 @@ const cursor = (el: HTMLElement): string | null =>
   el.querySelector('[data-cursor]')?.getAttribute('transform') ?? null
 
 test('interpolates the pointer between samples, but not across a pause', () => {
-  const moves = track.moves.filter((move) => move[3] === 0) as [number, number, number, number][]
+  const moves: Move[] = track.moves.filter(([, , , slot]) => slot === 0)
 
   expect(position(moves, 50)).toBe(null)
   expect(position(moves, 150)).toEqual([20, 30])

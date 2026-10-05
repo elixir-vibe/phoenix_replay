@@ -13,6 +13,18 @@
  * LiveView, which sends its own settings if it records the pointer too.
  */
 
+import {
+  type Batch,
+  DOWN,
+  MOUSE,
+  PEN,
+  type PointerKind,
+  type Press,
+  type PressKind,
+  TOUCH,
+  UP
+} from './pointer_track'
+
 /** The settings the server sends; see the `:pointer` option. */
 export interface PointerSettings {
   /** Milliseconds between recorded positions of a pointer. */
@@ -31,9 +43,6 @@ export interface PointerSocket {
 }
 
 const EVENT = 'phx_replay:pointer'
-const MOUSE = 0
-const TOUCH = 1
-const PEN = 2
 
 /**
  * Records while a LiveView asks for it, and returns a function that stops
@@ -66,7 +75,7 @@ export const replayPointer = (liveSocket: PointerSocket, target: Window = window
 
 class Recorder {
   private moves: number[] = []
-  private presses: unknown[][] = []
+  private presses: Press[] = []
   private scrolls: number[] = []
   private started = 0
   private readonly sampled = new Map<string, number>()
@@ -84,9 +93,9 @@ class Recorder {
 
     this.listeners = [
       [document, 'pointermove', (event) => this.move(event as PointerEvent)],
-      [document, 'pointerdown', (event) => this.press(event as PointerEvent, 0)],
-      [document, 'pointerup', (event) => this.press(event as PointerEvent, 1)],
-      [document, 'pointercancel', (event) => this.press(event as PointerEvent, 1)],
+      [document, 'pointerdown', (event) => this.press(event as PointerEvent, DOWN)],
+      [document, 'pointerup', (event) => this.press(event as PointerEvent, UP)],
+      [document, 'pointercancel', (event) => this.press(event as PointerEvent, UP)],
       [target, 'scroll', () => this.throttle('scroll', settings.scroll, () => this.scroll())],
       [document, 'visibilitychange', () => document.hidden && this.flush()]
     ]
@@ -118,14 +127,14 @@ class Recorder {
     )
   }
 
-  private press(event: PointerEvent, kind: 0 | 1): void {
+  private press(event: PointerEvent, kind: PressKind): void {
     const slot = this.slot(event)
     const x = Math.round(event.clientX)
     const y = Math.round(event.clientY)
-    const [target, fx, fy] = kind === 0 ? anchor(event) : [null, 0, 0]
+    const [target, fx, fy] = kind === DOWN ? anchor(event) : [null, 0, 0]
 
     this.add(() => this.presses.push([this.dt(), kind, x, y, slot, type(event), target, fx, fy]))
-    if (kind === 1 && event.pointerType === 'touch') this.slots.delete(event.pointerId)
+    if (kind === UP && event.pointerType === 'touch') this.slots.delete(event.pointerId)
   }
 
   private scroll(): void {
@@ -188,7 +197,7 @@ class Recorder {
   private flush(): void {
     if (this.count() === 0) return
 
-    const value = {
+    const value: Batch = {
       span: Math.round(performance.now() - this.started),
       m: this.moves,
       p: this.presses,
@@ -204,7 +213,7 @@ class Recorder {
   }
 }
 
-const type = (event: PointerEvent): number =>
+const type = (event: PointerEvent): PointerKind =>
   event.pointerType === 'touch' ? TOUCH : event.pointerType === 'pen' ? PEN : MOUSE
 
 /** The nearest pressed element with a lasting id, and the point within it in thousandths. */
