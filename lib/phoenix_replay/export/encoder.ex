@@ -36,7 +36,7 @@ defmodule PhoenixReplay.Export.Encoder do
         args: args(list, path, duration_ms, schedule.fps, export)
       ])
 
-    await(port, duration_ms, progress, [])
+    await(port, %{duration_ms: duration_ms, progress: progress, timeout: export.timeout}, [])
   end
 
   # The last picture is listed twice: the demuxer gives the last entry no
@@ -58,16 +58,18 @@ defmodule PhoenixReplay.Export.Encoder do
       ["-movflags", "+faststart", path]
   end
 
-  defp await(port, duration_ms, progress, output) do
+  # ffmpeg reports its progress about twice a second; silent for
+  # `:timeout`, it is taken as stuck and stopped, so the queue goes on.
+  defp await(port, run, output) do
     receive do
       {^port, {:data, {:eol, "out_time_us=" <> microseconds}}} ->
         with {done, ""} <- Integer.parse(microseconds),
-             do: progress.(min(done / 1_000 / max(duration_ms, 1), 1.0))
+             do: run.progress.(min(done / 1_000 / max(run.duration_ms, 1), 1.0))
 
-        await(port, duration_ms, progress, output)
+        await(port, run, output)
 
       {^port, {:data, {_eol, line}}} ->
-        await(port, duration_ms, progress, [line | output])
+        await(port, run, [line | output])
 
       {^port, {:exit_status, 0}} ->
         :ok
@@ -82,16 +84,27 @@ defmodule PhoenixReplay.Export.Encoder do
         ])
 
         {:error, {:ffmpeg, status}}
+    after
+      run.timeout ->
+        stop(port)
+        {:error, {:ffmpeg, :timeout}}
     end
   end
 
-  # Closing the port leaves ffmpeg running until it next writes, so it is
-  # stopped first.
-  defp stop(port) do
-    with {:os_pid, os_pid} <- Port.info(port, :os_pid),
-         do: System.cmd("kill", [Integer.to_string(os_pid)], stderr_to_stdout: true)
+  # ffmpeg stops when it reads `q`, on every platform; closing the port
+  # alone would leave it running until it next writes.
+  @stop_wait 5_000
 
-    if Port.info(port), do: Port.close(port)
+  defp stop(port) do
+    if Port.info(port) do
+      Port.command(port, "q")
+
+      receive do
+        {^port, {:exit_status, _status}} -> :ok
+      after
+        @stop_wait -> Port.close(port)
+      end
+    end
   end
 
   # Scaled by the export's `:scale`, rounded down to even pixels.

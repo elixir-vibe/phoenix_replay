@@ -109,6 +109,12 @@ Turn form controls off with `state: [inputs: false]`, or all client state with `
 - the contents of streams and uploads,
 - the controls listed above, and what happens in the browser that neither a form control nor `replayState` reports.
 
+## Video export
+
+An exported video shows what the player shows, so the sanitizer and redactor have already applied. The export browser loads the replay from a private endpoint PhoenixReplay starts on 127.0.0.1 and a free port, with a secret made at that moment; its pages need a token signed with that secret.
+
+Any other request the replayed page makes, such as a stylesheet, script, font or image, is passed to your endpoint in the same VM, as a request from 127.0.0.1 without your proxy's headers. If your app trusts requests by their loopback address, or by headers such as `X-Forwarded-For` that a proxy normally sets, keep that in mind: a page rendered in an export can reach the routes it links to the same way.
+
 ## Retention
 
 Keep recordings only as long as you need them, with `:retention` limits; see [Storage](storage.md#retention).

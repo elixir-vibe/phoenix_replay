@@ -91,6 +91,78 @@ defmodule PhoenixReplay.ExportTest do
     assert Export.get(queued.id).status == :cancelled
   end
 
+  test "refuses an export that would take more screenshots than allowed", %{recording: recording} do
+    config = PhoenixReplay.Config.load(export: [max_shots: 1])
+    {:ok, job} = Export.start(recording.id, config)
+
+    assert %Job{status: :failed, error: "The video would take " <> rest} = finished(job)
+    assert rest =~ "more than the 1 allowed"
+  end
+
+  test "deletes what a stopped server left in the export directory, once it is old" do
+    dir = Video.dir(PhoenixReplay.Config.load().export)
+    File.mkdir_p!(dir)
+    old = Path.join(dir, "left-behind.mp4")
+    fresh = Path.join(dir, "another-vm.mp4")
+    File.write!(old, "")
+    File.write!(fresh, "")
+    File.touch!(old, System.os_time(:second) - 2 * 3_600)
+
+    :ok = Supervisor.terminate_child(PhoenixReplay.Export.Supervisor, PhoenixReplay.Export.Server)
+
+    {:ok, _pid} =
+      Supervisor.restart_child(PhoenixReplay.Export.Supervisor, PhoenixReplay.Export.Server)
+
+    refute File.exists?(old)
+    assert File.exists?(fresh)
+    File.rm(fresh)
+  end
+
+  test "stops ffmpeg when it goes quiet for longer than the timeout" do
+    dir = Path.join(System.tmp_dir!(), "phoenix_replay_encoder_test")
+    File.mkdir_p!(dir)
+    on_exit(fn -> File.rm_rf(dir) end)
+    shot = Path.join(dir, "0.png")
+
+    {_out, 0} =
+      System.cmd("ffmpeg", [
+        "-v",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=red:s=64x64",
+        "-frames:v",
+        "1",
+        shot
+      ])
+
+    schedule = %PhoenixReplay.Export.Schedule{
+      shots: [],
+      canvas: %{width: 64, height: 64},
+      dpr: 1,
+      fps: 30
+    }
+
+    # Ten minutes of video at the slowest preset: no progress within 1 ms.
+    export = %{PhoenixReplay.Config.load().export | timeout: 1, preset: "veryslow"}
+
+    schedule = %{
+      schedule
+      | shots: [%{index: 0, at: 0, viewport: %{width: 64, height: 64}, frames: 18_000}]
+    }
+
+    assert {:error, {:ffmpeg, :timeout}} =
+             PhoenixReplay.Export.Encoder.run(
+               [{shot, 18_000}],
+               schedule,
+               Path.join(dir, "out.mp4"),
+               export,
+               fn _ -> :ok end
+             )
+  end
+
   test "fails a recording that is not saved" do
     :ok = Export.subscribe("missing")
     {:ok, job} = Export.start("missing")

@@ -121,7 +121,12 @@ defmodule PhoenixReplay.Config do
       * `:ffmpeg` — the `ffmpeg` executable (default `"ffmpeg"`)
       * `:playwright` — options for `PlaywrightEx.Supervisor`, such as
         `:executable` or `:ws_endpoint` (default `[]`)
-      * `:timeout` — milliseconds a browser step may take (default `30_000`)
+      * `:max_shots` — the most screenshots an export may take, as files
+        until the video is encoded; longer exports fail with a message to
+        choose a shorter range (default `3_600`, two minutes of pointer
+        movement at 30 fps)
+      * `:timeout` — milliseconds a browser step may take, and ffmpeg may
+        go without reporting progress (default `30_000`)
     * `:persist` — keyword list controlling `PhoenixReplay.Session.Finalizer`:
       * `:attempts` — save attempts before giving up (default `3`)
       * `:backoff` — base delay in milliseconds, multiplied by the attempt
@@ -190,6 +195,7 @@ defmodule PhoenixReplay.Config do
     preset: "veryfast",
     ffmpeg: "ffmpeg",
     playwright: [],
+    max_shots: 3_600,
     timeout: 30_000
   }
   @off [nil, false]
@@ -259,6 +265,7 @@ defmodule PhoenixReplay.Config do
           preset: String.t(),
           ffmpeg: String.t(),
           playwright: keyword(),
+          max_shots: pos_integer(),
           timeout: pos_integer()
         }
 

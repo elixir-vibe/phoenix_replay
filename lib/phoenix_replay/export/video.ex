@@ -28,6 +28,7 @@ defmodule PhoenixReplay.Export.Video do
     try do
       with {:ok, recording} <- fetch(config, recording_id),
            schedule = plan(recording, export, job.options),
+           :ok <- bounded(schedule, export.max_shots),
            {:ok, runtime} <- Runtime.ensure(config.export),
            {:ok, list} <-
              Capture.run(
@@ -65,7 +66,14 @@ defmodule PhoenixReplay.Export.Video do
   def describe_error(:empty), do: "The recording has nothing to show."
   def describe_error(:cancelled), do: "The export was cancelled."
   def describe_error({:browser, message}), do: "The browser failed: #{message}"
+  def describe_error({:ffmpeg, :timeout}), do: "ffmpeg stopped responding."
   def describe_error({:ffmpeg, status}), do: "ffmpeg failed with exit status #{status}."
+
+  def describe_error({:too_long, shots, max}),
+    do:
+      "The video would take #{shots} screenshots, more than the #{max} allowed. " <>
+        "Export a shorter range, at a lower frame rate or without the pointer."
+
   def describe_error(reason), do: "The export failed: #{inspect(reason)}"
 
   @doc "The directory videos are kept in."
@@ -81,6 +89,14 @@ defmodule PhoenixReplay.Export.Video do
   defp saved({:ok, %Recording{events: []}}), do: {:error, :empty}
   defp saved({:ok, recording}), do: {:ok, recording}
   defp saved({:error, _reason}), do: {:error, :not_found}
+
+  # Each screenshot is a file until the video is encoded.
+  defp bounded(%Schedule{shots: shots}, max) do
+    case length(shots) do
+      count when count > max -> {:error, {:too_long, count, max}}
+      _count -> :ok
+    end
+  end
 
   # Rotated, the pointer and the scrolling fit only the recorded layout;
   # without the pointer the page still scrolls as recorded.
