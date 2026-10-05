@@ -31,7 +31,10 @@ defmodule PhoenixReplay.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {PhoenixReplay.Application, []}
+      mod: {PhoenixReplay.Application, []},
+      # The export endpoint takes its configuration as start options; Phoenix
+      # warns about an endpoint without an entry here, so it has an empty one.
+      env: [{PhoenixReplay.Web.Export.Endpoint, []}]
     ]
   end
 
@@ -134,6 +137,7 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay,
           PhoenixReplay.Recorder,
           PhoenixReplay.Replayable,
+          PhoenixReplay.Trace,
           PhoenixReplay.Plug,
           PhoenixReplay.Config,
           PhoenixReplay.Telemetry,

@@ -11,6 +11,7 @@ adapter = [
   "Mix.Tasks.PhoenixReplay.*",
   "PhoenixReplay",
   "PhoenixReplay.Export",
+  "PhoenixReplay.Trace",
   "PhoenixReplay.Plug",
   "PhoenixReplay.Recorder",
   "PhoenixReplay.Router",
