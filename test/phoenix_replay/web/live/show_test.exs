@@ -61,7 +61,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   # Delivers the pending playback step now. Playback tests use recordings
   # with hour-long gaps, so the real timer cannot fire during the test.
   defp advance(view) do
-    %{playing: {timer, ref}} = assigns(view)
+    %{playing: %{timer: timer, ref: ref}} = assigns(view)
     Process.cancel_timer(timer)
     send(view.pid, {:advance, ref})
     assigns(view)
@@ -279,7 +279,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     render_click(view, "toggle")
 
     # Every event is an hour apart; at 10x the next one is due in six minutes.
-    assert %{playing: {timer, _ref}} = assigns(view)
+    assert %{playing: %{timer: timer}} = assigns(view)
     assert Process.read_timer(timer) in (div(gap, 10) - 1_000)..div(gap, 10)
 
     assert [2, 3, 4, 5] = for(_ <- 1..4, do: advance(view).index)
@@ -289,6 +289,45 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert %{index: 1} = assigns(view)
     render_click(view, "toggle")
     assert %{playing: nil} = assigns(view)
+  end
+
+  test "pausing keeps the time playback reached, and resuming plays on from it" do
+    gap = :timer.hours(1)
+    recording = Fixtures.counter_recording(id: "paused", clicks: 2)
+
+    events =
+      recording.events
+      |> Enum.with_index()
+      |> Enum.map(fn {event, i} -> %{event | at: i * gap} end)
+
+    Storage.save(Fixtures.storage(), %{recording | events: events})
+    {:ok, view, _html} = live(build_conn(), "/replay/paused")
+    view |> element(~s(button[value="10"])) |> render_click()
+    %{index: index, at: start} = assigns(view)
+
+    render_click(view, "toggle")
+    Process.sleep(100)
+    render_click(view, "toggle")
+
+    # A tenth of a second at 10x is a second into the gap, not back at its event.
+    assert %{index: ^index, at: paused, playing: nil} = assigns(view)
+    assert paused in (start + 1_000)..(start + 10_000)
+    assert view |> element("#replay-scrubber") |> render() =~ ~s(data-at="#{paused}")
+
+    # Resuming waits only for what is left of the gap.
+    render_click(view, "toggle")
+    assert %{playing: %{timer: timer}} = assigns(view)
+    assert Process.read_timer(timer) <= div(start + gap - paused, 10)
+
+    # Changing speed while playing keeps the time too.
+    Process.sleep(50)
+    view |> element(~s(button[value="2"])) |> render_click()
+    assert %{at: at, playing: %{}} = assigns(view)
+    assert at > paused
+
+    render_click(view, "toggle")
+    assert %{at: stopped} = assigns(view)
+    assert stopped >= at
   end
 
   test "deletes the recording" do

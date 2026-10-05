@@ -25,6 +25,7 @@
 
 ### Fixed
 
+- Pausing the player keeps the time playback reached between two events, instead of jumping back to the last one, and resuming or changing speed plays on from there.
 - Switching the player from 100% back to Fit after scrolling the replay no longer leaves the page shifted out of view.
 - Collected details no longer break words mid-way, such as SQL table names.
 - A LiveComponent whose recording fails, such as with a raising sanitizer, is reported with `[:phoenix_replay, :collector, :exception]`, as collectors are, instead of logged.

@@ -209,7 +209,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   @impl true
   # Steps to the next event; after the last one, plays on to the end of
   # the pointer track, then stops.
-  def handle_info({:advance, ref}, %{assigns: %{playing: {_timer, ref}}} = socket) do
+  def handle_info({:advance, ref}, %{assigns: %{playing: %{ref: ref}}} = socket) do
     %{index: index, timeline: timeline} = socket.assigns
 
     socket =
@@ -279,12 +279,16 @@ defmodule PhoenixReplay.Web.Live.Show do
     %{at: at, next_at: next_at, speed: speed} = socket.assigns
     ref = make_ref()
     timer = Process.send_after(self(), {:advance, ref}, div(next_at - at, speed))
-    assign(socket, :playing, {timer, ref})
+    assign(socket, :playing, %{timer: timer, ref: ref, since: now()})
   end
 
-  defp pause(%{assigns: %{playing: {timer, _ref}}} = socket) do
+  # The scrubber and the pointer moved on between events while playing, so
+  # pausing keeps the time playback reached rather than the last event's.
+  defp pause(%{assigns: %{playing: %{timer: timer, since: since}}} = socket) do
     Process.cancel_timer(timer)
-    assign(socket, :playing, nil)
+    %{at: at, next_at: next_at, speed: speed} = socket.assigns
+    reached = min(at + (now() - since) * speed, next_at)
+    assign(socket, at: reached, playing: nil)
   end
 
   defp pause(socket), do: socket
@@ -444,4 +448,6 @@ defmodule PhoenixReplay.Web.Live.Show do
     do: Map.delete(assigns, :phoenix_replay_state)
 
   defp shown_assigns(assigns), do: assigns
+
+  defp now, do: System.monotonic_time(:millisecond)
 end
