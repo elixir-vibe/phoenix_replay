@@ -60,6 +60,7 @@ defmodule PhoenixReplay.Web.Live.Show do
         progress: nil,
         load_error?: false,
         channel: channel,
+        connected?: connected?(socket),
         speed: 1,
         playing: nil,
         speeds: @speeds,
@@ -584,6 +585,12 @@ defmodule PhoenixReplay.Web.Live.Show do
     </div>
     """
   end
+
+  # The channel is made at each mount, and the page's first render is not
+  # connected, so the frame gets its address only once the player is: an
+  # address in that first render would load the frame, then load it again
+  # with the connected player's channel.
+  defp frame_src(%{connected?: false}), do: nil
 
   defp frame_src(%{context: context, id: id, channel: channel}),
     do: Context.path(context, [id, "frame"]) <> "?channel=#{channel}"

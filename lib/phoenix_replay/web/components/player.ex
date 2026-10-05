@@ -161,7 +161,7 @@ defmodule PhoenixReplay.Web.Components.Player do
   scroll** in the view menu sends `"follow_scroll"` to toggle it, leaving
   the page to scroll freely.
   """
-  attr :src, :string, required: true
+  attr :src, :string, default: nil, doc: "the frame's address; without one it loads nothing yet"
   attr :url, :string, default: nil, doc: "the page URL at the current moment"
   attr :viewport, :map, default: nil
   attr :mode, :string, default: "fit"

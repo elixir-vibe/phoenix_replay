@@ -173,6 +173,20 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert has_element?(view, ~s(button[phx-value-kind="state"]), "Client state")
   end
 
+  test "loads the frame once, when the player has connected" do
+    # The first render is not connected: a frame address there would load
+    # the frame, then again with the connected player's channel.
+    html = build_conn() |> get("/replay/show") |> html_response(200)
+
+    [frame] =
+      html |> LazyHTML.from_document() |> LazyHTML.query("#replay-frame") |> Enum.to_list()
+
+    assert LazyHTML.attribute(frame, "src") == []
+
+    {:ok, view, _html} = live(build_conn(), "/replay/show")
+    assert has_element?(view, ~s(#replay-frame[src^="/replay/show/frame?channel="]))
+  end
+
   test "jumps to the first error" do
     recording = Fixtures.counter_recording(id: "failing")
     error = %Event{at: 1500, type: :log, data: %{level: :error, message: "boom", metadata: %{}}}
