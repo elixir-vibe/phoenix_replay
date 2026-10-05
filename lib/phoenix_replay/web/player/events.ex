@@ -175,9 +175,12 @@ defmodule PhoenixReplay.Web.Player.Events do
   @spec label(Event.t()) :: String.t()
   def label(%Event{type: :mount}), do: "mount"
 
+  # A form control's change reads as the control and its value; other
+  # client state as its key and fields.
   def label(%Event{type: :state, data: %{key: key, changes: changes}}) do
-    fields = changes |> Map.keys() |> Enum.sort() |> Enum.join(", ")
-    if key == State.inputs_key(), do: "input #{fields}", else: "#{key}: #{fields}"
+    if key == State.inputs_key(),
+      do: "input " <> Enum.map_join(changes, ", ", &input_label/1),
+      else: "#{key}: " <> Enum.map_join(Enum.sort(changes), ", ", &field_label/1)
   end
 
   def label(%Event{type: :params, data: %{uri: uri}}), do: "navigate → #{uri}"
@@ -276,4 +279,14 @@ defmodule PhoenixReplay.Web.Player.Events do
     not MapSet.member?(filters.hidden, kind(event.type)) and matches?(event, filters.query) and
       (not filters.errors_only or Event.error?(event))
   end
+
+  defp input_label({selector, %{} = fields}),
+    do: "#{selector} " <> Enum.map_join(fields, ", ", fn {_name, value} -> state_value(value) end)
+
+  defp input_label({selector, _filtered}), do: selector
+
+  defp field_label({field, value}), do: "#{field} #{state_value(value)}"
+
+  defp state_value(value) when is_binary(value), do: inspect(String.slice(value, 0, 40))
+  defp state_value(value), do: value |> inspect(limit: 5) |> String.slice(0, 40)
 end
