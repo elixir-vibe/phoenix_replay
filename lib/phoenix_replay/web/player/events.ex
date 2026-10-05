@@ -10,16 +10,31 @@ defmodule PhoenixReplay.Web.Player.Events do
   alias PhoenixReplay.Web.Format
 
   @typedoc "What the event list filters by."
-  @type kind :: String.t()
+  @type kind :: :liveview | :state | :telemetry | :logs
 
-  @doc """
-  The kind an event type is filtered as: `"liveview"`, `"telemetry"` or
-  `"logs"`.
-  """
+  @kinds [:liveview, :state, :telemetry, :logs]
+
+  # Events that start an interaction; the rest follow the one before them.
+  @starts [:mount, :event, :params, :info]
+
+  # Errors stand out: larger, red, with a soft ring.
+  @error_marker "size-2.5 bg-error ring-3 ring-error-soft"
+
+  @doc "The kind an event type is filtered as."
   @spec kind(Event.type()) :: kind()
-  def kind(:telemetry), do: "telemetry"
-  def kind(:log), do: "logs"
-  def kind(_type), do: "liveview"
+  def kind(:state), do: :state
+  def kind(:telemetry), do: :telemetry
+  def kind(:log), do: :logs
+  def kind(_type), do: :liveview
+
+  @doc "Reads a kind sent by the browser, or returns `:error`."
+  @spec parse_kind(String.t()) :: {:ok, kind()} | :error
+  def parse_kind(name) do
+    case Enum.find(@kinds, &(Atom.to_string(&1) == name)) do
+      nil -> :error
+      kind -> {:ok, kind}
+    end
+  end
 
   @doc "The kinds in a recording, LiveView first."
   @spec kinds(Recording.t()) :: [kind()]
@@ -27,14 +42,11 @@ defmodule PhoenixReplay.Web.Player.Events do
     events
     |> Enum.map(&kind(&1.type))
     |> Enum.uniq()
-    |> Enum.sort_by(&(&1 != "liveview"))
+    |> Enum.sort_by(&(&1 != :liveview))
   end
 
   @typedoc "An event with its index in the recording."
   @type indexed :: {Event.t(), non_neg_integer()}
-
-  # Events that start an interaction; the rest follow the one before them.
-  @starts [:mount, :event, :params, :info]
 
   @doc """
   Groups events into interactions: a mount, user event, navigation or
@@ -48,20 +60,22 @@ defmodule PhoenixReplay.Web.Player.Events do
     |> Enum.chunk_while(nil, &interaction/2, &close_interaction/1)
   end
 
-  defp interaction({%Event{type: type}, _index} = item, acc) when type in @starts do
-    case acc do
-      nil -> {:cont, {item, []}}
-      acc -> {:cont, close(acc), {item, []}}
-    end
+  @typedoc "What the event list shows: hidden kinds, a search, and errors only."
+  @type filters :: %{hidden: MapSet.t(kind()), query: String.t(), errors_only: boolean()}
+
+  @doc """
+  Keeps the events of `interactions/1` that `filters` show. An interaction
+  stays while any of its events does, or its own first event.
+  """
+  @spec visible([{indexed(), [indexed()]}], filters()) :: [{indexed(), [indexed()]}]
+  def visible(interactions, filters) do
+    Enum.flat_map(interactions, fn {{head, _index} = first, rows} ->
+      case Enum.filter(rows, fn {event, _index} -> visible?(event, filters) end) do
+        [] -> if visible?(head, filters), do: [{first, []}], else: []
+        rows -> [{first, rows}]
+      end
+    end)
   end
-
-  defp interaction(item, nil), do: {:cont, {item, []}}
-  defp interaction(item, {head, rows}), do: {:cont, {head, [item | rows]}}
-
-  defp close_interaction(nil), do: {:cont, nil}
-  defp close_interaction(acc), do: {:cont, close(acc), nil}
-
-  defp close({head, rows}), do: {head, Enum.reverse(rows)}
 
   @doc "The events of each kind in a recording, as timeline lanes."
   @spec lanes(Recording.t()) :: [{kind(), [indexed()]}]
@@ -78,9 +92,10 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   @doc "The colour class of a kind's swatch."
   @spec kind_class(kind()) :: String.t()
-  def kind_class("liveview"), do: "bg-kind-event"
-  def kind_class("telemetry"), do: "bg-kind-query"
-  def kind_class("logs"), do: "bg-kind-log"
+  def kind_class(:liveview), do: "bg-kind-event"
+  def kind_class(:state), do: "bg-kind-component"
+  def kind_class(:telemetry), do: "bg-kind-query"
+  def kind_class(:logs), do: "bg-kind-log"
 
   @doc "The index of the first event that reports an error, or `nil`."
   @spec first_error_index(Recording.t()) :: non_neg_integer() | nil
@@ -91,6 +106,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   def changed_keys(%Event{type: type, data: %{assigns: assigns}}) when type in [:mount, :render],
     do: Map.keys(assigns)
 
+  def changed_keys(%Event{type: :state}), do: [PhoenixReplay.Recording.State.assign()]
   def changed_keys(_event), do: []
 
   @doc "Whether an event's label contains `query`, ignoring case."
@@ -106,23 +122,21 @@ defmodule PhoenixReplay.Web.Player.Events do
   """
   @spec details(Event.t()) :: [{String.t(), String.t()}]
   def details(%Event{type: :telemetry, data: data} = event) do
-    [
+    present([
       {"Event", Collector.name(data.event)},
-      data.summary && {"Summary", data.summary},
-      (duration = Event.duration(event)) && {"Duration", Format.milliseconds(duration)},
-      data.error && {"Error", data.error},
-      data.metadata != %{} && {"Metadata", inspect(data.metadata, pretty: true, limit: 50)}
-    ]
-    |> Enum.filter(& &1)
+      {"Summary", data.summary},
+      {"Duration", event |> Event.duration() |> duration()},
+      {"Error", data.error},
+      {"Metadata", metadata(data.metadata)}
+    ])
   end
 
   def details(%Event{type: :log, data: data}) do
-    [
+    present([
       {"Level", to_string(data.level)},
       {"Message", data.message},
-      data.metadata != %{} && {"Metadata", inspect(data.metadata, pretty: true, limit: 50)}
-    ]
-    |> Enum.filter(& &1)
+      {"Metadata", metadata(data.metadata)}
+    ])
   end
 
   def details(%Event{type: :exit, data: %{reason: reason}}), do: [{"Reason", reason}]
@@ -130,9 +144,10 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   @doc "A kind's name in the filter."
   @spec kind_label(kind()) :: String.t()
-  def kind_label("liveview"), do: "LiveView"
-  def kind_label("telemetry"), do: "Telemetry"
-  def kind_label("logs"), do: "Logs"
+  def kind_label(:liveview), do: "LiveView"
+  def kind_label(:state), do: "Client state"
+  def kind_label(:telemetry), do: "Telemetry"
+  def kind_label(:logs), do: "Logs"
 
   @doc """
   Whether an event was collected from telemetry or logs. Collected events
@@ -150,30 +165,19 @@ defmodule PhoenixReplay.Web.Player.Events do
   def dropped_count(%Recording{dropped: dropped}),
     do: Enum.sum_by(dropped, fn {_name, count} -> count end)
 
-  # Errors stand out: larger, red, with a soft ring.
-  @error_marker "size-2.5 bg-error ring-3 ring-error-soft"
-
   @doc "Classes for an event's timeline marker. Errors are larger and red."
   @spec marker_class(Event.t()) :: String.t()
   def marker_class(%Event{} = event) do
     if Event.error?(event), do: @error_marker, else: type_marker_class(event.type)
   end
 
-  defp type_marker_class(:mount), do: "size-1.5 bg-ink"
-  defp type_marker_class(:event), do: "size-1.5 bg-kind-event"
-  defp type_marker_class(:params), do: "size-1.5 bg-kind-nav"
-  defp type_marker_class(:info), do: "size-1 bg-kind-log"
-  defp type_marker_class(:render), do: "size-1 bg-kind-render"
-  defp type_marker_class(:component), do: "size-1 bg-kind-component"
-  defp type_marker_class(:component_destroyed), do: "size-1 bg-kind-component"
-  defp type_marker_class(:telemetry), do: "size-1 bg-kind-query"
-  defp type_marker_class(:log), do: "size-1 bg-kind-log"
-  defp type_marker_class(:exit), do: @error_marker
-  defp type_marker_class(:viewport), do: "size-1 bg-kind-render"
-
   @doc "One-line description of an event."
   @spec label(Event.t()) :: String.t()
   def label(%Event{type: :mount}), do: "mount"
+
+  def label(%Event{type: :state, data: %{key: key, changes: changes}}),
+    do: "#{key}: #{changes |> Map.keys() |> Enum.sort() |> Enum.join(", ")}"
+
   def label(%Event{type: :params, data: %{uri: uri}}), do: "navigate → #{uri}"
   def label(%Event{type: :info, data: %{tag: nil}}), do: "handle_info"
   def label(%Event{type: :info, data: %{tag: tag}}), do: "handle_info #{inspect(tag)}"
@@ -212,6 +216,42 @@ defmodule PhoenixReplay.Web.Player.Events do
     end
   end
 
+  defp interaction({%Event{type: type}, _index} = item, acc) when type in @starts do
+    case acc do
+      nil -> {:cont, {item, []}}
+      acc -> {:cont, close(acc), {item, []}}
+    end
+  end
+
+  defp interaction(item, nil), do: {:cont, {item, []}}
+  defp interaction(item, {head, rows}), do: {:cont, {head, [item | rows]}}
+
+  defp close_interaction(nil), do: {:cont, nil}
+  defp close_interaction(acc), do: {:cont, close(acc), nil}
+
+  defp close({head, rows}), do: {head, Enum.reverse(rows)}
+
+  defp present(details), do: Enum.reject(details, fn {_name, value} -> value == nil end)
+
+  defp duration(nil), do: nil
+  defp duration(ms), do: Format.milliseconds(ms)
+
+  defp metadata(metadata) when metadata == %{}, do: nil
+  defp metadata(metadata), do: inspect(metadata, pretty: true, limit: 50)
+
+  defp type_marker_class(:mount), do: "size-1.5 bg-ink"
+  defp type_marker_class(:event), do: "size-1.5 bg-kind-event"
+  defp type_marker_class(:params), do: "size-1.5 bg-kind-nav"
+  defp type_marker_class(:info), do: "size-1 bg-kind-log"
+  defp type_marker_class(:render), do: "size-1 bg-kind-render"
+  defp type_marker_class(:component), do: "size-1 bg-kind-component"
+  defp type_marker_class(:component_destroyed), do: "size-1 bg-kind-component"
+  defp type_marker_class(:telemetry), do: "size-1 bg-kind-query"
+  defp type_marker_class(:log), do: "size-1 bg-kind-log"
+  defp type_marker_class(:exit), do: @error_marker
+  defp type_marker_class(:viewport), do: "size-1 bg-kind-render"
+  defp type_marker_class(:state), do: "size-1 bg-kind-component"
+
   defp component_label(module, id) when is_binary(id), do: "#{inspect(module)}##{id}"
   defp component_label(module, id), do: "#{inspect(module)}##{inspect(id)}"
 
@@ -229,4 +269,9 @@ defmodule PhoenixReplay.Web.Player.Events do
   defp flatten_param({_key, %{} = nested}), do: Enum.flat_map(nested, &flatten_param/1)
   defp flatten_param({key, value}) when is_binary(value) and value != "", do: [{key, value}]
   defp flatten_param(_param), do: []
+
+  defp visible?(event, filters) do
+    not MapSet.member?(filters.hidden, kind(event.type)) and matches?(event, filters.query) and
+      (not filters.errors_only or Event.error?(event))
+  end
 end

@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recording.Keep do
+defmodule PhoenixReplay.Session.TailSampling do
   @moduledoc """
   Decides whether a session is saved, from the `:keep` configuration.
 
@@ -20,20 +20,28 @@ defmodule PhoenixReplay.Recording.Keep do
   @type reason :: :not_interactive | :not_sampled
 
   @typedoc "What `observe/3` has seen of a session's events so far."
-  @type observation :: %{event?: boolean(), params: non_neg_integer(), flagged?: boolean()}
+  @type observation :: %{
+          event?: boolean(),
+          params: non_neg_integer(),
+          flagged?: boolean(),
+          state_keys: MapSet.t(String.t())
+        }
 
   @doc "An observation of no events."
   @spec new() :: observation()
-  def new, do: %{event?: false, params: 0, flagged?: false}
+  def new, do: %{event?: false, params: 0, flagged?: false, state_keys: MapSet.new()}
 
   @doc "Adds `events` to an observation."
   @spec observe(observation(), [Event.t()], Config.keep()) :: observation()
   def observe(observation, events, keep) do
     Enum.reduce(events, observation, fn event, acc ->
+      acc = observe_state(acc, event)
+
       %{
-        event?: acc.event? or event.type == :event,
-        params: acc.params + if(event.type == :params, do: 1, else: 0),
-        flagged?: acc.flagged? or flagged?(event, keep)
+        acc
+        | event?: acc.event? or event.type == :event,
+          params: acc.params + if(event.type == :params, do: 1, else: 0),
+          flagged?: acc.flagged? or flagged?(event, keep)
       }
     end)
   end
@@ -42,8 +50,10 @@ defmodule PhoenixReplay.Recording.Keep do
   Decides from an observation, given a uniform `draw` in `0.0..1.0` for
   `:rate`.
 
-  A session is interactive once it handled an event or navigated within
-  the LiveView, that is, after more than its initial `handle_params/3`.
+  A session is interactive once it handled an event, navigated within the
+  LiveView, that is, after more than its initial `handle_params/3`, or
+  changed client state it had reported before; see
+  `PhoenixReplay.Capture.State`.
   """
   @spec decision(observation(), Config.keep(), float()) :: :keep | {:discard, reason()}
   def decision(observation, keep, draw) do
@@ -73,4 +83,18 @@ defmodule PhoenixReplay.Recording.Keep do
       duration -> duration >= slower_than
     end
   end
+
+  # Client state changing a key reported before is interaction; the first
+  # report of a key is the state the page started with.
+  defp observe_state(acc, %Event{type: :state, data: %{entries: entries}}) do
+    Enum.reduce(entries, acc, fn [_dt, key, _changes], acc ->
+      %{
+        acc
+        | event?: acc.event? or MapSet.member?(acc.state_keys, key),
+          state_keys: MapSet.put(acc.state_keys, key)
+      }
+    end)
+  end
+
+  defp observe_state(acc, _event), do: acc
 end

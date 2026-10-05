@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Web.Playback do
+defmodule PhoenixReplay.Web.Player.Channel do
   @moduledoc """
   Messaging between a player and its replay frame.
 
@@ -12,8 +12,8 @@ defmodule PhoenixReplay.Web.Playback do
   @type channel :: String.t()
 
   @doc "Generates a new channel name."
-  @spec new_channel() :: channel()
-  def new_channel, do: Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
+  @spec new() :: channel()
+  def new, do: Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
 
   @doc "Subscribes the caller to `channel`."
   @spec subscribe(channel()) :: :ok | {:error, term()}

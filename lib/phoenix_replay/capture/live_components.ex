@@ -23,16 +23,15 @@ defmodule PhoenixReplay.Capture.LiveComponents do
 
   `:telemetry` detaches a handler that raises, which would stop component
   recording for the whole application, so the handlers match metadata
-  loosely and ignore shapes they do not expect.
+  loosely and ignore shapes they do not expect, and a failure is reported
+  with `[:phoenix_replay, :collector, :exception]`, as collectors' are.
   """
 
-  require Logger
-
-  alias PhoenixReplay.Capture.{AsyncResults, Client}
+  alias PhoenixReplay.Telemetry
+  alias PhoenixReplay.Capture.{Assigns, AsyncResults, Browser}
   alias PhoenixReplay.Session.Buffer
 
   @handler __MODULE__
-  @unreplayable [:myself, :flash]
 
   @events [
     [:phoenix, :live_component, :handle_event, :start],
@@ -58,33 +57,27 @@ defmodule PhoenixReplay.Capture.LiveComponents do
 
   @doc """
   Handles a LiveComponent telemetry event in the LiveView process. A
-  failure, such as a custom sanitizer raising, is logged instead of
-  raised: `:telemetry` would detach the handler for the whole application.
+  failure, such as a custom sanitizer raising, is reported with
+  `PhoenixReplay.Telemetry.collector_failed/5` instead of raised:
+  `:telemetry` would detach the handler for the whole application.
   """
-  @spec handle_event([atom()], map(), map(), nil) :: :ok
-  def handle_event(event, measures, metadata, config) do
-    capture(event, measures, metadata, config)
+  @spec handle_event([atom()], map(), map(), term()) :: :ok
+  def handle_event(event, measures, metadata, _handler_config) do
+    capture(event, measures, metadata)
     :ok
   catch
-    kind, reason ->
-      Logger.error(
-        "PhoenixReplay: capturing #{inspect(event)} failed: " <>
-          Exception.format(kind, reason, __STACKTRACE__)
-      )
-
-      :ok
+    kind, reason -> Telemetry.collector_failed(__MODULE__, event, kind, reason, __STACKTRACE__)
   end
 
   defp capture(
          [:phoenix, :live_component, :handle_event, :start],
          _measures,
-         %{component: module, socket: %{assigns: %{id: id}}, event: name, params: params},
-         nil
+         %{component: module, socket: %{assigns: %{id: id}}, event: name, params: params}
        )
        when is_map(params) do
     case Buffer.session(self()) do
-      {:ok, _id, config} ->
-        params = config.sanitizer.sanitize_params(Client.observe(params))
+      {:ok, _id, sanitizer} ->
+        params = sanitizer.sanitize_params(Browser.observe(params))
         record(:event, %{name: name, params: params, target: {module, id}})
 
       :error ->
@@ -95,8 +88,7 @@ defmodule PhoenixReplay.Capture.LiveComponents do
   defp capture(
          [:phoenix, :live_component, :update, :stop],
          _measures,
-         %{component: module, sockets: sockets},
-         nil
+         %{component: module, sockets: sockets}
        )
        when is_list(sockets) do
     Enum.each(sockets, &record_changes(module, &1))
@@ -105,8 +97,7 @@ defmodule PhoenixReplay.Capture.LiveComponents do
   defp capture(
          [:phoenix, :live_component, callback, :stop],
          _measures,
-         %{component: module, socket: socket},
-         nil
+         %{component: module, socket: socket}
        )
        when callback in [:handle_event, :handle_async] do
     record_changes(module, socket)
@@ -116,8 +107,7 @@ defmodule PhoenixReplay.Capture.LiveComponents do
   defp capture(
          [:phoenix, :live_view, :render, :stop],
          _measures,
-         %{component: module, id: id, cid: cid},
-         nil
+         %{component: module, id: id, cid: cid}
        )
        when is_integer(cid) do
     AsyncResults.rendered(module, id, cid)
@@ -126,18 +116,17 @@ defmodule PhoenixReplay.Capture.LiveComponents do
   defp capture(
          [:phoenix, :live_component, :destroyed],
          _measures,
-         %{component: module, socket: %{assigns: %{id: id}}},
-         nil
+         %{component: module, socket: %{assigns: %{id: id}}}
        ) do
     record(:component_destroyed, %{module: module, id: id})
   end
 
-  defp capture(_event, _measures, _metadata, nil), do: :ok
+  defp capture(_event, _measures, _metadata), do: :ok
 
   defp record_changes(module, %{assigns: %{id: id, __changed__: changed} = assigns})
        when map_size(changed) > 0 do
-    with {:ok, _id, config} <- Buffer.session(self()),
-         changes when map_size(changes) > 0 <- sanitized_changes(assigns, changed, config) do
+    with {:ok, _id, sanitizer} <- Buffer.session(self()),
+         changes when map_size(changes) > 0 <- sanitized_changes(assigns, changed, sanitizer) do
       record(:component, %{module: module, id: id, assigns: changes})
     else
       _nothing -> :ok
@@ -146,11 +135,10 @@ defmodule PhoenixReplay.Capture.LiveComponents do
 
   defp record_changes(_module, _socket), do: :ok
 
-  defp sanitized_changes(assigns, changed, config) do
+  defp sanitized_changes(assigns, changed, sanitizer) do
     assigns
     |> Map.take(Map.keys(changed))
-    |> Map.drop(@unreplayable)
-    |> config.sanitizer.sanitize_assigns()
+    |> Assigns.component(sanitizer)
   end
 
   defp record(type, data) do

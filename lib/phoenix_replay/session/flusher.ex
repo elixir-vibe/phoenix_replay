@@ -19,25 +19,19 @@ defmodule PhoenixReplay.Session.Flusher do
          {:ok, recording} <- Buffer.meta(id),
          [_ | _] = chunk <- Buffer.pending(id),
          {seqs, events} = Enum.unzip(chunk),
-         {:ok, redacted} <- redact(%{recording | events: events}, config.redact),
+         {:ok, redacted} <-
+           Redactor.redact_recording(%{recording | events: events}, config.redact),
          :ok <-
            Storage.append(
              config.storage,
              %{redacted | events: []},
              Enum.zip(seqs, redacted.events)
            ) do
-      Buffer.flushed(id, chunk)
+      Buffer.remove_flushed(id, chunk)
     else
       [] -> :ok
       :error -> :ok
       {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp redact(recording, redactor) do
-    case Redactor.redact_recording(recording, redactor) do
-      {:ok, redacted} -> {:ok, redacted}
-      {:error, _reason} -> {:error, :redaction_failed}
     end
   end
 end

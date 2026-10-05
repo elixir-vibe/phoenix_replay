@@ -4,7 +4,7 @@ defmodule PhoenixReplay.Recorder.FlushingTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.{Config, Recordings, Storage}
+  alias PhoenixReplay.{Catalog, Config, Storage}
   alias PhoenixReplay.Session.{Buffer, Monitor, Recovery}
   alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Test.{Fixtures, Sessions, Tasks}
@@ -40,7 +40,7 @@ defmodule PhoenixReplay.Recorder.FlushingTest do
     assert clicks(partial.events) == 3
 
     click(view, 2)
-    assert {:ok, live} = Recordings.fetch(Config.load(), id)
+    assert {:ok, live} = Catalog.fetch(Config.load(), id)
     assert clicks(live.events) == 5
 
     assert Sessions.stop(sessions, view) == :persisted

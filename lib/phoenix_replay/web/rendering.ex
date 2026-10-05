@@ -20,6 +20,30 @@ defmodule PhoenixReplay.Web.Rendering do
 
   @type states :: %{{module(), term()} => map()}
 
+  @max_description 200
+  # Assigns LiveView keeps for itself, which `assign/2` refuses.
+  @reserved [:flash, :uploads, :streams, :socket, :myself]
+
+  @doc """
+  Renders a recorded view with `assigns`: with its `replay_render/1` when
+  it defines one, with `render/1` otherwise.
+
+  `replay_render/1` is an optional callback for views whose live render
+  depends on code in the browser, such as a client-side component whose
+  state the server never sees. It receives the same assigns `render/1`
+  would, plus the client state the browser reported up to this point in
+  `PhoenixReplay.Recording.State.assign/0`, `%{key => merged changes}`,
+  and returns a rendered template the replay frame can show without that
+  code. The assigns are change-tracked as in a LiveView, so `@` access in
+  `~H` works as usual.
+  """
+  @spec render(module(), map()) :: Phoenix.LiveView.Rendered.t()
+  def render(view, assigns) do
+    if Code.ensure_loaded?(view) and function_exported?(view, :replay_render, 1),
+      do: view.replay_render(assigns),
+      else: view.render(assigns)
+  end
+
   @doc """
   Renders `module` with `assigns`, returning a short description of the
   error when any part of the template fails to evaluate, or `nil`.
@@ -31,7 +55,7 @@ defmodule PhoenixReplay.Web.Rendering do
   @spec render_error(module(), map()) :: String.t() | nil
   # credo:disable-for-next-line ExSlop.Check.Warning.BlanketRescue
   def render_error(module, assigns) do
-    assigns |> module.render() |> evaluate()
+    module |> render(assigns) |> evaluate()
     nil
   rescue
     # reach:disable-next-line bare_rescue -- recorded templates are foreign code rendered with partial assigns
@@ -43,9 +67,10 @@ defmodule PhoenixReplay.Web.Rendering do
       describe(exception)
   end
 
-  @max_description 200
-
-  @doc false
+  @doc """
+  Describes why a recorded template failed to render, in a line short
+  enough for the player: a missing assign is named as such.
+  """
   @spec describe(Exception.t()) :: String.t()
   def describe(%KeyError{key: key, term: %{__changed__: _changed}}) when is_atom(key),
     do: "the recording has no @#{key}"
@@ -59,6 +84,10 @@ defmodule PhoenixReplay.Web.Rendering do
       do: String.slice(line, 0, @max_description) <> "…",
       else: line
   end
+
+  @doc "Leaves out of recorded `assigns` those LiveView keeps for itself."
+  @spec assignable(map()) :: map()
+  def assignable(assigns), do: Map.drop(assigns, @reserved)
 
   @doc "Routes every LiveComponent in `rendered` through the replay component."
   @spec rewrite(Rendered.t(), states()) :: Rendered.t()

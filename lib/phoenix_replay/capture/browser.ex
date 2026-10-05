@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Capture.Client do
+defmodule PhoenixReplay.Capture.Browser do
   @moduledoc """
   Builds a recording's client context: the browser's viewport and tab from
   LiveView's connect params and event metadata, the user agent, and the
@@ -25,6 +25,8 @@ defmodule PhoenixReplay.Capture.Client do
   """
 
   alias PhoenixReplay.Recording
+  alias PhoenixReplay.Recording.Client
+  alias PhoenixReplay.Recording.Client.Landing
   alias PhoenixReplay.Session.Buffer
 
   @key {__MODULE__, :viewport}
@@ -45,25 +47,25 @@ defmodule PhoenixReplay.Capture.Client do
   params, the `User-Agent` in its connect info, and the request context
   `PhoenixReplay.Plug` kept for the visit.
   """
-  @spec client(map() | nil, String.t() | nil, map() | nil) :: Recording.client()
-  def client(connect_params, user_agent, kept) do
+  @spec build(map() | nil, String.t() | nil, map() | nil) :: Client.t()
+  def build(connect_params, user_agent, kept) do
     replay = (connect_params || %{})["_replay"]
     viewport = parse(replay)
     Process.put(@key, viewport)
     kept = kept || %{}
 
-    %{
+    %Client{
       viewport: viewport,
       user_agent: user_agent,
       tab: tab(replay),
-      referer: referer((connect_params || %{})["_live_referer"]),
+      navigated_from: navigated_from((connect_params || %{})["_live_referer"]),
       headers: Map.get(kept, "headers", %{}),
       landing: landing(kept["landing"])
     }
   end
 
   defp landing(%{"path" => path, "at" => at} = landing) do
-    %{
+    %Landing{
       path: path,
       at: at,
       params: Map.get(landing, "params", %{}),
@@ -97,8 +99,6 @@ defmodule PhoenixReplay.Capture.Client do
   defp tab(_replay), do: nil
 
   # The client sends "undefined" when there was no live navigation.
-  defp referer(referer) when is_binary(referer) and referer not in ["", "undefined"],
-    do: referer
-
-  defp referer(_referer), do: nil
+  defp navigated_from(url) when is_binary(url) and url not in ["", "undefined"], do: url
+  defp navigated_from(_url), do: nil
 end

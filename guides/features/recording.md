@@ -46,13 +46,13 @@ socket "/live", Phoenix.LiveView.Socket,
   websocket: [connect_info: [:user_agent, session: @session_options]]
 ```
 
-`mix igniter.install phoenix_replay` makes both changes for the setup Phoenix generates. With them, `PhoenixReplay.Recording` `client` holds:
+`mix igniter.install phoenix_replay` makes both changes for the setup Phoenix generates. With them, a recording's `PhoenixReplay.Recording.Client` holds:
 
 - **the viewport** — width, height and pixel ratio when the LiveView connected. The player renders the replay at that size, keeping its aspect ratio: **Fit** scales it down until the whole viewport fits the window, centring a phone on a neutral stage, and **100%** shows it at true size in a scrolling box. A rotated phone eases into its new size, unless the viewer prefers reduced motion.
 - **resizes** — the viewport also travels with each click and key press, and a change is recorded as a `:viewport` event, so the replay follows a rotated phone or a resized window. Your `handle_event/3` receives the extra `"_replay"` param; recorded params leave it out.
 - **the user agent** — shown in the player as, for example, "Safari on iOS".
 - **the tab** — an id kept in the tab's `sessionStorage`. Navigating to another LiveView starts a new recording; the tab id ties them into one journey, and the player links the previous and next sessions of the tab.
-- **the referer** — the URL the user came from by live navigation.
+- **the previous page** — the URL of the LiveView that live-navigated here (`client.navigated_from`).
 
 ### Visit context
 
@@ -82,6 +82,105 @@ A visit lasts as long as the session cookie. The plug rewrites the session only 
 Headers such as `x-forwarded-for` or `cf-connecting-ip` hold IP addresses, which are personal data in many jurisdictions; capture them only when you need them. Captured headers and the landing go through the [redactor](privacy-and-security.md#redacting-values) when a recording is saved.
 
 The client module is `deps/phoenix_replay/priv/static/phoenix_replay.js`, with types; bundlers that resolve packages from `deps`, as Phoenix's esbuild and Volt setups do, import it as `"phoenix_replay"`.
+
+## Pointer, touches and scrolling
+
+PhoenixReplay can also record where the pointer moved, what it pressed and how the page scrolled, and the player shows them over the replay. It is off by default. Turn it on globally or per live session:
+
+```elixir
+config :phoenix_replay, pointer: true
+
+live_session :checkout, on_mount: [{PhoenixReplay.Recorder, pointer: true}] do
+  # ...
+end
+```
+
+and call `replayRecorder` from your JavaScript, after connecting the socket; `mix igniter.install phoenix_replay` adds it:
+
+```js
+import { replayParams, replayMetadata, replayRecorder } from "phoenix_replay"
+
+liveSocket.connect()
+replayRecorder(liveSocket)
+```
+
+`replayRecorder` records nothing until a recorded LiveView mounts and says what to record, and stops when the page navigates to another LiveView. It also records [client state](#client-state). The browser samples the pointer and the scroll offset, and sends them in batches over the LiveView socket as an event the recorder takes before your view sees it. Each setting has a default:
+
+```elixir
+config :phoenix_replay,
+  pointer: [
+    sample: 50,        # ms between recorded positions of a pointer
+    scroll: 100,       # ms between recorded scroll offsets
+    flush: 1_000,      # ms between the batches the browser sends
+    max_points: 500,   # entries a batch holds before it is sent early
+    limit: 3_600       # batches recorded per session
+  ]
+```
+
+At the defaults, a moving pointer costs about 20 samples a second, a few hundred bytes, and a still one nothing. Mouse, pen and touch are recorded alike, each finger on its own, and presses note the nearest element with an `id`, so the player can place them on it even if the replayed page lays out a little differently. Batches come from the browser, so the server drops anything malformed and caps each one at `:max_points`. They do not count towards `:max_events`, and pointer movement alone does not make a session interactive.
+
+The player's clock runs to the end of the pointer track and of any client state, not only to the last LiveView event, so movement after the last event still plays.
+
+## Client state
+
+Replay re-renders your view with its recorded assigns, so it cannot show state that lives only in the browser: the refs of a Vue or React component, a client-side search box, a draft kept in JavaScript. Code in the browser can report such state, and the replay shows it.
+
+Client state is recorded by default whenever `replayRecorder` runs; `state: false` turns it off, globally or per live session. The limits are configurable:
+
+```elixir
+config :phoenix_replay,
+  state: [
+    flush: 1_000,            # ms between the batches the browser sends
+    max_entries: 200,        # entries a batch holds before it is sent early
+    max_key: 64,             # bytes a key may have
+    max_entry_bytes: 8_192,  # JSON size of one entry's changes; larger ones are dropped
+    max_bytes: 65_536,       # JSON size a batch holds before it is sent early
+    limit: 3_600             # batches recorded per session
+  ]
+```
+
+State goes through your `PhoenixReplay.Sanitizer`'s `sanitize_params/1` when it arrives and through your `PhoenixReplay.Redactor` when the session is saved. It does not count towards `:max_events`. Changing a key reported before makes a session interactive, as typing into a box only the browser knows about is; the first report of each key, the state the page started with, does not.
+
+### For library authors
+
+A library reports state with plain DOM events, so it needs no dependency on PhoenixReplay, in Elixir or in JavaScript.
+
+**Knowing when to report.** `replayRecorder` dispatches `phx_replay:start` on `window` when the page's LiveView is recorded, and `phx_replay:stop` when recording ends: when the page navigates to another LiveView, or loses its connection. A recorded LiveView starts again when it mounts; patches and events pushed with page loading keep the recording going. `phx_replay:start`'s detail is `{state: settings | null}`, the limits above with snake_case names, or `null` when client state is off.
+
+Code that loads after the start can ask instead: while recording, `<html>` carries a `data-phx-replay` attribute holding the same detail as JSON.
+
+```js
+const recording = document.documentElement.dataset.phxReplay
+if (recording) reportEverything(JSON.parse(recording))
+```
+
+Report everything you hold on start, or when you load during a recording, then changes as they happen. Reports made while nothing is recorded are ignored, so a library can also report unconditionally.
+
+**Reporting.** Dispatch `phx_replay:state` on `window`:
+
+```js
+window.dispatchEvent(
+  new CustomEvent("phx_replay:state", {
+    detail: { key: "search", changes: { query: "shoes" } }
+  })
+)
+```
+
+`key` is a non-empty string naming the state, such as a component's id. `changes` is a JSON object of fields to merge into what was recorded under `key` before, a shallow delta: send only what changed. It is copied when reported. Reports that are not a key and a JSON object within the limits are dropped.
+
+**Replaying.** The replay merges the changes recorded up to the current moment into a reserved assign, `@phoenix_replay_state`: a map of each key to its merged fields, string keys throughout, empty before any report. A view whose live render depends on code in the browser defines `replay_render/1`, which the replay calls instead of `render/1` with the same assigns plus that one:
+
+```elixir
+def replay_render(assigns) do
+  ~H"""
+  <input value={@phoenix_replay_state["search"]["query"]} />
+  """
+end
+```
+
+The assigns are change-tracked as in a live render, so `@` access in `~H` works as usual. Each report is a step on the player's timeline, in a lane of its own, so seeking to a moment shows the state as it was then. Don't name an assign of your own `:phoenix_replay_state`.
+
+The browser state PhoenixReplay does not record yet: focus, typing that never reaches a `phx-change`, and `Phoenix.LiveView.JS` commands, which the replay does not re-run.
 
 ## Which sessions are kept
 

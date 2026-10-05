@@ -35,31 +35,20 @@ defmodule PhoenixReplay.Storage.File do
 
   @behaviour PhoenixReplay.Storage
 
-  import Ex2ms
-
   require Logger
 
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.Summary
-  alias PhoenixReplay.Recordings.Filter
   alias PhoenixReplay.Storage.Codec
+  alias PhoenixReplay.Storage.File.Index
 
   @recording_ext ".recording"
   @summary_ext ".summary"
   @part_ext ".part"
   @tmp_ext ".tmp"
-  @index __MODULE__.Index
 
-  @doc """
-  Creates the summary index. `PhoenixReplay.Application` calls it at start,
-  so the table lives as long as the application; without it, every list
-  reads the summary files.
-  """
-  @spec create_index() :: :ok
-  def create_index do
-    :ets.new(@index, [:named_table, :public, :set, read_concurrency: true])
-    :ok
-  end
+  @impl true
+  def child_spec(opts), do: Index.child_spec(opts)
 
   @impl true
   def save(%Recording{} = recording, opts) do
@@ -69,7 +58,7 @@ defmodule PhoenixReplay.Storage.File do
          :ok <- write_synced(recording_path, Codec.encode(recording)),
          summary = Summary.new(recording, saved_at: System.system_time(:millisecond)),
          :ok <- write_synced(summary_path, Codec.encode(summary)) do
-      index(dir(opts), [{recording.id, summary}])
+      Index.put(dir(opts), [{recording.id, summary}])
       remove_parts(recording.id, opts)
     end
   end
@@ -142,56 +131,11 @@ defmodule PhoenixReplay.Storage.File do
   end
 
   @impl true
-  def query(filter, page_opts, opts), do: opts |> list() |> Filter.page(filter, page_opts)
-
-  # Reads the summaries of `ids`, from the index where it has them.
-  defp summaries(dir, ids) do
-    if not indexed?() do
-      Enum.flat_map(ids, &read_summary(dir, &1))
-    else
-      known = :ets.select(@index, fun(do: ({{^dir, id}, _summary} -> id)))
-      listed = MapSet.new(ids)
-
-      for id <- known, not MapSet.member?(listed, id), do: unindex(dir, id)
-
-      known = MapSet.new(known)
-
-      index(
-        dir,
-        for(
-          id <- ids,
-          not MapSet.member?(known, id),
-          [summary] <- [read_summary(dir, id)],
-          do: {id, summary}
-        )
-      )
-
-      :ets.select(@index, fun(do: ({{^dir, _id}, summary} -> summary)))
-    end
-  end
-
-  defp index(dir, entries) do
-    if indexed?(),
-      do: :ets.insert(@index, for({id, summary} <- entries, do: {{dir, id}, summary}))
-
-    :ok
-  end
-
-  # The index lives with the application; without it, summaries are read
-  # from disk every time.
-  defp indexed?, do: :ets.whereis(@index) != :undefined
-
-  defp unindex(dir, id) do
-    if indexed?(), do: :ets.delete(@index, {dir, id})
-    :ok
-  end
-
-  @impl true
   def delete(id, opts) do
     with {:ok, summary_path} <- path(id, @summary_ext, opts),
          {:ok, recording_path} <- path(id, @recording_ext, opts),
          :ok <- remove(summary_path),
-         :ok = unindex(dir(opts), id),
+         :ok = Index.delete(dir(opts), id),
          :ok <- remove(recording_path) do
       remove_parts(id, opts)
     end
@@ -200,7 +144,7 @@ defmodule PhoenixReplay.Storage.File do
   @impl true
   def clear(opts) do
     dir = dir(opts)
-    if indexed?(), do: :ets.match_delete(@index, {{dir, :_}, :_})
+    :ok = Index.clear(dir)
 
     case File.ls(dir) do
       {:ok, files} ->
@@ -227,7 +171,7 @@ defmodule PhoenixReplay.Storage.File do
       |> Enum.sort_by(fn {seq, _event} -> seq end)
       |> Enum.map(fn {_seq, event} -> event end)
 
-    %{recording | events: events}
+    Recording.upgrade(%{recording | events: events})
   end
 
   defp write_synced(path, data) do
@@ -298,16 +242,28 @@ defmodule PhoenixReplay.Storage.File do
       else: {:error, :not_found}
   end
 
-  @doc """
-  Remembers the directory relative `:path`s are resolved against.
-  `PhoenixReplay.Application` calls it at start; see the `:path` option.
-  """
-  @spec remember_root(Path.t()) :: :ok
-  def remember_root(dir \\ File.cwd!()), do: :persistent_term.put({__MODULE__, :root}, dir)
-
   defp dir(opts) do
     opts
     |> Keyword.get(:path, "priv/replay_recordings")
-    |> Path.expand(:persistent_term.get({__MODULE__, :root}, nil) || File.cwd!())
+    |> Path.expand(Index.root())
+  end
+
+  # Reads the summaries of `ids`: from the index where it has them, from
+  # disk otherwise. Files other nodes removed leave the index too.
+  defp summaries(dir, ids) do
+    listed = MapSet.new(ids)
+    {indexed, gone} = dir |> Index.summaries() |> Enum.split_with(&MapSet.member?(listed, &1.id))
+    Enum.each(gone, &Index.delete(dir, &1.id))
+
+    known = MapSet.new(indexed, & &1.id)
+
+    read =
+      for id <- ids,
+          not MapSet.member?(known, id),
+          summary <- read_summary(dir, id),
+          do: {id, summary}
+
+    :ok = Index.put(dir, read)
+    indexed ++ Enum.map(read, &elem(&1, 1))
   end
 end

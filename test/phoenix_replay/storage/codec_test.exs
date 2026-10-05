@@ -2,6 +2,8 @@ defmodule PhoenixReplay.Storage.CodecTest do
   use ExUnit.Case, async: true
 
   alias PhoenixReplay.Recording
+  alias PhoenixReplay.Recording.Client
+  alias PhoenixReplay.Recording.Client.Landing
   alias PhoenixReplay.Recording.Summary
   alias PhoenixReplay.Storage.Codec
   alias PhoenixReplay.Test.Fixtures
@@ -20,6 +22,32 @@ defmodule PhoenixReplay.Storage.CodecTest do
 
     assert {:ok, %Summary{id: "a", event_names: []}} =
              written_by_older_version |> Codec.encode() |> Codec.decode(Summary)
+  end
+
+  test "brings the client context of a recording from before 0.6 up to date" do
+    recording = Fixtures.counter_recording()
+
+    stored_by_0_5 = %{
+      recording
+      | client: %{
+          viewport: nil,
+          user_agent: "Agent",
+          tab: "t1",
+          referer: "http://x/form",
+          headers: %{},
+          landing: %{path: "/", at: 1, params: %{}, referrer: nil}
+        }
+    }
+
+    assert {:ok, %Recording{client: client}} =
+             stored_by_0_5 |> Codec.encode() |> Codec.decode(Recording)
+
+    assert client == %Client{
+             user_agent: "Agent",
+             tab: "t1",
+             navigated_from: "http://x/form",
+             landing: %Landing{path: "/", at: 1}
+           }
   end
 
   test "decodes lists" do

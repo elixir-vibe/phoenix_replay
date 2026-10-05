@@ -19,7 +19,7 @@ defmodule PhoenixReplay.Capture.AsyncResultsTest do
 
   defp component_state(id) do
     {:ok, recording} = Buffer.fetch(id)
-    Timeline.components_at(recording, Timeline.last_index(recording))[{AsyncPrice, "price"}]
+    Timeline.at(recording, Timeline.last_index(recording)).components[{AsyncPrice, "price"}]
   end
 
   test "records component state applied by async results", %{sessions: sessions} do
@@ -57,7 +57,7 @@ defmodule PhoenixReplay.Capture.AsyncResultsTest do
 
     {:ok, recording} = Storage.fetch(Fixtures.storage(), id)
     {:ok, frame, _html} = live(build_conn(), "/replay/#{id}/frame?channel=async")
-    PhoenixReplay.Web.Playback.seek("async", Timeline.last_index(recording))
+    PhoenixReplay.Web.Player.Channel.seek("async", Timeline.last_index(recording))
     :sys.get_state(frame.pid)
 
     html = render(frame)

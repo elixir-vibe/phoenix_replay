@@ -71,4 +71,21 @@ defmodule PhoenixReplay.Session.FinalizerTest do
     refute_received {:save_attempt, _id}
     assert log =~ "dropping recording #{recording.id}"
   end
+
+  test "retries a storage that raises, as one that returns an error" do
+    recording = Fixtures.counter_recording()
+
+    config =
+      Config.new(
+        storage: {PhoenixReplay.Test.FailingStorage, notify: self(), raise: true},
+        persist: [attempts: 2, backoff: 0]
+      )
+
+    capture_log(fn ->
+      assert {:error, %RuntimeError{message: "storage is down"}} =
+               Finalizer.persist(recording, config)
+    end)
+
+    for _ <- 1..2, do: assert_received({:save_attempt, _id})
+  end
 end

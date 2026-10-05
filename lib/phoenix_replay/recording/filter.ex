@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recordings.Filter do
+defmodule PhoenixReplay.Recording.Filter do
   @moduledoc """
   Criteria for narrowing a list of `PhoenixReplay.Recording.Summary` structs.
 
@@ -72,8 +72,8 @@ defmodule PhoenixReplay.Recordings.Filter do
   def empty?(%__MODULE__{} = filter), do: to_params(filter) == %{}
 
   @doc "Keeps the summaries matching every criterion. `now` is in Unix milliseconds."
-  @spec apply([Summary.t()], t(), integer()) :: [Summary.t()]
-  def apply(summaries, %__MODULE__{} = filter, now) do
+  @spec select([Summary.t()], t(), integer()) :: [Summary.t()]
+  def select(summaries, %__MODULE__{} = filter, now) do
     Enum.filter(summaries, &matches?(&1, filter, now))
   end
 
@@ -81,9 +81,9 @@ defmodule PhoenixReplay.Recordings.Filter do
   Which page of matching summaries to read:
 
     * `:now` — the current time in Unix milliseconds, for `"within"`
-    * `:until` — only sessions that started at or before this time, so pages
-      stay put while new sessions arrive
-    * `:since` — only sessions that started after this time
+    * `:until` — only recordings saved at or before this time, so pages stay
+      put while sessions end; see `PhoenixReplay.Recording.Summary.stored_at/1`
+    * `:since` — only recordings saved after this time
     * `:offset` and `:limit` — the slice to return
   """
   @type page_opts :: [
@@ -104,7 +104,7 @@ defmodule PhoenixReplay.Recordings.Filter do
 
     matching =
       summaries
-      |> __MODULE__.apply(filter, Keyword.fetch!(opts, :now))
+      |> select(filter, Keyword.fetch!(opts, :now))
       |> Enum.filter(fn summary ->
         (is_nil(until) or Summary.stored_at(summary) <= until) and
           (is_nil(since) or Summary.stored_at(summary) > since)

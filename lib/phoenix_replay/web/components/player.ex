@@ -14,8 +14,9 @@ defmodule PhoenixReplay.Web.Components.Player do
   import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.Core
 
+  alias Phoenix.LiveView.JS
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Client, Event}
+  alias PhoenixReplay.Recording.{Client, Event, PointerTrack}
   alias PhoenixReplay.Web.Format
   alias PhoenixReplay.Web.Player.Events
 
@@ -135,8 +136,15 @@ defmodule PhoenixReplay.Web.Components.Player do
   attr :mode, :string, default: "fit"
   attr :below, :string, default: nil
 
+  attr :pointer, :map,
+    default: nil,
+    doc: "the recording's `PhoenixReplay.Recording.PointerTrack` track"
+
   @spec replay_frame(map()) :: Phoenix.LiveView.Rendered.t()
   def replay_frame(assigns) do
+    assigns =
+      assign(assigns, :pointer?, assigns.pointer != nil and PointerTrack.any?(assigns.pointer))
+
     ~H"""
     <section
       id="replay-viewport"
@@ -162,6 +170,19 @@ defmodule PhoenixReplay.Web.Components.Player do
           data-scale-label
           class="hidden font-mono tabular-nums sm:inline"
         ></span>
+        <button
+          :if={@pointer? and @viewport}
+          type="button"
+          aria-pressed="true"
+          phx-click={
+            %JS{}
+            |> JS.toggle_class("hidden", to: "#replay-pointer")
+            |> JS.toggle_attribute({"aria-pressed", "true", "false"})
+          }
+          class="inline-flex h-7 items-center gap-1.5 rounded-md border border-line px-2.5 text-muted transition-colors hover:text-ink aria-pressed:bg-hover aria-pressed:text-ink pointer-coarse:h-11"
+        >
+          <.icon name="lucide:mouse-pointer-2" class="size-3.5" /> Pointer
+        </button>
         <.segmented
           :if={@viewport}
           label="Frame size"
@@ -170,8 +191,23 @@ defmodule PhoenixReplay.Web.Components.Player do
           event="frame_mode"
         />
       </div>
-      <div id="replay-viewport-box" class="bg-canvas">
+      <div id="replay-viewport-box" class="relative bg-canvas">
         <iframe id="replay-frame" title="Replay" src={@src} class="block h-[600px] w-full border-0"></iframe>
+        <%!-- The Pointer hook draws the pointer track over the frame; FrameViewport
+             gives it the frame's size, scale and position. --%>
+        <div
+          :if={@pointer? and @viewport}
+          id="replay-pointer"
+          phx-hook="Pointer"
+          phx-update="ignore"
+          data-frame-overlay
+          data-track={JSON.encode!(@pointer)}
+          data-width={@viewport.width}
+          data-height={@viewport.height}
+          aria-hidden="true"
+          class="pointer-events-none absolute top-0 left-0"
+        >
+        </div>
       </div>
     </section>
     """
@@ -290,7 +326,13 @@ defmodule PhoenixReplay.Web.Components.Player do
   filters and, when there are errors, a filter to them alone. The current
   event's details open under it.
   """
-  attr :recording, Recording, required: true
+  attr :groups, :list,
+    required: true,
+    doc: "the interactions shown, from `PhoenixReplay.Web.Player.Events.visible/2`"
+
+  attr :kinds, :list, required: true
+  attr :counts, :map, required: true, doc: "events of each kind"
+  attr :error_count, :integer, required: true
   attr :index, :integer, required: true
   attr :hidden, :any, required: true, doc: "a `MapSet` of hidden kinds"
   attr :query, :string, default: ""
@@ -298,30 +340,6 @@ defmodule PhoenixReplay.Web.Components.Player do
 
   @spec event_list(map()) :: Phoenix.LiveView.Rendered.t()
   def event_list(assigns) do
-    kinds = Events.kinds(assigns.recording)
-
-    visible? =
-      &(not MapSet.member?(assigns.hidden, Events.kind(&1.type)) and
-          Events.matches?(&1, assigns.query) and
-          (not assigns.errors_only or Event.error?(&1)))
-
-    groups =
-      Enum.flat_map(Events.interactions(assigns.recording.events), fn {{head, _index} = first,
-                                                                       rows} ->
-        case Enum.filter(rows, fn {event, _index} -> visible?.(event) end) do
-          [] -> if visible?.(head), do: [{first, []}], else: []
-          rows -> [{first, rows}]
-        end
-      end)
-
-    assigns =
-      assign(assigns,
-        kinds: kinds,
-        counts: Events.kind_counts(assigns.recording),
-        error_count: Events.error_count(assigns.recording),
-        groups: groups
-      )
-
     ~H"""
     <div class="flex flex-col gap-2.5 border-b border-line p-3">
       <form id="replay-event-search" phx-change="search_events" phx-submit="search_events">
@@ -480,9 +498,9 @@ defmodule PhoenixReplay.Web.Components.Player do
     assigns =
       assign(assigns,
         user_agent: client.user_agent,
-        referer: client.referer,
-        landing: client[:landing],
-        headers: client[:headers] || %{}
+        navigated_from: client.navigated_from,
+        landing: client.landing,
+        headers: client.headers
       )
 
     ~H"""
@@ -520,9 +538,11 @@ defmodule PhoenixReplay.Web.Components.Player do
         </div>
       </section>
 
-      <section :if={@referer} aria-labelledby="replay-referer-heading">
-        <h3 id="replay-referer-heading" class={heading()}>Came from</h3>
-        <code class="font-mono text-xs break-all" title={@referer}>{Format.path_of(@referer)}</code>
+      <section :if={@navigated_from} aria-labelledby="replay-navigated-from-heading">
+        <h3 id="replay-navigated-from-heading" class={heading()}>Came from</h3>
+        <code class="font-mono text-xs break-all" title={@navigated_from}>
+          {Format.path_of(@navigated_from)}
+        </code>
       </section>
 
       <section

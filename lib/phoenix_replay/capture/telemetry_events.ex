@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Capture.Collectors do
+defmodule PhoenixReplay.Capture.TelemetryEvents do
   @moduledoc """
   Records telemetry events captured by the configured `PhoenixReplay.Collector`s.
 
@@ -61,13 +61,13 @@ defmodule PhoenixReplay.Capture.Collectors do
   @doc "Handles a telemetry event for a collector."
   @spec handle_event([atom()], map(), map(), {module(), keyword(), pos_integer()}) :: :ok
   def handle_event(event, measurements, metadata, {module, opts, limit}) do
-    with {:ok, session, config} <- Buffer.attribute([self() | callers()]),
+    with {:ok, session, sanitizer} <- Buffer.attribute([self() | callers()]),
          {:ok, %Captured{} = captured} <- module.capture(event, measurements, metadata, opts) do
       data = %{
         event: event,
         summary: captured.summary,
         measurements: captured.measurements,
-        metadata: config.sanitizer.sanitize_params(captured.metadata),
+        metadata: sanitizer.sanitize_params(captured.metadata),
         error: captured.error
       }
 

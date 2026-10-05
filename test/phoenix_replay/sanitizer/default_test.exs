@@ -25,12 +25,6 @@ defmodule PhoenixReplay.Sanitizer.DefaultTest do
            }
   end
 
-  test "drops unreplayable LiveView internals from assigns only" do
-    assigns = %{__changed__: %{}, uploads: %{}, streams: %{}, flash: %{}, count: 1}
-    assert Default.sanitize_assigns(assigns) == %{flash: %{}, count: 1}
-    assert Default.sanitize_params(%{"streams" => 1}) == %{"streams" => 1}
-  end
-
   test "recurses into structs, lists and tuples" do
     account = %Account{name: "n", api_key: "k", profile: %{secret_answer: "s"}}
 

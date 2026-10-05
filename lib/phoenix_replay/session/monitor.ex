@@ -5,7 +5,7 @@ defmodule PhoenixReplay.Session.Monitor do
   Each recorded process is monitored. While it runs, the monitor checks
   its sessions periodically and writes a session's buffered events to
   storage as a chunk, with `PhoenixReplay.Session.Flusher`, once
-  `PhoenixReplay.Recording.Keep` decides to keep it and `:flush` says a
+  `PhoenixReplay.Session.TailSampling` decides to keep it and `:flush` says a
   chunk is due. Keeping is decided from the events seen so far, which are
   observed incrementally, and never turns back, so nothing is written that
   would be discarded later.
@@ -27,9 +27,8 @@ defmodule PhoenixReplay.Session.Monitor do
 
   require Logger
 
-  alias PhoenixReplay.{Recordings, Storage, Telemetry}
-  alias PhoenixReplay.Session.{Buffer, Finalizer, Flusher}
-  alias PhoenixReplay.Recording.Keep
+  alias PhoenixReplay.{Catalog, Storage, Telemetry}
+  alias PhoenixReplay.Session.{Buffer, Finalizer, Flusher, TailSampling}
 
   @max_reason 4_000
   @max_tick 1_000
@@ -39,7 +38,11 @@ defmodule PhoenixReplay.Session.Monitor do
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
-  @doc false
+  @doc """
+  Gives the monitor time to drain on shutdown: the application waits for
+  recordings being saved or written when it stops.
+  """
+  @spec child_spec(keyword()) :: Supervisor.child_spec()
   def child_spec(opts) do
     %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}, shutdown: @drain_timeout + 5_000}
   end
@@ -62,7 +65,7 @@ defmodule PhoenixReplay.Session.Monitor do
 
   @impl true
   def handle_cast({:watch, pid, id}, state) do
-    :ok = Recordings.broadcast_change()
+    :ok = Catalog.broadcast_change()
     {:noreply, watch(state, pid, id)}
   end
 
@@ -101,8 +104,18 @@ defmodule PhoenixReplay.Session.Monitor do
   defp watch(%{tracks: tracks} = state, _pid, id) when is_map_key(tracks, id), do: state
 
   defp watch(state, pid, id) do
+    # A session's configuration is fixed when it opens, so each check reads
+    # it from here rather than copying it out of the buffer.
+    {flush, keep} =
+      case Buffer.config(id) do
+        {:ok, config} -> {if(Storage.chunked?(config.storage), do: config.flush), config.keep}
+        :error -> {nil, nil}
+      end
+
     track = %{
-      observation: Keep.new(),
+      flush: flush,
+      keep: keep,
+      observation: TailSampling.new(),
       checked: -1,
       committed?: Buffer.flushed?(id),
       flushed_at: now(),
@@ -123,9 +136,9 @@ defmodule PhoenixReplay.Session.Monitor do
   # One timer runs while a watched session flushes, at the shortest
   # interval among them, so each session's own `:flush` applies.
   defp keep_ticking(state, id) do
-    case Buffer.config(id) do
-      {:ok, %{flush: %{interval: interval}}} -> schedule_tick(state, min(interval, @max_tick))
-      _no_flush -> state
+    case state.tracks do
+      %{^id => %{flush: %{interval: interval}}} -> schedule_tick(state, min(interval, @max_tick))
+      %{} -> state
     end
   end
 
@@ -138,38 +151,39 @@ defmodule PhoenixReplay.Session.Monitor do
 
   ## Flushing
 
+  defp check(state, _id, %{flush: nil}), do: state
   defp check(state, _id, %{flushing?: true}), do: state
   defp check(state, _id, %{ended?: true}), do: state
 
   defp check(state, id, track) do
-    with {:ok, config} <- Buffer.config(id),
-         %{} = flush <- config.flush,
-         true <- Storage.chunked?(config.storage),
-         true <- due?(Buffer.pending_count(id), flush, track) do
-      track = observe(track, id, config)
+    if due?(Buffer.pending_count(id), track) do
+      track = observe(track, id)
       if track.committed?, do: start_flush(state, id, track), else: put_track(state, id, track)
     else
-      _not_due -> state
+      state
     end
   end
 
-  defp due?(0, _flush, _track), do: false
+  defp due?(0, _track), do: false
 
-  defp due?(pending, flush, track),
+  defp due?(pending, %{flush: flush} = track),
     do: pending >= flush.events or now() - track.flushed_at >= flush.interval
 
-  defp observe(%{committed?: true} = track, _id, _config), do: track
+  defp observe(%{committed?: true} = track, _id), do: track
 
-  defp observe(track, id, config) do
+  defp observe(track, id) do
     events = Buffer.pending(id, track.checked)
-    observation = Keep.observe(track.observation, Enum.map(events, &elem(&1, 1)), config.keep)
+
+    observation =
+      TailSampling.observe(track.observation, Enum.map(events, &elem(&1, 1)), track.keep)
+
     {:ok, draw} = Buffer.draw(id)
 
     %{
       track
       | observation: observation,
         checked: Enum.reduce(events, track.checked, fn {seq, _event}, acc -> max(seq, acc) end),
-        committed?: Keep.decision(observation, config.keep, draw) == :keep
+        committed?: TailSampling.decision(observation, track.keep, draw) == :keep
     }
   end
 
@@ -201,7 +215,7 @@ defmodule PhoenixReplay.Session.Monitor do
     with {:ok, recording} <- Buffer.fetch(id),
          {:ok, config} <- Buffer.config(id),
          :keep <- keep(id, recording, config) do
-      :ok = Buffer.saving(id)
+      :ok = Buffer.mark_saving(id)
 
       task =
         Task.Supervisor.async_nolink(PhoenixReplay.TaskSupervisor, Finalizer, :finish, [
@@ -227,7 +241,7 @@ defmodule PhoenixReplay.Session.Monitor do
       :keep
     else
       {:ok, draw} = Buffer.draw(id)
-      Keep.decide(recording, config.keep, draw)
+      TailSampling.decide(recording, config.keep, draw)
     end
   end
 
@@ -277,7 +291,7 @@ defmodule PhoenixReplay.Session.Monitor do
   defp record_exit(_pid, {:shutdown, _reason}), do: :ok
 
   defp record_exit(pid, reason) do
-    with {:ok, session, _config} <- Buffer.attribute([pid]) do
+    with {:ok, session, _sanitizer} <- Buffer.attribute([pid]) do
       text = reason |> Exception.format_exit() |> String.slice(0, @max_reason)
       Buffer.collect(session, :exit, %{reason: text}, "exit", 1)
     end
@@ -287,7 +301,7 @@ defmodule PhoenixReplay.Session.Monitor do
 
   defp close(id) do
     :ok = Buffer.close(id)
-    Recordings.broadcast_change()
+    Catalog.broadcast_change()
   end
 
   defp now, do: System.monotonic_time(:millisecond)

@@ -74,7 +74,7 @@ defmodule PhoenixReplay.RecorderTest do
     assert Sessions.stop(sessions, view) == :persisted
     assert Buffer.fetch(id) == :error
     assert {:ok, recording} = Storage.fetch(Fixtures.storage(), id)
-    assert Timeline.assigns_at(recording, Timeline.last_index(recording)).count == 1
+    assert Timeline.at(recording, Timeline.last_index(recording)).assigns.count == 1
   end
 
   test "sanitizes params and assigns", %{sessions: sessions} do
@@ -85,7 +85,7 @@ defmodule PhoenixReplay.RecorderTest do
     refute inspect(recording) =~ "hunter2"
 
     assert %{name: "dan", password: "[FILTERED]"} =
-             Timeline.assigns_at(recording, Timeline.last_index(recording))
+             Timeline.at(recording, Timeline.last_index(recording)).assigns
   end
 
   test "applies live session options", %{sessions: sessions} do
@@ -140,20 +140,18 @@ defmodule PhoenixReplay.RecorderTest do
       |> Plug.Conn.put_private(:live_view_connect_info, %{user_agent: @iphone})
     end
 
-    test "records the viewport, user agent, tab and referer the client sent", %{
+    test "records the viewport, user agent, tab and previous page the client sent", %{
       sessions: sessions
     } do
       {:ok, _view, _html, id} = Sessions.live(sessions, client_conn(), "/counter")
 
       assert {:ok, %{client: client}} = Buffer.fetch(id)
 
-      assert client == %{
+      assert client == %PhoenixReplay.Recording.Client{
                viewport: %{width: 390, height: 844, dpr: 3},
                user_agent: @iphone,
                tab: "tab-1",
-               referer: "http://www.example.com/form",
-               headers: %{},
-               landing: nil
+               navigated_from: "http://www.example.com/form"
              }
     end
 
@@ -161,9 +159,8 @@ defmodule PhoenixReplay.RecorderTest do
       conn = put_connect_params(build_conn(), %{"_live_referer" => "undefined"})
       {:ok, _view, _html, id} = Sessions.live(sessions, conn, "/counter")
 
-      assert {:ok,
-              %{client: %{viewport: nil, user_agent: nil, tab: nil, referer: nil, landing: nil}}} =
-               Buffer.fetch(id)
+      assert {:ok, %{client: %PhoenixReplay.Recording.Client{} = client}} = Buffer.fetch(id)
+      assert client == %PhoenixReplay.Recording.Client{}
     end
 
     test "records viewport changes sent with events, leaving them out of params", %{
@@ -185,7 +182,7 @@ defmodule PhoenixReplay.RecorderTest do
                Enum.find(recording.events, &(&1.type == :viewport))
 
       assert Enum.all?(recording.events, &(not Map.has_key?(&1.data[:params] || %{}, "_replay")))
-      assert Timeline.viewport_at(recording, Timeline.last_index(recording)).width == 844
+      assert Timeline.at(recording, Timeline.last_index(recording)).viewport.width == 844
     end
   end
 end

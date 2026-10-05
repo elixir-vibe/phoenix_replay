@@ -4,7 +4,8 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.{Config, Recordings, Storage}
+  alias PhoenixReplay.{Catalog, Config, Storage}
+  alias PhoenixReplay.Recording.Client.Landing
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
 
@@ -50,14 +51,14 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
   test "shows the device and source of each session" do
     recording = Fixtures.counter_recording(id: "phone")
 
-    client =
-      Map.merge(recording.client, %{
-        viewport: %{width: 390, height: 844, dpr: 3},
+    client = %{
+      recording.client
+      | viewport: %{width: 390, height: 844, dpr: 3},
         user_agent:
           "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 " <>
             "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
-        landing: %{path: "/", at: 0, params: %{"utm_source" => "hn"}, referrer: nil}
-      })
+        landing: %Landing{path: "/", at: 0, params: %{"utm_source" => "hn"}}
+    }
 
     Storage.save(Fixtures.storage(), %{recording | client: client})
     {:ok, view, _html} = live(build_conn(), "/replay?errors=1&view=X")
@@ -96,7 +97,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     # started earlier would otherwise push the rows down.
     save_at("ended", until - 60_000)
     save_at("fresh", until + 1)
-    Recordings.broadcast_change()
+    Catalog.broadcast_change()
 
     assert has_element?(view, "#recording-listed")
     refute has_element?(view, "#recording-ended")
@@ -107,6 +108,22 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     assert has_element?(view, "#recording-ended")
     assert has_element?(view, "#recording-fresh")
     refute has_element?(view, "#recordings-new button")
+  end
+
+  test "reads storage once more for changes made just after a reload" do
+    {:ok, view, _html} = live(build_conn(), "/replay")
+    until = :sys.get_state(view.pid).socket.assigns.until
+
+    save_at("first", until + 1)
+    Catalog.broadcast_change()
+    assert has_element?(view, "#recordings-new button", "1 new recording · Show")
+
+    save_at("second", until + 2)
+    Catalog.broadcast_change()
+    assert has_element?(view, "#recordings-new button", "1 new recording · Show")
+
+    send(view.pid, :reload_window)
+    assert has_element?(view, "#recordings-new button", "2 new recordings · Show")
   end
 
   test "offers quick filters on phones" do

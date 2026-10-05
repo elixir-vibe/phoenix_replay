@@ -1,10 +1,12 @@
 defmodule PhoenixReplay.Web.Live.Index do
   @moduledoc """
   Lists recordings, live sessions first, narrowed by a
-  `PhoenixReplay.Recordings.Filter` kept in the URL.
+  `PhoenixReplay.Recording.Filter` kept in the URL.
 
-  Refreshes when `PhoenixReplay.Recordings` broadcasts a change, and every
-  few seconds while live sessions are shown so their counters advance.
+  Reads storage again when `PhoenixReplay.Catalog` broadcasts a change,
+  at most once a second however many sessions start and end, and reads the
+  buffer every few seconds while live sessions are shown, so their counters
+  advance.
 
   Saved recordings are listed as of a moment, `until`, taken when the list
   opens or its filter changes, so pages stay put while sessions end. Newer
@@ -14,18 +16,20 @@ defmodule PhoenixReplay.Web.Live.Index do
   use Phoenix.LiveView
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.{Core, Recordings}
+  import PhoenixReplay.Web.Components.Core
+  import PhoenixReplay.Web.Components.RecordingList
 
-  alias PhoenixReplay.Recordings
-  alias PhoenixReplay.Recordings.Filter
+  alias PhoenixReplay.Catalog
+  alias PhoenixReplay.Recording.Filter
   alias PhoenixReplay.Web.{Context, Format, Layouts, Params}
 
   @per_page 25
   @live_refresh_ms 2_000
+  @reload_window_ms 1_000
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Recordings.subscribe()
+    if connected?(socket), do: Catalog.subscribe()
     context = Context.fetch(socket)
 
     {:ok,
@@ -36,7 +40,9 @@ defmodule PhoenixReplay.Web.Live.Index do
        page: 1,
        filter: %Filter{},
        until: nil,
-       refresh_timer: nil
+       refresh_timer: nil,
+       reload_window: nil,
+       reload?: false
      )}
   end
 
@@ -56,15 +62,25 @@ defmodule PhoenixReplay.Web.Live.Index do
   end
 
   @impl true
-  def handle_info(message, socket) when message in [:recordings_changed, :refresh] do
-    {:noreply, load(socket)}
-  end
+  # The first change reloads at once; changes within the next second
+  # reload once more when it is over.
+  def handle_info(:recordings_changed, %{assigns: %{reload_window: nil}} = socket),
+    do: {:noreply, reload(socket)}
+
+  def handle_info(:recordings_changed, socket), do: {:noreply, assign(socket, :reload?, true)}
+
+  def handle_info(:reload_window, %{assigns: %{reload?: true}} = socket),
+    do: {:noreply, reload(socket)}
+
+  def handle_info(:reload_window, socket), do: {:noreply, assign(socket, :reload_window, nil)}
+
+  def handle_info(:refresh, socket), do: {:noreply, load_live(socket)}
 
   @impl true
   def handle_event("delete", %{"id" => id}, socket) do
     case Enum.find(socket.assigns.saved, &(&1.id == id)) do
       nil -> {:noreply, socket}
-      summary -> {:noreply, perform(socket, :delete, summary, &Recordings.delete(&1, id))}
+      summary -> {:noreply, perform(socket, :delete, summary, &Catalog.delete(&1, id))}
     end
   end
 
@@ -83,7 +99,7 @@ defmodule PhoenixReplay.Web.Live.Index do
   end
 
   def handle_event("clear", _params, socket) do
-    {:noreply, perform(socket, :clear, nil, &Recordings.clear/1)}
+    {:noreply, perform(socket, :clear, nil, &Catalog.clear/1)}
   end
 
   defp perform(socket, action, subject, fun) do
@@ -99,42 +115,60 @@ defmodule PhoenixReplay.Web.Live.Index do
     end
   end
 
-  defp load(socket) do
-    %{context: %{config: config}, filter: filter} = socket.assigns
+  defp reload(socket) do
+    window = Process.send_after(self(), :reload_window, @reload_window_ms)
+    socket |> assign(reload_window: window, reload?: false) |> load()
+  end
+
+  defp load(socket), do: socket |> load_stored() |> load_live()
+
+  # What storage holds: the page shown and the counts around it.
+  defp load_stored(socket) do
+    %{context: %{config: config}} = socket.assigns
     now = System.system_time(:millisecond)
     allow = allow(socket)
-    count = &(config |> Recordings.query(&1, now: now, limit: 0, allow: allow) |> elem(1))
+    count = &(config |> Catalog.query(&1, now: now, limit: 0, allow: allow) |> elem(1))
+    {saved, total, page} = saved_page(socket, now, allow)
+    all = count.(%Filter{})
 
-    # Sessions still in the buffer: running, or ended and being saved.
+    assign(socket,
+      page: page,
+      stored: %{saved: saved, total: total, all: all, errors: count.(%Filter{errors: true})},
+      newer: newer(socket, now, allow),
+      facets: Catalog.facets(config, allow),
+      can_clear?: all > 0 and Context.allowed?(socket, :clear, nil)
+    )
+  end
+
+  # Sessions still in the buffer, running or ended and being saved, merged
+  # with the stored page.
+  defp load_live(socket) do
+    %{filter: filter, page: page, stored: stored} = socket.assigns
+    now = System.system_time(:millisecond)
+
     {live, ending} =
-      Recordings.live(%Filter{}, now)
-      |> Enum.filter(allow || fn _summary -> true end)
+      Catalog.live(%Filter{}, now)
+      |> Enum.filter(allow(socket) || fn _summary -> true end)
       |> Enum.split_with(& &1.live?)
 
-    stored = count.(%Filter{})
-    {saved, total, page} = saved_page(socket, now, allow)
     buffered = MapSet.new(live ++ ending, & &1.id)
-    shown = Filter.apply(live ++ ending, filter, now)
+    shown = Filter.select(live ++ ending, filter, now)
 
     socket
     |> assign(
-      page: page,
-      total_pages: max(1, ceil(total / @per_page)),
-      total: total + length(shown),
-      any?: stored + length(live) + length(ending) > 0,
+      total_pages: max(1, ceil(stored.total / @per_page)),
+      total: stored.total + length(shown),
+      any?: stored.all + length(live) + length(ending) > 0,
       now: now,
       live: if(page == 1, do: Enum.filter(shown, & &1.live?), else: []),
       saved:
         if(page == 1, do: Enum.reject(shown, & &1.live?), else: []) ++
-          Enum.reject(saved, &MapSet.member?(buffered, &1.id)),
+          Enum.reject(stored.saved, &MapSet.member?(buffered, &1.id)),
       counts: %{
-        all: stored + length(live) + length(ending),
+        all: stored.all + length(live) + length(ending),
         live: length(live),
-        errors: count.(%Filter{errors: true}) + Enum.count(live ++ ending, &(&1.error_count > 0))
-      },
-      newer: newer(socket, now, allow),
-      facets: Recordings.facets(config, allow),
-      can_clear?: stored > 0 and Context.allowed?(socket, :clear, nil)
+        errors: stored.errors + Enum.count(live ++ ending, &(&1.error_count > 0))
+      }
     )
     |> schedule_refresh(live != [])
   end
@@ -145,7 +179,7 @@ defmodule PhoenixReplay.Web.Live.Index do
     %{context: %{config: config}, filter: filter, page: page} = socket.assigns
 
     read =
-      &Recordings.query(config, filter,
+      &Catalog.query(config, filter,
         now: now,
         until: socket.assigns.until,
         offset: (&1 - 1) * @per_page,
@@ -169,7 +203,7 @@ defmodule PhoenixReplay.Web.Live.Index do
     %{context: %{config: config}, filter: filter, until: until} = socket.assigns
 
     {_none, count} =
-      Recordings.query(config, filter, now: now, since: until, limit: 0, allow: allow)
+      Catalog.query(config, filter, now: now, since: until, limit: 0, allow: allow)
 
     count
   end

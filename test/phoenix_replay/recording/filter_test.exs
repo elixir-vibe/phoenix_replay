@@ -1,8 +1,7 @@
-defmodule PhoenixReplay.Recordings.FilterTest do
+defmodule PhoenixReplay.Recording.FilterTest do
   use ExUnit.Case, async: true
 
-  alias PhoenixReplay.Recording.Summary
-  alias PhoenixReplay.Recordings.Filter
+  alias PhoenixReplay.Recording.{Filter, Summary}
 
   @now 10_000_000
 
@@ -16,7 +15,7 @@ defmodule PhoenixReplay.Recordings.FilterTest do
   defp ids(params, summaries) do
     params
     |> Filter.from_params()
-    |> then(&Filter.apply(summaries, &1, @now))
+    |> then(&Filter.select(summaries, &1, @now))
     |> Enum.map(& &1.id)
   end
 

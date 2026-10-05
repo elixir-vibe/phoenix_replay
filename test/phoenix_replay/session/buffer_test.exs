@@ -23,7 +23,7 @@ defmodule PhoenixReplay.Session.BufferTest do
     assert {id, self()} in Buffer.sessions()
   end
 
-  test "summarizes sessions without decoding events", %{recording: %{id: id}} do
+  test "summarizes buffered sessions", %{recording: %{id: id}} do
     Buffer.append(id, 0, %Event{at: 0, type: :mount, data: %{assigns: %{}}})
     Buffer.append(id, 1, %Event{at: 250, type: :info, data: %{tag: nil}})
     Buffer.append(id, 2, %Event{at: 260, type: :event, data: %{name: "save", params: %{}}})
@@ -38,7 +38,9 @@ defmodule PhoenixReplay.Session.BufferTest do
     :ok = Buffer.open(recording, self(), Config.new(max_events: 1))
     on_exit(fn -> Buffer.close(recording.id) end)
 
-    assert {:ok, session, %Config{}} = Buffer.attribute([spawn(fn -> :ok end), self()])
+    assert {:ok, session, PhoenixReplay.Sanitizer.Default} =
+             Buffer.attribute([spawn(fn -> :ok end), self()])
+
     assert Buffer.record(self(), :info, %{tag: nil}) == :ok
     assert Buffer.record(self(), :info, %{tag: nil}) == :full
     assert Buffer.collect(session, :log, %{level: :info}, "log", 1) == :ok
@@ -74,7 +76,7 @@ defmodule PhoenixReplay.Session.BufferTest do
     assert [{2, %Event{type: :info}}] = Buffer.pending(id, 1)
 
     chunk = Enum.take(Buffer.pending(id), 2)
-    :ok = Buffer.flushed(id, chunk)
+    :ok = Buffer.remove_flushed(id, chunk)
 
     assert Buffer.flushed?(id)
     assert Buffer.pending_count(id) == 1
@@ -83,6 +85,34 @@ defmodule PhoenixReplay.Session.BufferTest do
 
     assert %Summary{event_count: 3, event_names: ["save"], error_count: 1} =
              Enum.find(Buffer.summaries(), &(&1.id == id))
+
+    # Totals are kept as events are written, so flushing them all changes nothing.
+    :ok = Buffer.remove_flushed(id, Buffer.pending(id))
+    assert {:ok, %{events: []}} = Buffer.fetch(id)
+
+    assert %Summary{event_count: 3, event_names: ["save"], error_count: 1} =
+             Enum.find(Buffer.summaries(), &(&1.id == id))
+  end
+
+  test "keeps the latest offset and distinct names, and leaves nothing on close",
+       %{recording: %{id: id}} do
+    :ok = Buffer.record(self(), :event, %{name: "save", params: %{}})
+    Process.sleep(5)
+    :ok = Buffer.record(self(), :event, %{name: "add", params: %{}})
+    :ok = Buffer.record(self(), :event, %{name: "save", params: %{}})
+    :ok = Buffer.record(self(), :pointer, %{span: 0, moves: [], presses: [], scrolls: []})
+
+    {:ok, %{events: events}} = Buffer.fetch(id)
+    summary = Enum.find(Buffer.summaries(), &(&1.id == id))
+
+    assert summary.event_names == ["add", "save"]
+    assert summary.event_count == 3
+    assert summary.duration_ms == events |> Enum.map(& &1.at) |> Enum.max()
+    assert summary.duration_ms >= 5
+
+    :ok = Buffer.close(id)
+    assert :ets.match(Buffer, {{:event_name, id, :_}}) == []
+    assert :ets.match(Buffer, {{id, :_}, :_}) == []
   end
 
   test "keeps the draw made when the session opened" do
@@ -109,14 +139,14 @@ defmodule PhoenixReplay.Session.BufferTest do
     # ETS alone counts the binary by reference, a few bytes.
     assert Buffer.memory() - before >= 2_000_000
 
-    :ok = Buffer.flushed(id, Buffer.pending(id))
+    :ok = Buffer.remove_flushed(id, Buffer.pending(id))
     assert Buffer.memory() - before < 100_000
   end
 
   test "a collector writing as its session closes leaves nothing behind", %{
     recording: %{id: id}
   } do
-    {:ok, session, _config} = Buffer.attribute([self()])
+    {:ok, session, _sanitizer} = Buffer.attribute([self()])
     :ok = Buffer.close(id)
 
     assert :ok =
@@ -136,7 +166,7 @@ defmodule PhoenixReplay.Session.BufferTest do
     recording: %{id: id}
   } do
     assert {id, self()} in Buffer.sessions()
-    :ok = Buffer.saving(id)
+    :ok = Buffer.mark_saving(id)
     refute {id, self()} in Buffer.sessions()
   end
 end

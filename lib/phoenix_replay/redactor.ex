@@ -40,6 +40,8 @@ defmodule PhoenixReplay.Redactor do
   @doc "Redacts sensitive values in `text`."
   @callback redact(text :: String.t(), opts :: keyword()) :: {:ok, String.t()} | {:error, term()}
 
+  # As PhoenixReplay.Sanitizer.Default keeps them, but for URI: its path,
+  # query and user info hold whatever was typed into them.
   @opaque_structs [
     Date,
     DateTime,
@@ -58,35 +60,43 @@ defmodule PhoenixReplay.Redactor do
   headers and landing, and the data of each event. The viewport and tab id
   are kept as they are.
 
-  `progress` is called after each event. Without a redactor, the
-  recording is returned as it is.
-  """
-  @spec redact_recording(Recording.t(), t() | nil, progress()) ::
-          {:ok, Recording.t()} | {:error, term()}
-  def redact_recording(recording, redactor, progress \\ fn _done, _total -> :ok end)
-  def redact_recording(%Recording{} = recording, nil, _progress), do: {:ok, recording}
+  Without a redactor, the recording is returned as it is. A failure is
+  `{:error, :redaction_failed}`, without the redactor's reason, which may
+  quote the text it could not redact.
 
-  def redact_recording(%Recording{} = recording, redactor, progress) do
+  ## Options
+
+    * `:progress` — a `t:progress/0` function, called after each event
+  """
+  @spec redact_recording(Recording.t(), t() | nil, keyword()) ::
+          {:ok, Recording.t()} | {:error, :redaction_failed}
+  def redact_recording(recording, redactor, opts \\ [])
+  def redact_recording(%Recording{} = recording, nil, _opts), do: {:ok, recording}
+
+  def redact_recording(%Recording{} = recording, redactor, opts) do
+    progress = Keyword.get(opts, :progress, fn _done, _total -> :ok end)
     total = length(recording.events)
 
     with {:ok, url} <- redact_term(recording.url, redactor),
          {:ok, params} <- redact_term(recording.params, redactor),
          {:ok, session} <- redact_term(recording.session, redactor),
-         {:ok, referer} <- redact_term(recording.client[:referer], redactor),
-         {:ok, user_agent} <- redact_term(recording.client[:user_agent], redactor),
-         {:ok, headers} <- redact_term(recording.client[:headers], redactor),
-         {:ok, landing} <- redact_term(recording.client[:landing], redactor),
+         {:ok, navigated_from} <- redact_term(recording.client.navigated_from, redactor),
+         {:ok, user_agent} <- redact_term(recording.client.user_agent, redactor),
+         {:ok, headers} <- redact_term(recording.client.headers, redactor),
+         {:ok, landing} <- redact_term(recording.client.landing, redactor),
          {:ok, events} <- redact_events(recording.events, redactor, progress, total) do
-      client =
-        Map.merge(recording.client, %{
-          referer: referer,
+      client = %{
+        recording.client
+        | navigated_from: navigated_from,
           user_agent: user_agent,
           headers: headers,
           landing: landing
-        })
+      }
 
       {:ok,
        %{recording | url: url, params: params, session: session, client: client, events: events}}
+    else
+      {:error, _reason} -> {:error, :redaction_failed}
     end
   end
 
@@ -107,7 +117,7 @@ defmodule PhoenixReplay.Redactor do
   def redact_term(map, redactor) when is_map(map) do
     map
     |> Map.to_list()
-    |> redact_all(redactor, fn {key, value} ->
+    |> redact_all(fn {key, value} ->
       with {:ok, value} <- redact_term(value, redactor), do: {:ok, {key, value}}
     end)
     |> map_ok(&Map.new/1)
@@ -116,7 +126,7 @@ defmodule PhoenixReplay.Redactor do
   def redact_term(list, redactor) when is_list(list) do
     if List.improper?(list),
       do: {:ok, list},
-      else: redact_all(list, redactor, &redact_term(&1, redactor))
+      else: redact_all(list, &redact_term(&1, redactor))
   end
 
   def redact_term(tuple, redactor) when is_tuple(tuple) do
@@ -128,7 +138,7 @@ defmodule PhoenixReplay.Redactor do
   defp redact_events(events, redactor, progress, total) do
     events
     |> Enum.with_index(1)
-    |> redact_all(redactor, fn {%Event{data: data} = event, done} ->
+    |> redact_all(fn {%Event{data: data} = event, done} ->
       with {:ok, data} <- redact_term(data, redactor) do
         progress.(done, total)
         {:ok, %{event | data: data}}
@@ -136,7 +146,7 @@ defmodule PhoenixReplay.Redactor do
     end)
   end
 
-  defp redact_all(items, _redactor, fun) do
+  defp redact_all(items, fun) do
     items
     |> Enum.reduce_while({:ok, []}, fn item, {:ok, acc} ->
       case fun.(item) do

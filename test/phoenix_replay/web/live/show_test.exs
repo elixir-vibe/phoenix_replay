@@ -5,10 +5,11 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Config, Storage}
-  alias PhoenixReplay.Recording.Event
+  alias PhoenixReplay.Recording.{Client, Event}
+  alias PhoenixReplay.Recording.Client.Landing
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
-  alias PhoenixReplay.Web.Playback
+  alias PhoenixReplay.Web.Player.Channel
 
   @endpoint PhoenixReplay.Test.Endpoint
 
@@ -40,6 +41,21 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     on_exit(fn -> Buffer.close(id) end)
     recording
+  end
+
+  # Waits for playback to stop by itself.
+  defp played(view, tries \\ 50) do
+    case assigns(view) do
+      %{playing: nil} = assigns ->
+        assigns
+
+      _playing when tries > 0 ->
+        Process.sleep(10)
+        played(view, tries - 1)
+
+      assigns ->
+        assigns
+    end
   end
 
   # Delivers the pending playback step now. Playback tests use recordings
@@ -127,13 +143,13 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     {:ok, view, _html} = live(build_conn(), "/replay/live-1")
     channel = assigns(view).channel
-    Playback.subscribe(channel)
-    Playback.frame_ready(channel)
+    Channel.subscribe(channel)
+    Channel.frame_ready(channel)
 
     assert render_async(view) =~ "PhoenixReplay.Test.Live.Counter"
     assert assigns(view).recording.url == "http://localhost/cards/[REDACTED]"
-    assert_receive {Playback, {:load, %{url: "http://localhost/cards/[REDACTED]"}}}
-    assert_receive {Playback, {:seek, 1}}
+    assert_receive {Channel, {:load, %{url: "http://localhost/cards/[REDACTED]"}}}
+    assert_receive {Channel, {:seek, 1}}
   end
 
   test "navigates away from live sessions the viewer may not see" do
@@ -151,12 +167,55 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert channel != assigns(other).channel
     assert has_element?(view, ~s(iframe[src="/replay/show/frame?channel=#{channel}"]))
 
-    Playback.subscribe(channel)
+    Channel.subscribe(channel)
     render_hook(view, "seek", %{"index" => "3"})
-    assert_receive {Playback, {:seek, 3}}
+    assert_receive {Channel, {:seek, 3}}
 
-    Playback.frame_ready(channel)
-    assert_receive {Playback, {:seek, 3}}
+    Channel.frame_ready(channel)
+    assert_receive {Channel, {:seek, 3}}
+  end
+
+  test "plays on after the last event to the end of the pointer track" do
+    recording = Fixtures.counter_recording(id: "pointed", clicks: 1)
+    last = PhoenixReplay.Recording.Timeline.duration_ms(recording)
+    # The pointer moved for three seconds after the last LiveView event.
+    batch = %Event{
+      at: last + 3_000,
+      type: :pointer,
+      data: %{span: 100, moves: [100, 5, 5, 0], presses: [], scrolls: []}
+    }
+
+    client = %{recording.client | viewport: %{width: 390, height: 844, dpr: 3}}
+
+    Storage.save(Fixtures.storage(), %{
+      recording
+      | events: [batch | recording.events],
+        client: client
+    })
+
+    {:ok, view, _html} = live(build_conn(), "/replay/pointed?at=3")
+    assert %{index: 3, duration_ms: duration} = assigns(view)
+    assert duration == last + 3_000
+    assert has_element?(view, "#replay-pointer")
+
+    render_click(view, "toggle")
+    assert %{at: ^duration, playing: nil} = advance(view)
+
+    # At the very end, playing starts over.
+    render_click(view, "toggle")
+    assert %{index: 1} = assigns(view)
+    # Events at the same time play on.
+    Storage.save(Fixtures.storage(), %{
+      recording
+      | id: "same",
+        events: Enum.map(recording.events, &%{&1 | at: 0})
+    })
+
+    # With no gaps the real timers play it at once: through every event,
+    # not stopping at the first that shares its time.
+    {:ok, view, _html} = live(build_conn(), "/replay/same?at=0")
+    render_click(view, "toggle")
+    assert %{index: 3, playing: nil} = played(view)
   end
 
   test "plays to the end at the chosen speed" do
@@ -205,12 +264,12 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   end
 
   describe "client context" do
-    defp client(viewport, tab, referer \\ nil) do
-      %{
+    defp client(viewport, tab, navigated_from \\ nil) do
+      %Client{
         viewport: viewport,
         user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1",
         tab: tab,
-        referer: referer
+        navigated_from: navigated_from
       }
     end
 
@@ -240,16 +299,16 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     test "shows how the visit started" do
       recording = Fixtures.counter_recording(id: "visit")
 
-      client =
-        Map.merge(recording.client, %{
-          headers: %{"accept-language" => "de-DE"},
-          landing: %{
+      client = %{
+        recording.client
+        | headers: %{"accept-language" => "de-DE"},
+          landing: %Landing{
             path: "/pricing",
             at: 1_700_000_000_000,
             params: %{"utm_source" => "google", "utm_medium" => "cpc"},
             referrer: "https://www.google.com/search"
           }
-        })
+      }
 
       Storage.save(Fixtures.storage(), %{recording | client: client})
       {:ok, view, _html} = live(build_conn(), "/replay/visit")
@@ -264,9 +323,13 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     test "links the sessions of one browser tab" do
       for {id, at} <- [{"first", 1}, {"second", 2}, {"third", 3}] do
-        referer = if id != "first", do: "http://localhost/counter"
+        navigated_from = if id != "first", do: "http://localhost/counter"
         recording = Fixtures.counter_recording(id: id, connected_at: at)
-        Storage.save(Fixtures.storage(), %{recording | client: client(nil, "tab-9", referer)})
+
+        Storage.save(Fixtures.storage(), %{
+          recording
+          | client: client(nil, "tab-9", navigated_from)
+        })
       end
 
       {:ok, view, _html} = live(build_conn(), "/replay/second")

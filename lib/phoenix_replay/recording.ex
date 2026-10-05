@@ -8,22 +8,11 @@ defmodule PhoenixReplay.Recording do
   `dropped` counts collected events left out once a collector reached its
   `:limit`, keyed by collector name, such as `"my_app.repo.query"` or `"log"`.
 
-  `client` describes the browser, when it told PhoenixReplay (see
-  `PhoenixReplay.Capture.Client`):
-
-    * `:viewport` — `%{width: integer, height: integer, dpr: number}` when
-      the LiveView connected; later changes are `:viewport` events
-    * `:user_agent` — the `User-Agent` header, when the endpoint's socket
-      lists `:user_agent` in its `:connect_info`
-    * `:tab` — an id of the browser tab, shared by the tab's sessions
-    * `:referer` — the URL the user came from by live navigation
-    * `:headers` — request headers listed in `:context`, kept by
-      `PhoenixReplay.Plug`
-    * `:landing` — the visit's landing request, when `:context` asks for
-      it: `%{path: String.t(), at: integer, params: map, referrer:
-      String.t() | nil}`
+  `client` describes the browser and the visit; see
+  `PhoenixReplay.Recording.Client`.
   """
 
+  alias PhoenixReplay.Recording.Client
   alias PhoenixReplay.Recording.Event
 
   @type id :: String.t()
@@ -37,26 +26,10 @@ defmodule PhoenixReplay.Recording do
           connected_at: integer(),
           events: [Event.t()],
           dropped: %{String.t() => pos_integer()},
-          client: client()
+          client: Client.t()
         }
 
   @type viewport :: %{width: pos_integer(), height: pos_integer(), dpr: number()}
-
-  @type client :: %{
-          viewport: viewport() | nil,
-          user_agent: String.t() | nil,
-          tab: String.t() | nil,
-          referer: String.t() | nil,
-          headers: %{String.t() => String.t()},
-          landing: landing() | nil
-        }
-
-  @type landing :: %{
-          path: String.t(),
-          at: integer(),
-          params: %{String.t() => String.t()},
-          referrer: String.t() | nil
-        }
 
   @enforce_keys [:id, :view, :connected_at]
   defstruct [
@@ -68,15 +41,16 @@ defmodule PhoenixReplay.Recording do
     session: %{},
     events: [],
     dropped: %{},
-    client: %{
-      viewport: nil,
-      user_agent: nil,
-      tab: nil,
-      referer: nil,
-      headers: %{},
-      landing: nil
-    }
+    client: %Client{}
   ]
+
+  @doc """
+  Brings a recording stored by an earlier version up to date.
+  `PhoenixReplay.Storage.Codec` calls it on every recording it decodes.
+  """
+  @spec upgrade(t()) :: t()
+  def upgrade(%__MODULE__{client: client} = recording),
+    do: %{recording | client: Client.upgrade(client)}
 
   @doc "Generates a URL-safe random recording id."
   @spec generate_id() :: id()

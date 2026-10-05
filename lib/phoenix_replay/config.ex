@@ -40,6 +40,36 @@ defmodule PhoenixReplay.Config do
       * `:events` — events buffered before a chunk is written (default `200`)
       * `:interval` — milliseconds after which buffered events are written
         anyway (default `5_000`)
+    * `:pointer` — records the pointer, touches and scrolling, for the
+      player to show over the replay, when the client module's
+      `replayRecorder/1` runs in the browser. `true` uses the defaults; a
+      keyword list sets any of them; `false` (the default) records none:
+      * `:sample` — milliseconds between recorded pointer positions
+        (default `50`)
+      * `:scroll` — milliseconds between recorded scroll positions
+        (default `100`)
+      * `:flush` — milliseconds between the batches the browser sends
+        (default `1_000`)
+      * `:max_points` — positions, presses and scrolls a batch may hold; a
+        fuller batch is sent early, and the server drops the rest
+        (default `500`)
+      * `:limit` — batches recorded per session (default `3_600`, an hour
+        of movement at the default `:flush`)
+    * `:state` — records state that lives only in the browser, which other
+      libraries report with a `phx_replay:state` window event, when
+      `replayRecorder/1` runs in the browser; see
+      `PhoenixReplay.Capture.State`. On by default; `false` records none,
+      and a keyword list sets any of:
+      * `:flush` — milliseconds between the batches the browser sends
+        (default `1_000`)
+      * `:max_entries` — entries a batch may hold; a fuller batch is sent
+        early, and the server drops the rest (default `200`)
+      * `:max_key` — bytes a key may have (default `64`)
+      * `:max_entry_bytes` — the JSON size an entry's changes may have;
+        larger ones are dropped (default `8_192`)
+      * `:max_bytes` — the JSON size a batch may have; a fuller batch is
+        sent early, and the server drops the rest (default `65_536`)
+      * `:limit` — batches recorded per session (default `3_600`)
     * `:context` — request context `PhoenixReplay.Plug` keeps for a visit
       and recordings carry in `client`:
       * `:headers` — request header names to capture, refreshed on each
@@ -57,7 +87,7 @@ defmodule PhoenixReplay.Config do
           (default `:first`)
     * `:max_memory` — bytes of buffered recordings above which new
       sessions are not recorded, or `nil` (the default) for no limit.
-    * `:retention` — keyword list controlling `PhoenixReplay.Recordings.Retention`:
+    * `:retention` — keyword list controlling `PhoenixReplay.Storage.Retention`:
       * `:max_age` — milliseconds after which recordings are deleted
       * `:max_count` — number of most recent recordings to keep
       * `:interval` — milliseconds between pruning runs (default `60_000`)
@@ -65,6 +95,18 @@ defmodule PhoenixReplay.Config do
       * `:attempts` — save attempts before giving up (default `3`)
       * `:backoff` — base delay in milliseconds, multiplied by the attempt
         number (default `1_000`)
+
+  ## Switching options off and overriding them
+
+  `:flush`, `:logs`, `:pointer`, `:state`, `:redact`, `:max_memory` and
+  the context's `:landing` can be switched off with `nil` or `false`.
+
+  For `:flush`, `:logs`, `:pointer`, `:state` and `:landing`, `true` turns
+  one on with whatever is already set, or its defaults, and a keyword list
+  sets some of its settings onto that, as `:keep`, `:retention` and
+  `:persist` do. So a live session's `{PhoenixReplay.Recorder, flush:
+  [events: 50]}` keeps the application's `:interval`. `:redact` and
+  `:max_memory` have no defaults to turn on: give them a value.
 
   ## Tail sampling
 
@@ -85,6 +127,29 @@ defmodule PhoenixReplay.Config do
   Every session is then buffered until it ends, so set `:max_memory`.
   """
 
+  # Defaults of the options that can be switched off. `nil` and `false`
+  # switch one off, `true` turns it on with these, and a keyword list sets
+  # some of them, onto whatever is already set.
+  @flush %{events: 200, interval: 5_000}
+  @logs %{level: :info, metadata: [], limit: 1_000}
+  @pointer %{sample: 50, scroll: 100, flush: 1_000, max_points: 500, limit: 3_600}
+  @state %{
+    flush: 1_000,
+    max_entries: 200,
+    max_key: 64,
+    max_entry_bytes: 8_192,
+    max_bytes: 65_536,
+    limit: 3_600
+  }
+  @landing %{params: [], referrer: true, attribution: :first}
+  @off [nil, false]
+
+  @secret_headers ~w(cookie authorization proxy-authorization)
+  @param_presets %{
+    utm: ~w(utm_source utm_medium utm_campaign utm_term utm_content),
+    click_ids: ~w(gclid fbclid msclkid)
+  }
+
   @type retention :: %{
           max_age: pos_integer() | nil,
           max_count: non_neg_integer() | nil,
@@ -102,6 +167,23 @@ defmodule PhoenixReplay.Config do
   @type redactor :: {module(), keyword()}
 
   @type flush :: %{events: pos_integer(), interval: pos_integer()}
+
+  @type pointer :: %{
+          sample: pos_integer(),
+          scroll: pos_integer(),
+          flush: pos_integer(),
+          max_points: pos_integer(),
+          limit: pos_integer()
+        }
+
+  @type state :: %{
+          flush: pos_integer(),
+          max_entries: pos_integer(),
+          max_key: pos_integer(),
+          max_entry_bytes: pos_integer(),
+          max_bytes: pos_integer(),
+          limit: pos_integer()
+        }
 
   @type landing :: %{
           params: [String.t()],
@@ -127,6 +209,8 @@ defmodule PhoenixReplay.Config do
           redact: redactor() | nil,
           max_memory: pos_integer() | nil,
           flush: flush() | nil,
+          pointer: pointer() | nil,
+          state: state() | nil,
           context: context(),
           retention: retention(),
           persist: persist()
@@ -142,6 +226,8 @@ defmodule PhoenixReplay.Config do
             redact: nil,
             max_memory: nil,
             flush: %{events: 200, interval: 5_000},
+            pointer: nil,
+            state: @state,
             context: %{headers: [], landing: nil},
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
@@ -152,14 +238,28 @@ defmodule PhoenixReplay.Config do
   `overrides` take precedence over the environment. Module-keyed entries,
   such as an endpoint configured with `otp_app: :phoenix_replay`, belong to
   those modules and are skipped.
+
+  It runs on every request and mount, so the result is kept for each set
+  of `overrides` and built again only when the environment changes.
   """
   @spec load(keyword()) :: t()
   def load(overrides \\ []) when is_list(overrides) do
-    :phoenix_replay
-    |> Application.get_all_env()
-    |> Enum.reject(fn {key, _value} -> module_key?(key) end)
-    |> Kernel.++(overrides)
-    |> new()
+    env =
+      :phoenix_replay
+      |> Application.get_all_env()
+      |> Enum.reject(fn {key, _value} -> module_key?(key) end)
+
+    key = {__MODULE__, :erlang.phash2(overrides)}
+
+    case :persistent_term.get(key, nil) do
+      {^env, ^overrides, config} ->
+        config
+
+      _stale ->
+        config = new(env ++ overrides)
+        :persistent_term.put(key, {env, overrides, config})
+        config
+    end
   end
 
   @doc """
@@ -198,12 +298,10 @@ defmodule PhoenixReplay.Config do
   defp put({:collect, entries}, config) when is_list(entries),
     do: %{config | collect: Enum.map(entries, &collector/1)}
 
-  defp put({:logs, nil}, config), do: %{config | logs: nil}
+  defp put({:logs, value}, config),
+    do: %{config | logs: switch(:logs, value, config.logs, @logs, &valid_logs?/2)}
 
-  defp put({:logs, opts}, config) when is_list(opts),
-    do: %{config | logs: merge(%{level: :info, metadata: [], limit: 1_000}, opts, &valid_logs?/2)}
-
-  defp put({:redact, []}, config), do: %{config | redact: nil}
+  defp put({:redact, off}, config) when off in [nil, false, []], do: %{config | redact: nil}
 
   defp put({:redact, patterns}, config) when is_list(patterns),
     do: %{
@@ -214,28 +312,33 @@ defmodule PhoenixReplay.Config do
   defp put({:redact, {module, opts}}, config) when is_atom(module) and is_list(opts),
     do: %{config | redact: {module, opts}}
 
-  defp put({:redact, module}, config) when is_atom(module) and not is_nil(module),
+  defp put({:redact, module}, config) when is_atom(module) and not is_boolean(module),
     do: %{config | redact: {module, []}}
 
-  defp put({:max_memory, max}, config) when is_nil(max) or (is_integer(max) and max > 0),
+  defp put({:max_memory, off}, config) when off in @off, do: %{config | max_memory: nil}
+
+  defp put({:max_memory, max}, config) when is_integer(max) and max > 0,
     do: %{config | max_memory: max}
 
   defp put({:context, opts}, config) when is_list(opts) do
     context =
       Enum.reduce(opts, config.context, fn
         {:headers, names}, acc when is_list(names) -> %{acc | headers: Enum.map(names, &header/1)}
-        {:landing, nil}, acc -> %{acc | landing: nil}
-        {:landing, landing}, acc when is_list(landing) -> %{acc | landing: landing(landing)}
+        {:landing, value}, acc -> %{acc | landing: landing(value, acc.landing)}
         {key, value}, _acc -> invalid!(key, value)
       end)
 
     %{config | context: context}
   end
 
-  defp put({:flush, false}, config), do: %{config | flush: nil}
+  defp put({:pointer, value}, config),
+    do: %{config | pointer: switch(:pointer, value, config.pointer, @pointer, &positive?/2)}
 
-  defp put({:flush, opts}, config) when is_list(opts),
-    do: %{config | flush: merge(%{events: 200, interval: 5_000}, opts, &valid_flush?/2)}
+  defp put({:state, value}, config),
+    do: %{config | state: switch(:state, value, config.state, @state, &positive?/2)}
+
+  defp put({:flush, value}, config),
+    do: %{config | flush: switch(:flush, value, config.flush, @flush, &positive?/2)}
 
   defp put({:retention, opts}, config) when is_list(opts),
     do: %{config | retention: merge(config.retention, opts, &valid_retention?/2)}
@@ -243,19 +346,23 @@ defmodule PhoenixReplay.Config do
   defp put({:persist, opts}, config) when is_list(opts),
     do: %{config | persist: merge(config.persist, opts, &valid_persist?/2)}
 
-  defp put({key, value}, _config) do
-    raise ArgumentError,
-          "invalid :phoenix_replay configuration #{inspect(key)}: #{inspect(value)}"
-  end
+  defp put({key, value}, _config), do: invalid!(key, value)
 
-  defp merge(defaults, opts, valid?) do
-    Enum.reduce(opts, defaults, fn {key, value}, acc ->
-      if Map.has_key?(acc, key) and valid?.(key, value) do
-        Map.put(acc, key, value)
-      else
-        raise ArgumentError,
-              "invalid :phoenix_replay configuration #{inspect(key)}: #{inspect(value)}"
-      end
+  # An option that can be off: nil or false switch it off, true turns it on
+  # as it was or with the defaults, and a keyword list sets some of it.
+  defp switch(_key, off, _current, _defaults, _valid?) when off in @off, do: nil
+  defp switch(_key, true, current, defaults, _valid?), do: current || defaults
+
+  defp switch(_key, opts, current, defaults, valid?) when is_list(opts),
+    do: merge(current || defaults, opts, valid?)
+
+  defp switch(key, value, _current, _defaults, _valid?), do: invalid!(key, value)
+
+  defp merge(current, opts, valid?) do
+    Enum.reduce(opts, current, fn {key, value}, acc ->
+      if Map.has_key?(acc, key) and valid?.(key, value),
+        do: Map.put(acc, key, value),
+        else: invalid!(key, value)
     end)
   end
 
@@ -268,14 +375,12 @@ defmodule PhoenixReplay.Config do
   defp collector({module, opts}) when is_atom(module) and is_list(opts), do: {module, opts}
   defp collector(module) when is_atom(module), do: {module, []}
 
-  defp collector(entry),
-    do: raise(ArgumentError, "invalid :phoenix_replay :collect entry: #{inspect(entry)}")
+  defp collector(entry), do: invalid!(:collect, entry)
 
   defp pattern(%Regex{} = regex), do: regex
   defp pattern(source) when is_binary(source), do: Regex.compile!(source)
 
-  defp pattern(pattern),
-    do: raise(ArgumentError, "invalid :phoenix_replay :redact pattern: #{inspect(pattern)}")
+  defp pattern(pattern), do: invalid!(:redact, pattern)
 
   defp valid_keep?(:rate, value), do: is_number(value) and value >= 0 and value <= 1
   defp valid_keep?(:errors, value), do: is_boolean(value)
@@ -285,13 +390,7 @@ defmodule PhoenixReplay.Config do
   defp valid_logs?(:metadata, value), do: is_list(value) and Enum.all?(value, &is_atom/1)
   defp valid_logs?(:limit, value), do: pos_integer?(value)
 
-  defp valid_flush?(_key, value), do: pos_integer?(value)
-
-  @secret_headers ~w(cookie authorization proxy-authorization)
-  @param_presets %{
-    utm: ~w(utm_source utm_medium utm_campaign utm_term utm_content),
-    click_ids: ~w(gclid fbclid msclkid)
-  }
+  defp positive?(_key, value), do: pos_integer?(value)
 
   defp header(name) when is_binary(name) or is_atom(name) do
     name = name |> to_string() |> String.downcase()
@@ -303,9 +402,11 @@ defmodule PhoenixReplay.Config do
 
   defp header(name), do: invalid!(:headers, name)
 
-  defp landing(opts) do
-    landing = merge(%{params: [], referrer: true, attribution: :first}, opts, &valid_landing?/2)
-    %{landing | params: landing.params |> Enum.flat_map(&param/1) |> Enum.uniq()}
+  defp landing(value, current) do
+    case switch(:landing, value, current, @landing, &valid_landing?/2) do
+      nil -> nil
+      landing -> %{landing | params: landing.params |> Enum.flat_map(&param/1) |> Enum.uniq()}
+    end
   end
 
   defp param(preset) when is_map_key(@param_presets, preset), do: @param_presets[preset]

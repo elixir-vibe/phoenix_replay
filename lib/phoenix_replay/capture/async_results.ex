@@ -22,9 +22,8 @@ defmodule PhoenixReplay.Capture.AsyncResults do
   render, and its offset is the time it is recorded.
   """
 
+  alias PhoenixReplay.Capture.Assigns
   alias PhoenixReplay.Session.Buffer
-
-  @unreplayable [:__changed__, :myself, :flash]
 
   @doc """
   Notes that the next render of the component is caused by an event that
@@ -61,8 +60,8 @@ defmodule PhoenixReplay.Capture.AsyncResults do
   def snapshot(pid, module, id, cid) do
     with {:ok, components} <- Phoenix.LiveView.Debug.live_components(pid),
          %{assigns: assigns} <- Enum.find(components, &(&1.cid == cid)),
-         {:ok, _id, config} <- Buffer.session(pid) do
-      assigns = assigns |> Map.drop(@unreplayable) |> config.sanitizer.sanitize_assigns()
+         {:ok, _id, sanitizer} <- Buffer.session(pid) do
+      assigns = Assigns.component(assigns, sanitizer)
       Buffer.record(pid, :component, %{module: module, id: id, assigns: assigns})
       :ok
     else

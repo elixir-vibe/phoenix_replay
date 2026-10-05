@@ -49,7 +49,9 @@ defmodule PhoenixReplay.ConfigTest do
               event: [:my_app, :search, :stop], metadata: [:query]}
            ]
 
-    assert_raise ArgumentError, ~r/:collect entry/, fn -> Config.new(collect: ["nope"]) end
+    assert_raise ArgumentError, ~r/configuration :collect: "nope"/, fn ->
+      Config.new(collect: ["nope"])
+    end
   end
 
   test "validates tail sampling, logs, redaction and memory" do
@@ -76,7 +78,10 @@ defmodule PhoenixReplay.ConfigTest do
 
     assert Config.new(redact: {MyRedactor, x: 1}).redact == {MyRedactor, x: 1}
     assert Config.new(redact: MyRedactor).redact == {MyRedactor, []}
-    assert_raise ArgumentError, ~r/:redact pattern/, fn -> Config.new(redact: [:email]) end
+
+    assert_raise ArgumentError, ~r/configuration :redact: :email/, fn ->
+      Config.new(redact: [:email])
+    end
 
     assert Config.new([]).flush == %{events: 200, interval: 5_000}
     assert Config.new(flush: [events: 50]).flush == %{events: 50, interval: 5_000}
@@ -128,5 +133,29 @@ defmodule PhoenixReplay.ConfigTest do
   test "load/0 reads the application environment" do
     assert %Config{storage: {PhoenixReplay.Storage.File, [path: _]}, persist: %{attempts: 2}} =
              Config.load()
+  end
+
+  test "merges overrides of every nested option onto what is set" do
+    assert Config.new(flush: [events: 50], flush: [interval: 9]).flush == %{
+             events: 50,
+             interval: 9
+           }
+
+    assert Config.new(pointer: [sample: 30], pointer: [flush: 500]).pointer.sample == 30
+    assert Config.new(logs: [level: :warning], logs: [limit: 5]).logs.level == :warning
+    assert Config.new(flush: false, flush: [events: 10]).flush == %{events: 10, interval: 5_000}
+  end
+
+  test "switches options off with nil or false, and on with true" do
+    for key <- [:flush, :logs, :pointer, :redact, :max_memory], off <- [nil, false] do
+      assert Map.fetch!(Config.new([{key, off}]), key) == nil
+    end
+
+    assert Config.new(redact: []).redact == nil
+    assert Config.new(context: [landing: false]).context.landing == nil
+    assert Config.new(logs: true).logs == %{level: :info, metadata: [], limit: 1_000}
+    assert Config.new(flush: [events: 10], flush: true).flush.events == 10
+
+    assert_raise ArgumentError, ~r/:flush: "x"/, fn -> Config.new(flush: "x") end
   end
 end

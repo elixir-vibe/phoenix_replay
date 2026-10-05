@@ -36,7 +36,7 @@ defmodule PhoenixReplay.Capture.LiveComponentsTest do
              )
 
     assert %{{CartItem, "apple"} => %{quantity: 0}, {CartItem, "pear"} => %{quantity: 2}} =
-             Timeline.components_at(recording, Timeline.last_index(recording))
+             Timeline.at(recording, Timeline.last_index(recording)).components
 
     refute recording.events
            |> Enum.filter(&(&1.type == :component))
@@ -81,7 +81,7 @@ defmodule PhoenixReplay.Capture.LiveComponentsTest do
     assert %Event{data: %{module: CartItem, id: "apple"}} =
              Enum.find(recording.events, &(&1.type == :component_destroyed))
 
-    assert Map.keys(Timeline.components_at(recording, Timeline.last_index(recording))) ==
+    assert Map.keys(Timeline.at(recording, Timeline.last_index(recording)).components) ==
              [{CartItem, "pear"}]
   end
 

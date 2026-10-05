@@ -1,6 +1,8 @@
 defmodule PhoenixReplay.RedactorTest do
   use ExUnit.Case, async: true
 
+  alias PhoenixReplay.Recording.Client
+  alias PhoenixReplay.Recording.Client.Landing
   alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Redactor
   alias PhoenixReplay.Redactor.Patterns
@@ -52,13 +54,13 @@ defmodule PhoenixReplay.RedactorTest do
       | url: "http://x/1234-5678",
         params: %{"card" => "1234-5678"},
         session: %{"note" => "1234-5678"},
-        client: %{
+        client: %Client{
           viewport: %{width: 1234, height: 5678, dpr: 1},
           user_agent: "Agent 1234-5678",
           tab: "1234-5678",
-          referer: "http://x/1234-5678",
+          navigated_from: "http://x/1234-5678",
           headers: %{"x-account" => "1234-5678"},
-          landing: %{path: "/", at: 1, params: %{"ref" => "1234-5678"}, referrer: nil}
+          landing: %Landing{path: "/", at: 1, params: %{"ref" => "1234-5678"}}
         }
     }
 
@@ -72,19 +74,21 @@ defmodule PhoenixReplay.RedactorTest do
     test = self()
 
     assert {:ok, redacted} =
-             Redactor.redact_recording(recording, @cards, &send(test, {:progress, &1, &2}))
+             Redactor.redact_recording(recording, @cards,
+               progress: &send(test, {:progress, &1, &2})
+             )
 
     assert redacted.url == "http://x/[REDACTED]"
     assert redacted.params == %{"card" => "[REDACTED]"}
     assert redacted.session == %{"note" => "[REDACTED]"}
 
-    assert redacted.client == %{
+    assert redacted.client == %Client{
              viewport: %{width: 1234, height: 5678, dpr: 1},
              user_agent: "Agent [REDACTED]",
              tab: "1234-5678",
-             referer: "http://x/[REDACTED]",
+             navigated_from: "http://x/[REDACTED]",
              headers: %{"x-account" => "[REDACTED]"},
-             landing: %{path: "/", at: 1, params: %{"ref" => "[REDACTED]"}, referrer: nil}
+             landing: %Landing{path: "/", at: 1, params: %{"ref" => "[REDACTED]"}}
            }
 
     assert Enum.find(redacted.events, &(&1.type == :log)).data.message == "paid [REDACTED]"

@@ -6,6 +6,7 @@ import { copyLinks } from './dom/copy'
 import { searchShortcut } from './dom/shortcut'
 import { EventList } from './hooks/event_list'
 import { FrameViewport } from './hooks/frame_viewport'
+import { Pointer } from './hooks/pointer'
 import { Scrubber } from './hooks/scrubber'
 
 const meta = (name: string): string | undefined =>
@@ -13,7 +14,7 @@ const meta = (name: string): string | undefined =>
 
 const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Socket, {
   params: { _csrf_token: meta('csrf-token') },
-  hooks: { EventList, FrameViewport, Scrubber }
+  hooks: { EventList, FrameViewport, Pointer, Scrubber }
 })
 
 confirmClicks(window)

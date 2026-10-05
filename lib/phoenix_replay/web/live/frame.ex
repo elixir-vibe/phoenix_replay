@@ -3,10 +3,14 @@ defmodule PhoenixReplay.Web.Live.Frame do
   Re-renders a recorded view with its recorded assigns.
 
   Loaded in an iframe by the player and driven through
-  `PhoenixReplay.Web.Playback`. Recorded assigns are assigned directly, so
+  `PhoenixReplay.Web.Player.Channel`. Recorded assigns are assigned directly, so
   the recorded template renders unchanged. Frame state lives in
   `socket.private`, except for the single `:phoenix_replay_frame` assign that
   the layout and the fallback template need.
+
+  A view whose live render depends on code in the browser can define
+  `replay_render/1`, which the frame calls in place of `render/1`; see
+  `PhoenixReplay.Web.Rendering.render/2`.
 
   LiveComponents in the template render through
   `PhoenixReplay.Web.Live.ReplayComponent` with their recorded assigns; see
@@ -14,27 +18,31 @@ defmodule PhoenixReplay.Web.Live.Frame do
   assigns shows a placeholder instead of crashing the frame.
 
   A session that is still running is never read from the buffer here: the
-  player redacts it and hands it over with `PhoenixReplay.Web.Playback.load/2`.
+  player redacts it and hands it over with `PhoenixReplay.Web.Player.Channel.load/2`.
   Until then the frame shows a placeholder.
   """
 
   use Phoenix.LiveView
 
   alias PhoenixReplay.Recording.Timeline
-  alias PhoenixReplay.Recordings
-  alias PhoenixReplay.Web.{Context, Layouts, Playback, Rendering}
+  alias PhoenixReplay.Catalog
+  alias PhoenixReplay.Web.{Context, Layouts, Rendering}
+  alias PhoenixReplay.Web.Player.Channel
   alias PhoenixReplay.Web.Live.ReplayComponent
 
   @private :phoenix_replay_frame
-  @unassignable [:flash, :uploads, :streams, :socket, :myself]
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
-    recording = if Recordings.live?(id), do: nil, else: Context.fetch_recording!(socket, id)
+    # Indexed like the player's.
+    recording =
+      if Catalog.live?(id),
+        do: nil,
+        else: socket |> Context.fetch_recording!(id) |> Timeline.for_playback() |> elem(0)
 
     if connected?(socket) and is_binary(params["channel"]) do
-      :ok = Playback.subscribe(params["channel"])
-      :ok = Playback.frame_ready(params["channel"])
+      :ok = Channel.subscribe(params["channel"])
+      :ok = Channel.frame_ready(params["channel"])
     end
 
     frame = %{
@@ -46,7 +54,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
     {:ok,
      socket
-     |> put_private(@private, %{recording: recording, keys: []})
+     |> put_private(@private, private(recording))
      |> assign(@private, frame)
      |> show_first(), layout: false}
   end
@@ -61,11 +69,11 @@ defmodule PhoenixReplay.Web.Live.Frame do
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   @impl true
-  def handle_info({Playback, {:load, recording}}, socket) do
+  def handle_info({Channel, {:load, recording}}, socket) do
     if Context.allowed?(socket, :view, recording) do
       {:noreply,
        socket
-       |> put_private(@private, %{recording: recording, keys: []})
+       |> put_private(@private, private(recording))
        |> update(@private, &%{&1 | view: recording.view})
        |> show_first()}
     else
@@ -74,13 +82,13 @@ defmodule PhoenixReplay.Web.Live.Frame do
   end
 
   def handle_info(
-        {Playback, {:seek, _index}},
+        {Channel, {:seek, _index}},
         %{private: %{@private => %{recording: nil}}} = socket
       ),
       do: {:noreply, socket}
 
-  def handle_info({Playback, {:seek, index}}, socket), do: {:noreply, show(socket, index)}
-  def handle_info({Playback, _message}, socket), do: {:noreply, socket}
+  def handle_info({Channel, {:seek, index}}, socket), do: {:noreply, show(socket, index)}
+  def handle_info({Channel, _message}, socket), do: {:noreply, socket}
 
   @impl true
   def render(%{@private => %{view: nil}} = assigns) do
@@ -92,7 +100,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
   end
 
   def render(%{@private => %{error: nil, view: view, components: states}} = assigns),
-    do: assigns |> view.render() |> Rendering.rewrite(states)
+    do: view |> Rendering.render(assigns) |> Rendering.rewrite(states)
 
   def render(assigns) do
     ~H"""
@@ -103,13 +111,17 @@ defmodule PhoenixReplay.Web.Live.Frame do
     """
   end
 
+  defp private(nil), do: %{recording: nil, timeline: nil, keys: []}
+
+  defp private(recording),
+    do: %{recording: recording, timeline: Timeline.new(recording), keys: []}
+
   defp show(socket, index) do
-    %{recording: recording, keys: previous_keys} = socket.private[@private]
-    index = Timeline.clamp(recording, index)
-    recorded = Timeline.assigns_at(recording, index)
-    states = Timeline.components_at(recording, index)
-    {flash, recorded} = Map.pop(recorded, :flash, %{})
-    recorded = Map.drop(recorded, @unassignable)
+    %{timeline: timeline, keys: previous_keys} = private = socket.private[@private]
+    timeline = Timeline.seek(timeline, index)
+    states = timeline.components
+    {flash, recorded} = Map.pop(timeline.assigns, :flash, %{})
+    recorded = Rendering.assignable(recorded)
     keys = Map.keys(recorded)
 
     socket
@@ -118,7 +130,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
     |> replace_flash(flash)
     |> update(@private, &%{&1 | components: states})
     |> refresh_components(states)
-    |> put_private(@private, %{recording: recording, keys: keys})
+    |> put_private(@private, %{private | timeline: timeline, keys: keys})
     |> check_render()
   end
 
@@ -132,8 +144,9 @@ defmodule PhoenixReplay.Web.Live.Frame do
   # they get their recorded assigns directly.
   defp refresh_components(socket, states) do
     if connected?(socket) do
-      for {module, id} <- Map.keys(states),
-          do: send_update(ReplayComponent, id: {module, id}, __replay_states__: states)
+      Enum.each(states, fn {{module, id}, _assigns} ->
+        send_update(ReplayComponent, id: {module, id}, __replay_states__: states)
+      end)
     end
 
     socket

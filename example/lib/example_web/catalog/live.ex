@@ -13,11 +13,10 @@ defmodule ExampleWeb.Catalog.Live do
   import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.Core
   import PhoenixReplay.Web.Components.Player, only: [event_icon: 1]
-  import PhoenixReplay.Web.Components.Recordings
+  import PhoenixReplay.Web.Components.RecordingList
 
   alias Phoenix.LiveView.JS
-  alias PhoenixReplay.Recording.{Client, Summary}
-  alias PhoenixReplay.Recordings.Filter
+  alias PhoenixReplay.Recording.{Client, Filter, Summary}
 
   @event_types ~w(mount event params info render component telemetry log exit viewport)a
 
@@ -186,6 +185,7 @@ defmodule ExampleWeb.Catalog.Live do
       <.panel title="Recording list" padded>
         <.filter_bar
           filter={%Filter{errors: true}}
+          path={&("?" <> URI.encode_query(Filter.to_params(&1)))}
           views={["ExampleWeb.TaskLive.Index"]}
           event_names={["save"]}
         />

@@ -47,7 +47,7 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
       dropped: %{"repo.query" => 3}
     }
 
-    assert Events.kinds(recording) == ["liveview", "logs"]
+    assert Events.kinds(recording) == [:liveview, :logs]
     assert Events.error_count(recording) == 1
     assert Events.dropped_count(recording) == 3
     assert Events.collected?(hd(recording.events))
@@ -95,14 +95,19 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
       ]
     }
 
-    assert Events.kind_counts(recording) == %{"liveview" => 2, "logs" => 1}
-    assert [{"liveview", [_mount, _render]}, {"logs", [{^log, 2}]}] = Events.lanes(recording)
+    assert Events.kind_counts(recording) == %{liveview: 2, logs: 1}
+    assert [{:liveview, [_mount, _render]}, {:logs, [{^log, 2}]}] = Events.lanes(recording)
     assert Events.first_error_index(recording) == 2
     assert Events.first_error_index(%{recording | events: []}) == nil
     assert Events.changed_keys(Enum.at(recording.events, 1)) == [:b]
     assert Events.changed_keys(log) == []
     assert Events.changed_keys(nil) == []
-    assert Events.kind_class("logs") == "bg-kind-log"
+    assert Events.kind_class(:logs) == "bg-kind-log"
+  end
+
+  test "reads only known kinds sent by the browser" do
+    assert Events.parse_kind("logs") == {:ok, :logs}
+    assert Events.parse_kind("nope") == :error
   end
 
   test "matches labels and describes collected events" do

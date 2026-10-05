@@ -49,14 +49,16 @@ defmodule PhoenixReplay.Storage.FileTest do
     assert [%{id: "theirs"}] = FileStorage.list(opts)
   end
 
-  test "pages summaries matching a filter", %{opts: opts} do
+  test "pages summaries matching a filter through the storage facade", %{opts: opts} do
+    storage = {FileStorage, opts}
+
     for i <- 1..5,
         do: FileStorage.save(Fixtures.counter_recording(id: "r#{i}", connected_at: i), opts)
 
-    filter = %PhoenixReplay.Recordings.Filter{}
+    filter = %PhoenixReplay.Recording.Filter{}
 
     assert {[%{id: "r4"}, %{id: "r3"}], 5} =
-             FileStorage.query(filter, [now: 10, offset: 1, limit: 2], opts)
+             PhoenixReplay.Storage.query(storage, filter, now: 10, offset: 1, limit: 2)
 
     Process.sleep(2)
     saved = System.system_time(:millisecond)
@@ -64,9 +66,10 @@ defmodule PhoenixReplay.Storage.FileTest do
     FileStorage.save(Fixtures.counter_recording(id: "late", connected_at: 0), opts)
 
     assert {[%{id: "late"}], 1} =
-             FileStorage.query(filter, [now: 10, since: saved, limit: 5], opts)
+             PhoenixReplay.Storage.query(storage, filter, now: 10, since: saved, limit: 5)
 
-    assert {_page, 5} = FileStorage.query(filter, [now: 10, until: saved, limit: 0], opts)
+    assert {_page, 5} =
+             PhoenixReplay.Storage.query(storage, filter, now: 10, until: saved, limit: 0)
   end
 
   test "orders sessions that started together by id", %{opts: opts} do

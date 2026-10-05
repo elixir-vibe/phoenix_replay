@@ -15,7 +15,7 @@ defmodule PhoenixReplay.Recording.Summary do
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Client, Event, Timeline}
+  alias PhoenixReplay.Recording.{Client, Event}
 
   @type t :: %__MODULE__{
           id: Recording.id(),
@@ -33,6 +33,16 @@ defmodule PhoenixReplay.Recording.Summary do
           saved_at: integer() | nil,
           live?: boolean()
         }
+
+  @typedoc "What a summary counts of a recording's events; see `totals/2`."
+  @type totals :: %{
+          event_count: non_neg_integer(),
+          error_count: non_neg_integer(),
+          event_names: [String.t()],
+          duration_ms: non_neg_integer()
+        }
+
+  @no_totals %{event_count: 0, error_count: 0, event_names: [], duration_ms: 0}
 
   @enforce_keys [:id, :view, :connected_at]
   defstruct [
@@ -55,23 +65,64 @@ defmodule PhoenixReplay.Recording.Summary do
   @doc "Summarizes a recording."
   @spec new(Recording.t(), keyword()) :: t()
   def new(%Recording{} = recording, opts \\ []) do
-    %__MODULE__{
+    summary = %__MODULE__{
       id: recording.id,
       view: inspect(recording.view),
       url: recording.url,
       connected_at: recording.connected_at,
-      event_count: length(recording.events),
-      event_names: event_names(recording.events),
-      error_count: Enum.count(recording.events, &Event.error?/1),
-      tab: recording.client[:tab],
-      viewport: recording.client[:viewport],
-      device: Client.device(recording.client[:user_agent]),
+      tab: recording.client.tab,
+      viewport: recording.client.viewport,
+      device: Client.device(recording.client.user_agent),
       source: Client.source(recording.client),
-      duration_ms: Timeline.duration_ms(recording),
       saved_at: Keyword.get(opts, :saved_at),
       live?: Keyword.get(opts, :live?, false)
     }
+
+    struct!(summary, totals(recording.events))
   end
+
+  @doc """
+  Counts `events` into `totals`, which start at zero: every event but
+  pointer batches and client state, which are not shown as events; the events for which
+  `PhoenixReplay.Recording.Event.error?/1` holds; the distinct
+  `handle_event/3` names, sorted; and the time of the last event.
+
+  A recording flushed to storage in chunks is counted chunk by chunk.
+  """
+  @spec totals([Event.t()], totals()) :: totals()
+  def totals(events, totals \\ @no_totals) do
+    {totals, names} = Enum.reduce(events, {totals, totals.event_names}, &count/2)
+    %{totals | event_names: names |> Enum.uniq() |> Enum.sort()}
+  end
+
+  @doc """
+  How one event adds to `totals/2`: `1` or `0` to the event count and to
+  the error count, and its `handle_event/3` name, if it has one.
+  `PhoenixReplay.Session.Buffer` keeps running totals with it as events
+  are written.
+  """
+  @spec counts(Event.t()) :: {0 | 1, 0 | 1, String.t() | nil}
+  def counts(%Event{} = event),
+    do: {one(event.type not in [:pointer, :state]), one(Event.error?(event)), event_name(event)}
+
+  defp count(%Event{} = event, {totals, names}) do
+    {shown, error, name} = counts(event)
+
+    totals = %{
+      totals
+      | event_count: totals.event_count + shown,
+        error_count: totals.error_count + error,
+        duration_ms: max(totals.duration_ms, event.at)
+    }
+
+    {totals, if(name, do: [name | names], else: names)}
+  end
+
+  defp one(true), do: 1
+  defp one(false), do: 0
+
+  defp event_name(%Event{type: :event, data: %{name: name}}), do: name
+  defp event_name(_event), do: nil
 
   @doc """
   When the recording reached storage: `saved_at`, or `connected_at` for
@@ -89,11 +140,4 @@ defmodule PhoenixReplay.Recording.Summary do
   """
   @spec sort([t()]) :: [t()]
   def sort(summaries), do: Enum.sort_by(summaries, &{&1.connected_at, &1.id}, :desc)
-
-  @doc "Distinct `handle_event/3` names among `events`, sorted."
-  @spec event_names([Event.t()]) :: [String.t()]
-  def event_names(events) do
-    names = for %{type: :event, data: %{name: name}} <- events, uniq: true, do: name
-    Enum.sort(names)
-  end
 end

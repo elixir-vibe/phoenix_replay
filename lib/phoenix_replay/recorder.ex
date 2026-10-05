@@ -8,7 +8,8 @@ defmodule PhoenixReplay.Recorder do
 
   Options given as `{PhoenixReplay.Recorder, opts}` override the
   `PhoenixReplay.Config` values for that live session. `:sample_rate`,
-  `:keep`, `:max_events`, `:sanitizer`, `:redact` and `:flush` are accepted:
+  `:keep`, `:max_events`, `:sanitizer`, `:redact`, `:flush`, `:pointer` and
+  `:state` are accepted:
 
       live_session :checkout,
         on_mount: [{PhoenixReplay.Recorder, keep: [rate: 0.1, errors: true]}] do
@@ -28,7 +29,14 @@ defmodule PhoenixReplay.Recorder do
 
   When the host app sends PhoenixReplay's client context, the recording
   also holds the browser's viewport, user agent, tab and the URL the user
-  came from; see `PhoenixReplay.Capture.Client`.
+  came from; see `PhoenixReplay.Capture.Browser`.
+
+  On the connected mount of a recorded session, the recorder pushes a
+  `"phx_replay:record"` event with what the browser should record:
+  `%{pointer: settings | nil, state: settings | nil}`. The client module's
+  `replayRecorder/1` starts on it and sends pointer batches and client
+  state back, which the recorder records and halts; see
+  `PhoenixReplay.Capture.Pointer` and `PhoenixReplay.Capture.State`.
   """
 
   import Phoenix.LiveView,
@@ -37,15 +45,28 @@ defmodule PhoenixReplay.Recorder do
       connected?: 1,
       get_connect_info: 2,
       get_connect_params: 1,
+      push_event: 3,
       put_private: 3
     ]
 
   alias PhoenixReplay.{Config, Recording}
-  alias PhoenixReplay.Capture.Client
+  alias PhoenixReplay.Capture.{Assigns, Browser, Pointer, State}
   alias PhoenixReplay.Session.{Buffer, Monitor}
 
   @private :phoenix_replay
-  @session_options [:sample_rate, :keep, :max_events, :sanitizer, :redact, :flush]
+  @record_event "phx_replay:record"
+  @pointer_event Pointer.event()
+  @state_event State.event()
+  @session_options [
+    :sample_rate,
+    :keep,
+    :max_events,
+    :sanitizer,
+    :redact,
+    :flush,
+    :pointer,
+    :state
+  ]
 
   @doc """
   Starts recording on the connected mount, for the sampled share of sessions.
@@ -62,14 +83,7 @@ defmodule PhoenixReplay.Recorder do
   def on_mount(:default, params, session, socket), do: on_mount([], params, session, socket)
 
   def on_mount(opts, params, session, socket) when is_list(opts) do
-    case Keyword.keys(opts) -- @session_options do
-      [] ->
-        :ok
-
-      unknown ->
-        raise ArgumentError, "unknown PhoenixReplay.Recorder options: #{inspect(unknown)}"
-    end
-
+    Keyword.validate!(opts, @session_options)
     config = Config.load(opts)
 
     if connected?(socket) and sampled?(config.sample_rate) and memory?(config.max_memory),
@@ -102,17 +116,27 @@ defmodule PhoenixReplay.Recorder do
       session: sanitizer.sanitize_params(session),
       connected_at: System.system_time(:millisecond),
       client:
-        Client.client(get_connect_params(socket), get_connect_info(socket, :user_agent), kept)
+        Browser.build(get_connect_params(socket), get_connect_info(socket, :user_agent), kept)
     }
 
     :ok = Buffer.open(recording, self(), config)
     Monitor.watch(self(), recording.id)
 
-    state = %{id: recording.id, url?: false, sanitizer: sanitizer}
+    state = %{
+      id: recording.id,
+      url?: false,
+      sanitizer: sanitizer,
+      pointer: config.pointer,
+      state: config.state
+    }
 
     socket
     |> put_private(@private, state)
-    |> record(:mount, %{assigns: sanitizer.sanitize_assigns(socket.assigns)})
+    |> push_event(@record_event, %{
+      pointer: config.pointer && Pointer.settings(config.pointer),
+      state: config.state && State.settings(config.state)
+    })
+    |> record(:mount, %{assigns: Assigns.view(socket.assigns, sanitizer)})
     |> attach_hook(@private, :handle_event, &handle_event/3)
     |> attach_params_hook(params)
     |> attach_hook(@private, :handle_info, &handle_info/2)
@@ -126,9 +150,27 @@ defmodule PhoenixReplay.Recorder do
   defp attach_params_hook(socket, _params),
     do: attach_hook(socket, @private, :handle_params, &handle_params/3)
 
+  defp handle_event(@pointer_event, params, socket) do
+    case socket.private[@private] do
+      %{pointer: %{} = pointer} -> Pointer.capture(self(), params, pointer)
+      _not_recording -> :ok
+    end
+
+    {:halt, socket}
+  end
+
+  defp handle_event(@state_event, params, socket) do
+    case socket.private[@private] do
+      %{state: %{} = state} -> State.capture(self(), params, state)
+      _not_recording -> :ok
+    end
+
+    {:halt, socket}
+  end
+
   defp handle_event(name, params, socket) do
     %{sanitizer: sanitizer} = socket.private[@private]
-    params = Client.observe(params)
+    params = Browser.observe(params)
     {:cont, record(socket, :event, %{name: name, params: sanitizer.sanitize_params(params)})}
   end
 
@@ -155,7 +197,7 @@ defmodule PhoenixReplay.Recorder do
   defp after_render(%{assigns: %{__changed__: changed}} = socket) when map_size(changed) > 0 do
     %{sanitizer: sanitizer} = socket.private[@private]
 
-    case socket.assigns |> Map.take(Map.keys(changed)) |> sanitizer.sanitize_assigns() do
+    case socket.assigns |> Map.take(Map.keys(changed)) |> Assigns.view(sanitizer) do
       assigns when map_size(assigns) > 0 -> record(socket, :render, %{assigns: assigns})
       _empty -> socket
     end

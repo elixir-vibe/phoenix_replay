@@ -21,20 +21,22 @@ defmodule PhoenixReplay.Telemetry do
   Collector failures are emitted where they happen:
 
     * `[:phoenix_replay, :collector, :exception]` — a
-      `PhoenixReplay.Collector` or the log handler raised while handling an
-      event, which was not recorded. Metadata: `%{collector: module, event:
-      [atom], kind: atom, reason: term, stacktrace: list}`.
+      `PhoenixReplay.Collector`, the log handler or LiveComponent recording
+      raised while handling an event, which was not recorded. Metadata:
+      `%{collector: module, event: [atom], kind: atom, reason: term,
+      stacktrace: list}`.
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Keep, Timeline}
+  alias PhoenixReplay.Recording.Summary
+  alias PhoenixReplay.Session.TailSampling
 
   @doc "Emits `[:phoenix_replay, :recording, :persisted]`."
   @spec persisted(Recording.t()) :: :ok
   def persisted(%Recording{} = recording) do
     :telemetry.execute(
       [:phoenix_replay, :recording, :persisted],
-      %{event_count: length(recording.events), duration_ms: Timeline.duration_ms(recording)},
+      measurements(recording),
       %{id: recording.id, view: recording.view}
     )
   end
@@ -44,13 +46,13 @@ defmodule PhoenixReplay.Telemetry do
   def recovered(%Recording{} = recording) do
     :telemetry.execute(
       [:phoenix_replay, :recording, :recovered],
-      %{event_count: length(recording.events), duration_ms: Timeline.duration_ms(recording)},
+      measurements(recording),
       %{id: recording.id, view: recording.view}
     )
   end
 
   @doc "Emits `[:phoenix_replay, :recording, :discarded]`."
-  @spec discarded(Recording.id(), Keep.reason()) :: :ok
+  @spec discarded(Recording.id(), TailSampling.reason()) :: :ok
   def discarded(id, reason) do
     :telemetry.execute([:phoenix_replay, :recording, :discarded], %{}, %{id: id, reason: reason})
   end
@@ -71,5 +73,9 @@ defmodule PhoenixReplay.Telemetry do
       reason: reason,
       stacktrace: stacktrace
     })
+  end
+
+  defp measurements(recording) do
+    recording.events |> Summary.totals() |> Map.take([:event_count, :duration_ms])
   end
 end

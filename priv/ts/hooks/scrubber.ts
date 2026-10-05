@@ -1,9 +1,14 @@
 import { ViewHook } from 'phoenix_live_view'
 import { clamp, indexAt } from '../timeline'
 
+/** The window event announcing the playback time, in milliseconds, as `detail`. */
+export const TIME_EVENT = 'phoenix-replay:time'
+
 /**
  * Maps pointer and keyboard input on the timeline to player events, and
- * animates the thumb between events while the server plays.
+ * animates the thumb between events while the server plays. Each time it
+ * places the thumb it announces the time as a `TIME_EVENT`, so overlays
+ * such as the pointer follow playback, seeking and dragging alike.
  */
 export class Scrubber extends ViewHook {
   private offsets: number[] = []
@@ -93,6 +98,7 @@ export class Scrubber extends ViewHook {
     const thumb = this.el.querySelector<HTMLElement>('[data-thumb]')
     const duration = this.number('duration')
     if (thumb) thumb.style.left = `${duration > 0 ? (ms / duration) * 100 : 0}%`
+    window.dispatchEvent(new CustomEvent(TIME_EVENT, { detail: ms }))
   }
 
   private push(event: string, payload: object = {}): void {

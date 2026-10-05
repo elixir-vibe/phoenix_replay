@@ -1,11 +1,55 @@
 defmodule PhoenixReplay.Recording.Client do
   @moduledoc """
-  Describes the browser and the visit a recording's `client` context
-  holds: the device, named from its user agent with `UAParser`, and where
-  the visit came from.
+  The browser and the visit a recording came from, when the browser told
+  PhoenixReplay (see `PhoenixReplay.Capture.Browser`):
+
+    * `:viewport` — `%{width: integer, height: integer, dpr: number}` when
+      the LiveView connected; later changes are `:viewport` events
+    * `:user_agent` — the `User-Agent` header, when the endpoint's socket
+      lists `:user_agent` in its `:connect_info`
+    * `:tab` — an id of the browser tab, shared by the tab's sessions
+    * `:navigated_from` — the URL of the LiveView that live-navigated here
+    * `:headers` — request headers listed in `:context`, kept by
+      `PhoenixReplay.Plug`
+    * `:landing` — the visit's first request, when `:context` asks for it;
+      see `PhoenixReplay.Recording.Client.Landing`
+
+  Its functions describe the device, named from its user agent with
+  `UAParser`, and where the visit came from.
   """
 
   alias PhoenixReplay.Recording
+  alias PhoenixReplay.Recording.Client.Landing
+
+  @type t :: %__MODULE__{
+          viewport: Recording.viewport() | nil,
+          user_agent: String.t() | nil,
+          tab: String.t() | nil,
+          navigated_from: String.t() | nil,
+          headers: %{String.t() => String.t()},
+          landing: Landing.t() | nil
+        }
+
+  defstruct [:viewport, :user_agent, :tab, :navigated_from, :landing, headers: %{}]
+
+  @campaign_keys ~w(utm_source utm_medium utm_campaign)
+
+  @doc """
+  Brings a client context stored by an earlier version up to date: plain
+  maps before 0.6, which named `:navigated_from` `:referer`.
+  """
+  @spec upgrade(t() | map()) :: t()
+  def upgrade(%__MODULE__{landing: landing} = client),
+    do: %{client | landing: upgrade_landing(landing)}
+
+  def upgrade(%{} = client) do
+    fields = client |> Map.delete(:__struct__) |> Map.put_new(:navigated_from, client[:referer])
+    upgrade(struct(__MODULE__, fields))
+  end
+
+  defp upgrade_landing(%Landing{} = landing), do: landing
+  defp upgrade_landing(%{} = landing), do: struct(Landing, landing)
+  defp upgrade_landing(nil), do: nil
 
   @doc """
   Names the browser, with its major version, and the system in a user
@@ -31,8 +75,6 @@ defmodule PhoenixReplay.Recording.Client do
   defp browser(%{family: family, version: %{major: nil}}), do: family
   defp browser(%{family: family, version: %{major: major}}), do: "#{family} #{major}"
   defp browser(%{family: family}), do: family
-
-  @campaign_keys ~w(utm_source utm_medium utm_campaign)
 
   @doc """
   Describes a landing's campaign as `"google / cpc / spring_sale"`, from
@@ -62,11 +104,11 @@ defmodule PhoenixReplay.Recording.Client do
   the site that referred it. `nil` for direct visits and without
   `PhoenixReplay.Plug`.
   """
-  @spec source(Recording.client()) :: String.t() | nil
-  def source(%{landing: %{params: params, referrer: referrer}}),
+  @spec source(t()) :: String.t() | nil
+  def source(%__MODULE__{landing: %Landing{params: params, referrer: referrer}}),
     do: campaign(params) || referrer_host(referrer)
 
-  def source(_client), do: nil
+  def source(%__MODULE__{}), do: nil
 
   @doc """
   Writes a viewport as `"390x844@3"`, compact for storing alongside a

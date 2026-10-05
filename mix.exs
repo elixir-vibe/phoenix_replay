@@ -85,7 +85,7 @@ defmodule PhoenixReplay.MixProject do
         priv/fonts/LICENSE
         priv/iconify/manifest.json
         priv/static/phoenix_replay.js
-        priv/static/phoenix_replay.d.ts
+        priv/static/*.d.ts
         package.json
         guides
         mix.exs
@@ -130,12 +130,12 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Telemetry,
           PhoenixReplay.Recording,
           PhoenixReplay.Recording.Event,
-          PhoenixReplay.Recording.Keep,
           PhoenixReplay.Recording.Summary,
+          PhoenixReplay.Recording.Filter,
           PhoenixReplay.Recording.Timeline,
-          PhoenixReplay.Recordings,
-          PhoenixReplay.Recordings.Filter,
-          PhoenixReplay.Recordings.Retention
+          PhoenixReplay.Session.TailSampling,
+          PhoenixReplay.Catalog,
+          PhoenixReplay.Storage.Retention
         ],
         Collectors: ~r/^PhoenixReplay\.Collector/,
         Extension: [

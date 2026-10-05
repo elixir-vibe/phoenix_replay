@@ -25,6 +25,14 @@ defmodule PhoenixReplay.Recording.Event do
       abnormally
     * `:viewport` — `%{width: integer, height: integer, dpr: number}`, the
       browser's viewport changed, as seen with the user's next interaction
+    * `:pointer` — a batch of pointer moves, presses and scroll offsets,
+      when `:pointer` is configured; see `PhoenixReplay.Capture.Pointer` and
+      `PhoenixReplay.Recording.PointerTrack`
+    * `:state` — state reported by code in the browser, see
+      `PhoenixReplay.Capture.State`. Stored as a batch, `%{span: integer,
+      entries: [[dt, key, changes]]}`; `PhoenixReplay.Recording.State.spread/1`
+      turns it into one `:state` event per entry, `%{key: String.t(),
+      changes: map}`, for replay
 
   `:telemetry`, `:log` and `:exit` events describe what happened around
   the view; they do not change the replayed state.
@@ -42,6 +50,8 @@ defmodule PhoenixReplay.Recording.Event do
           | :log
           | :exit
           | :viewport
+          | :pointer
+          | :state
 
   @type t :: %__MODULE__{at: non_neg_integer(), type: type(), data: map()}
 

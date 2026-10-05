@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Pointer, touch and scroll recording, off by default. `:pointer` turns it on, globally or per live session, with every interval and cap configurable: `:sample`, `:scroll`, `:flush`, `:max_points` and `:limit`. The client module's new `replayRecorder(liveSocket)` records only while a recorded LiveView asks for it, keeps recording through patches and events pushed with page loading, and sends batches over the LiveView socket as an event the recorder halts before the view sees it. The installer wires it.
+- The player draws the pointer over the replay: the cursor with a short trail, a ripple for each press, placed on the pressed element when the replay has it, and a fingertip for each touch, and it scrolls the replayed page as recorded. **Pointer** in the frame's bar toggles them.
+- Client state: code in the browser reports state the server never sees, such as a client-side component's, with a `phx_replay:state` window event, `{key, changes}`, and needs no dependency on PhoenixReplay. The client module records it while the page's LiveView is recorded and sends it in batches like the pointer's; the server validates, sanitizes and caps it, `:state` configures the limits, and it is on by default. See "Client state" in the recording guide.
+- `phx_replay:start` and `phx_replay:stop` window events tell code in the browser when the page's LiveView is recorded, for every recorded session, and a `data-phx-replay` attribute on `<html>` tells code that loads later.
+- The replay merges client state up to the current moment into the reserved `@phoenix_replay_state` assign, and calls a view's optional `replay_render/1` instead of `render/1` when it defines one. The player shows client state as steps in a lane of their own.
+- `PhoenixReplay.Storage` has an optional `child_spec/1` callback for a process the backend needs, which the application starts. File storage starts its summary index this way; a file storage used while its index is not running, such as one configured by hand next to another backend, reads summaries from disk.
+
+### Changed
+
+- Modules are renamed so no two differ only by a suffix or share a name across namespaces. `PhoenixReplay.Recordings` is now `PhoenixReplay.Catalog`, `PhoenixReplay.Recordings.Filter` is `PhoenixReplay.Recording.Filter`, which storage backends that implement `query/3` use, `PhoenixReplay.Recordings.Retention` is `PhoenixReplay.Storage.Retention`, and `PhoenixReplay.Recording.Keep` is `PhoenixReplay.Session.TailSampling`. Completing a running session's recording moved from `Recordings.complete/3` to `PhoenixReplay.Session.Finalizer.complete/3`. The `:retention` and `:keep` options are unchanged.
+- A recording's `client` is a `PhoenixReplay.Recording.Client` struct, and its landing a `PhoenixReplay.Recording.Client.Landing`. The URL of the LiveView that live-navigated to the session is `navigated_from`, formerly `referer`, so it no longer reads like the landing's HTTP `referrer`. Recordings stored by earlier versions are brought up to date when read.
+- Overriding `:flush`, `:pointer`, `:logs` or `:landing` in a live session merges the override into the global configuration, as the other options already did, instead of starting from the defaults. `nil` and `false` switch any of these options off; `true` switches one on with the global configuration or the defaults.
+- LiveView internals (`:__changed__`, `:uploads`, `:streams`, and a component's `:myself` and `:flash`) are left out of recorded assigns before the sanitizer runs, so a custom `PhoenixReplay.Sanitizer` no longer has to drop them.
+- `PhoenixReplay.Storage.File.query/3` is gone; the storage facade pages file storage from `list/1`.
+
+### Fixed
+
+- A LiveComponent whose recording fails, such as with a raising sanitizer, is reported with `[:phoenix_replay, :collector, :exception]`, as collectors are, instead of logged.
+- A save that raised, such as an Ecto save while the database is down, is retried like one that returned an error, rather than dropping the recording.
+- `[:phoenix_replay, :recording, :persisted]` and `:recovered` count events without pointer batches, as the summary does.
+
 ## 0.5.1 - 2026-10-04
 
 The rest of the dashboard redesign.
