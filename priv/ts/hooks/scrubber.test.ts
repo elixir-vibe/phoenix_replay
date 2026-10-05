@@ -37,19 +37,29 @@ test('places the thumb at the current event', () => {
   expect(thumb(el)).toBe('50%')
 })
 
-test('seeks to the event under the pointer once per event while dragging', () => {
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
+test('seeks to the time under the pointer, one seek at a time, while dragging', async () => {
   const el = scrubber({ at: 0 })
   const { pushed } = mountHook(Scrubber, el)
 
   pointer('pointerdown', el, 0.6)
+  // Moves while the first seek is in flight: only the latest follows it.
   pointer('pointermove', el, 0.7)
-  pointer('pointermove', el, 0.2)
+  pointer('pointermove', el, 0.3)
+  await settle()
+  // In flight again, with a move waiting behind it when the pointer is let go.
+  pointer('pointermove', el, 0.4)
+  pointer('pointermove', el, 0.25)
   pointer('pointerup', el, 0.2)
+  await settle()
   pointer('pointermove', el, 0.9)
 
   expect(pushed).toEqual([
-    ['seek', { index: 2 }],
-    ['seek', { index: 1 }],
+    ['seek', { index: 2, at: 600 }],
+    ['seek', { index: 1, at: 300 }],
+    ['seek', { index: 1, at: 400 }],
+    // The waiting move is dropped for where the thumb was let go.
     ['seek', { index: 1, at: 200 }]
   ])
   expect(thumb(el)).toBe('20%')
@@ -60,8 +70,10 @@ test('keeps the thumb under the pointer while the server answers a drag', () => 
   const { hook } = mountHook(Scrubber, el)
 
   pointer('pointerdown', el, 0.3)
-  // The server moved to the event before the pointer, at 100 ms.
-  el.dataset.at = '100'
+  // The server's patch renders the thumb at its own time, the first
+  // render at 0 ms here, the event before a gap in the recording.
+  el.dataset.at = '0'
+  el.querySelector<HTMLElement>('[data-thumb]')!.style.left = '0%'
   hook.updated?.()
   expect(thumb(el)).toBe('30%')
 
