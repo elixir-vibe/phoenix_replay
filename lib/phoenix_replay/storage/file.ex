@@ -130,20 +130,6 @@ defmodule PhoenixReplay.Storage.File do
     |> Summary.sort()
   end
 
-  # Reads the summaries of `ids`: from the index where it has them, from
-  # disk otherwise. Files other nodes removed leave the index too.
-  defp summaries(dir, ids) do
-    known = Index.ids(dir)
-    listed = MapSet.new(ids)
-    Enum.each(known, fn id -> unless MapSet.member?(listed, id), do: Index.delete(dir, id) end)
-
-    known = MapSet.new(known)
-    unread = Enum.reject(ids, &MapSet.member?(known, &1))
-    Index.put(dir, Enum.flat_map(unread, fn id -> Enum.map(read_summary(dir, id), &{id, &1}) end))
-
-    Index.summaries(dir)
-  end
-
   @impl true
   def delete(id, opts) do
     with {:ok, summary_path} <- path(id, @summary_ext, opts),
@@ -260,5 +246,19 @@ defmodule PhoenixReplay.Storage.File do
     opts
     |> Keyword.get(:path, "priv/replay_recordings")
     |> Path.expand(Index.root())
+  end
+
+  # Reads the summaries of `ids`: from the index where it has them, from
+  # disk otherwise. Files other nodes removed leave the index too.
+  defp summaries(dir, ids) do
+    known = Index.ids(dir)
+    listed = MapSet.new(ids)
+    Enum.each(known, fn id -> unless MapSet.member?(listed, id), do: Index.delete(dir, id) end)
+
+    known = MapSet.new(known)
+    unread = Enum.reject(ids, &MapSet.member?(known, &1))
+    Index.put(dir, Enum.flat_map(unread, fn id -> Enum.map(read_summary(dir, id), &{id, &1}) end))
+
+    Index.summaries(dir)
   end
 end

@@ -14,6 +14,12 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   @kinds [:liveview, :telemetry, :logs]
 
+  # Events that start an interaction; the rest follow the one before them.
+  @starts [:mount, :event, :params, :info]
+
+  # Errors stand out: larger, red, with a soft ring.
+  @error_marker "size-2.5 bg-error ring-3 ring-error-soft"
+
   @doc "The kind an event type is filtered as."
   @spec kind(Event.type()) :: kind()
   def kind(:telemetry), do: :telemetry
@@ -41,9 +47,6 @@ defmodule PhoenixReplay.Web.Player.Events do
   @typedoc "An event with its index in the recording."
   @type indexed :: {Event.t(), non_neg_integer()}
 
-  # Events that start an interaction; the rest follow the one before them.
-  @starts [:mount, :event, :params, :info]
-
   @doc """
   Groups events into interactions: a mount, user event, navigation or
   message, followed by the renders, component updates and collected events
@@ -55,21 +58,6 @@ defmodule PhoenixReplay.Web.Player.Events do
     |> Enum.with_index()
     |> Enum.chunk_while(nil, &interaction/2, &close_interaction/1)
   end
-
-  defp interaction({%Event{type: type}, _index} = item, acc) when type in @starts do
-    case acc do
-      nil -> {:cont, {item, []}}
-      acc -> {:cont, close(acc), {item, []}}
-    end
-  end
-
-  defp interaction(item, nil), do: {:cont, {item, []}}
-  defp interaction(item, {head, rows}), do: {:cont, {head, [item | rows]}}
-
-  defp close_interaction(nil), do: {:cont, nil}
-  defp close_interaction(acc), do: {:cont, close(acc), nil}
-
-  defp close({head, rows}), do: {head, Enum.reverse(rows)}
 
   @doc "The events of each kind in a recording, as timeline lanes."
   @spec lanes(Recording.t()) :: [{kind(), [indexed()]}]
@@ -134,14 +122,6 @@ defmodule PhoenixReplay.Web.Player.Events do
   def details(%Event{type: :exit, data: %{reason: reason}}), do: [{"Reason", reason}]
   def details(%Event{}), do: []
 
-  defp present(details), do: Enum.reject(details, fn {_name, value} -> value == nil end)
-
-  defp duration(nil), do: nil
-  defp duration(ms), do: Format.milliseconds(ms)
-
-  defp metadata(metadata) when metadata == %{}, do: nil
-  defp metadata(metadata), do: inspect(metadata, pretty: true, limit: 50)
-
   @doc "A kind's name in the filter."
   @spec kind_label(kind()) :: String.t()
   def kind_label(:liveview), do: "LiveView"
@@ -164,26 +144,11 @@ defmodule PhoenixReplay.Web.Player.Events do
   def dropped_count(%Recording{dropped: dropped}),
     do: Enum.sum_by(dropped, fn {_name, count} -> count end)
 
-  # Errors stand out: larger, red, with a soft ring.
-  @error_marker "size-2.5 bg-error ring-3 ring-error-soft"
-
   @doc "Classes for an event's timeline marker. Errors are larger and red."
   @spec marker_class(Event.t()) :: String.t()
   def marker_class(%Event{} = event) do
     if Event.error?(event), do: @error_marker, else: type_marker_class(event.type)
   end
-
-  defp type_marker_class(:mount), do: "size-1.5 bg-ink"
-  defp type_marker_class(:event), do: "size-1.5 bg-kind-event"
-  defp type_marker_class(:params), do: "size-1.5 bg-kind-nav"
-  defp type_marker_class(:info), do: "size-1 bg-kind-log"
-  defp type_marker_class(:render), do: "size-1 bg-kind-render"
-  defp type_marker_class(:component), do: "size-1 bg-kind-component"
-  defp type_marker_class(:component_destroyed), do: "size-1 bg-kind-component"
-  defp type_marker_class(:telemetry), do: "size-1 bg-kind-query"
-  defp type_marker_class(:log), do: "size-1 bg-kind-log"
-  defp type_marker_class(:exit), do: @error_marker
-  defp type_marker_class(:viewport), do: "size-1 bg-kind-render"
 
   @doc "One-line description of an event."
   @spec label(Event.t()) :: String.t()
@@ -225,6 +190,41 @@ defmodule PhoenixReplay.Web.Player.Events do
       label -> "#{name}: #{label}"
     end
   end
+
+  defp interaction({%Event{type: type}, _index} = item, acc) when type in @starts do
+    case acc do
+      nil -> {:cont, {item, []}}
+      acc -> {:cont, close(acc), {item, []}}
+    end
+  end
+
+  defp interaction(item, nil), do: {:cont, {item, []}}
+  defp interaction(item, {head, rows}), do: {:cont, {head, [item | rows]}}
+
+  defp close_interaction(nil), do: {:cont, nil}
+  defp close_interaction(acc), do: {:cont, close(acc), nil}
+
+  defp close({head, rows}), do: {head, Enum.reverse(rows)}
+
+  defp present(details), do: Enum.reject(details, fn {_name, value} -> value == nil end)
+
+  defp duration(nil), do: nil
+  defp duration(ms), do: Format.milliseconds(ms)
+
+  defp metadata(metadata) when metadata == %{}, do: nil
+  defp metadata(metadata), do: inspect(metadata, pretty: true, limit: 50)
+
+  defp type_marker_class(:mount), do: "size-1.5 bg-ink"
+  defp type_marker_class(:event), do: "size-1.5 bg-kind-event"
+  defp type_marker_class(:params), do: "size-1.5 bg-kind-nav"
+  defp type_marker_class(:info), do: "size-1 bg-kind-log"
+  defp type_marker_class(:render), do: "size-1 bg-kind-render"
+  defp type_marker_class(:component), do: "size-1 bg-kind-component"
+  defp type_marker_class(:component_destroyed), do: "size-1 bg-kind-component"
+  defp type_marker_class(:telemetry), do: "size-1 bg-kind-query"
+  defp type_marker_class(:log), do: "size-1 bg-kind-log"
+  defp type_marker_class(:exit), do: @error_marker
+  defp type_marker_class(:viewport), do: "size-1 bg-kind-render"
 
   defp component_label(module, id) when is_binary(id), do: "#{inspect(module)}##{id}"
   defp component_label(module, id), do: "#{inspect(module)}##{inspect(id)}"

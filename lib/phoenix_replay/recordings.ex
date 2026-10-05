@@ -99,16 +99,6 @@ defmodule PhoenixReplay.Recordings do
     end
   end
 
-  # Events written concurrently can reach the buffer after a later one was
-  # flushed; they follow the flushed events here, microseconds out of order.
-  defp flushed_events(id, storage) do
-    if Buffer.flushed?(id) do
-      with {:ok, partial} <- Storage.fetch_partial(storage, id), do: {:ok, partial.events}
-    else
-      {:ok, []}
-    end
-  end
-
   @doc "Returns true while the session `id` is in the buffer and has not been saved."
   @spec live?(Recording.id()) :: boolean()
   def live?(id), do: Buffer.config(id) != :error
@@ -129,6 +119,22 @@ defmodule PhoenixReplay.Recordings do
   @spec subscribe() :: :ok | {:error, term()}
   def subscribe, do: Phoenix.PubSub.subscribe(PhoenixReplay.PubSub, @topic)
 
+  @doc "Notifies subscribers that the set of recordings changed."
+  @spec broadcast_change() :: :ok
+  def broadcast_change do
+    Phoenix.PubSub.broadcast(PhoenixReplay.PubSub, @topic, :recordings_changed)
+  end
+
+  # Events written concurrently can reach the buffer after a later one was
+  # flushed; they follow the flushed events here, microseconds out of order.
+  defp flushed_events(id, storage) do
+    if Buffer.flushed?(id) do
+      with {:ok, partial} <- Storage.fetch_partial(storage, id), do: {:ok, partial.events}
+    else
+      {:ok, []}
+    end
+  end
+
   defp redact_url(%Summary{url: nil} = summary), do: summary
 
   defp redact_url(%Summary{id: id, url: url} = summary) do
@@ -139,11 +145,5 @@ defmodule PhoenixReplay.Recordings do
       {:ok, %Config{redact: nil}} -> summary
       _failed -> %{summary | url: nil}
     end
-  end
-
-  @doc "Notifies subscribers that the set of recordings changed."
-  @spec broadcast_change() :: :ok
-  def broadcast_change do
-    Phoenix.PubSub.broadcast(PhoenixReplay.PubSub, @topic, :recordings_changed)
   end
 end
