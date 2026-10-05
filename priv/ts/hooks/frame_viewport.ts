@@ -73,6 +73,10 @@ export class FrameViewport extends ViewHook {
           Math.floor(Math.min(1, containerWidth / width, available / height) * 100) / 100
         )
 
+    // A fitted frame does not scroll; a box scrolled at 100% would keep the
+    // page shifted out of view once it stops scrolling.
+    if (!actual) box.scrollTo(0, 0)
+
     const inset = Math.max(0, Math.round((containerWidth - width * scale) / 2))
     const boxHeight = actual ? Math.min(height, available) : Math.round(height * scale)
 

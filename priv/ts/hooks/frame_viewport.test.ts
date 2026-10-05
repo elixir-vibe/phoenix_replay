@@ -113,3 +113,18 @@ test('keeps the element named by data-below free under the frame', () => {
   expect(alone - withControls).toBeGreaterThan(260)
   expect(alone - withControls).toBeLessThan(340)
 })
+
+test('scrolls the box back when it goes from 100% to fit', () => {
+  const el = section({ width: 1200, height: 800 })
+  const { hook } = mountHook(FrameViewport, el)
+  const box = el.querySelector('#viewport-box') as HTMLElement
+
+  el.dataset.mode = 'actual'
+  hook.updated?.()
+  box.scrollTo(300, 200)
+  expect(box.scrollLeft).toBe(300)
+
+  el.dataset.mode = 'fit'
+  hook.updated?.()
+  expect([box.scrollLeft, box.scrollTop]).toEqual([0, 0])
+})
