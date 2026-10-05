@@ -32,7 +32,8 @@ defmodule PhoenixReplay.Storage do
 
   The dashboard reads pages through the optional `query/3`, and the views
   and event names its filters suggest through the optional `facets/1`.
-  Without them, both are worked out from `list/1`.
+  Without them, both are worked out from `list/1`. A backend that needs a
+  process, such as a cache, returns it from the optional `child_spec/1`.
   """
 
   alias PhoenixReplay.Recording
@@ -81,7 +82,18 @@ defmodule PhoenixReplay.Storage do
   """
   @callback facets(keyword()) :: facets()
 
-  @optional_callbacks append: 3, fetch_partial: 2, partials: 1, query: 3, facets: 1
+  @doc """
+  A process the backend needs while the application runs, started under
+  PhoenixReplay's supervisor with the backend's options.
+  """
+  @callback child_spec(keyword()) :: Supervisor.child_spec()
+
+  @optional_callbacks append: 3,
+                      fetch_partial: 2,
+                      partials: 1,
+                      query: 3,
+                      facets: 1,
+                      child_spec: 1
 
   @doc "Persists a finished recording."
   @spec save(t(), Recording.t()) :: :ok | {:error, term()}
@@ -132,9 +144,6 @@ defmodule PhoenixReplay.Storage do
   @spec chunked?(t()) :: boolean()
   def chunked?({module, _opts}), do: exports?(module, :append, 3)
 
-  defp exports?(module, function, arity),
-    do: Code.ensure_loaded?(module) and function_exported?(module, function, arity)
-
   @doc "Appends a chunk of a running session. See `c:append/3`."
   @spec append(t(), Recording.t(), chunk()) :: :ok | {:error, term()}
   def append({module, opts}, %Recording{} = recording, chunk),
@@ -149,4 +158,13 @@ defmodule PhoenixReplay.Storage do
   def partials({module, opts}) do
     if chunked?({module, opts}), do: module.partials(opts), else: []
   end
+
+  @doc "The processes the backend runs. See `c:child_spec/1`."
+  @spec children(t()) :: [Supervisor.child_spec()]
+  def children({module, opts}) do
+    if exports?(module, :child_spec, 1), do: [module.child_spec(opts)], else: []
+  end
+
+  defp exports?(module, function, arity),
+    do: Code.ensure_loaded?(module) and function_exported?(module, function, arity)
 end
