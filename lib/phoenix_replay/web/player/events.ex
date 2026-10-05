@@ -7,7 +7,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   alias PhoenixReplay.Collector
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.{Event, State}
-  alias PhoenixReplay.Web.Format
+  alias PhoenixReplay.Web.{Format, Highlight}
 
   @typedoc "What the event list filters by."
   @type kind :: :liveview | :state | :telemetry | :logs
@@ -120,11 +120,11 @@ defmodule PhoenixReplay.Web.Player.Events do
   Name–value pairs describing a collected event or an exit, shown when it
   is selected. Other events describe themselves through the assigns.
   """
-  @spec details(Event.t()) :: [{String.t(), String.t()}]
+  @spec details(Event.t()) :: [{String.t(), String.t() | Phoenix.HTML.safe()}]
   def details(%Event{type: :telemetry, data: data} = event) do
     present([
       {"Event", Collector.name(data.event)},
-      {"Summary", data.summary},
+      {"Summary", summary(data)},
       {"Duration", event |> Event.duration() |> duration()},
       {"Error", data.error},
       {"Metadata", metadata(data.metadata)}
@@ -170,6 +170,17 @@ defmodule PhoenixReplay.Web.Player.Events do
   def marker_class(%Event{} = event) do
     if Event.error?(event), do: @error_marker, else: type_marker_class(event.type)
   end
+
+  @doc """
+  What a code event's row shows: its summary highlighted, when a collector
+  said what language it is in, or `nil` for the rest, which show `label/1`.
+  """
+  @spec code_label(Event.t()) :: Phoenix.HTML.safe() | nil
+  def code_label(%Event{type: :telemetry, data: %{summary: summary, language: language}})
+      when is_binary(summary) and language != nil,
+      do: summary |> String.replace(~r/\s+/, " ") |> Highlight.code(language)
+
+  def code_label(%Event{}), do: nil
 
   @doc "One-line description of an event."
   @spec label(Event.t()) :: String.t()
@@ -242,7 +253,13 @@ defmodule PhoenixReplay.Web.Player.Events do
   defp duration(ms), do: Format.milliseconds(ms)
 
   defp metadata(metadata) when metadata == %{}, do: nil
-  defp metadata(metadata), do: inspect(metadata, pretty: true, limit: 50)
+  defp metadata(metadata), do: Highlight.term(metadata, pretty: true, limit: 50)
+
+  defp summary(%{summary: summary, language: language})
+       when is_binary(summary) and language != nil,
+       do: Highlight.code(summary, language)
+
+  defp summary(%{summary: summary}), do: summary
 
   defp type_marker_class(:mount), do: "size-1.5 bg-ink"
   defp type_marker_class(:event), do: "size-1.5 bg-kind-event"

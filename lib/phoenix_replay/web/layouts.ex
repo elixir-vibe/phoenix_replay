@@ -49,6 +49,10 @@ defmodule PhoenixReplay.Web.Layouts do
         <meta name="csrf-token" content={Phoenix.Controller.get_csrf_token()} />
         <meta name="phoenix-replay-socket" content={@assets.live_socket_path} />
         <title>{assigns[:page_title] || "PhoenixReplay"}</title>
+        <%!-- The theme chosen with the toggle applies before the first paint. --%>
+        <script>
+          try { const theme = localStorage.getItem("phoenix_replay:theme"); if (theme) document.documentElement.dataset.theme = theme } catch {}
+        </script>
         <link rel="stylesheet" href={@assets.stylesheet} />
         <script :for={src <- @assets.scripts} defer src={src}>
         </script>

@@ -10,6 +10,9 @@
 - Client state: app code reports state the server never sees with `replayState(key, changes)` from the client module, and libraries that cannot import PhoenixReplay with a `phx_replay:state` window event. The client keeps the latest state of each key, so a recording starts with the state as it is and reporters need not know when it starts. The server validates, sanitizes and caps it; `:state` configures the limits, and it is on by default.
 - `phx_replay:start` and `phx_replay:stop` window events, and a `data-phx-replay` attribute on `<html>`, tell code in the browser when the page's LiveView is recorded.
 - The replay merges client state up to the current moment into the reserved `@phoenix_replay_state` assign, and calls a view's optional `replay_render/1` instead of `render/1` when it defines one. The player shows client state as steps in a lane of their own.
+- A button in the dashboard's header switches between the light and dark themes, overriding the system's appearance; the browser remembers the choice.
+- SQL, collected metadata and the assigns in the player's **State** tab are highlighted with Lumis in a monospace font, in colours that follow the theme. Collected SQL is monospaced in the event list too. `PhoenixReplay.Collector.Captured` has a `:language` field, `:sql` for `PhoenixReplay.Collector.Ecto`, that turns highlighting on for a collector's summary.
+- In the **State** tab, only values their row cannot show whole are expandable.
 - `PhoenixReplay.Storage` has an optional `child_spec/1` callback for a process the backend needs, which the application starts. File storage starts its summary index this way; a file storage used while its index is not running, such as one configured by hand next to another backend, reads summaries from disk.
 
 ### Changed
@@ -22,6 +25,8 @@
 
 ### Fixed
 
+- Switching the player from 100% back to Fit after scrolling the replay no longer leaves the page shifted out of view.
+- Collected details no longer break words mid-way, such as SQL table names.
 - A LiveComponent whose recording fails, such as with a raising sanitizer, is reported with `[:phoenix_replay, :collector, :exception]`, as collectors are, instead of logged.
 - A save that raised, such as an Ecto save while the database is down, is retried like one that returned an error, rather than dropping the recording.
 - `[:phoenix_replay, :recording, :persisted]` and `:recovered` count events without pointer batches, as the summary does.

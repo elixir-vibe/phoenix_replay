@@ -45,6 +45,7 @@ defmodule PhoenixReplay.Collector.Ecto do
       {:ok,
        %Captured{
          summary: metadata[:query],
+         language: :sql,
          measurements: Map.put(measurements, :duration, duration),
          metadata: metadata(metadata, opts),
          error: Collector.result_error(metadata[:result])

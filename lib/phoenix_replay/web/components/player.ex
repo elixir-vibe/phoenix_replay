@@ -17,8 +17,12 @@ defmodule PhoenixReplay.Web.Components.Player do
   alias Phoenix.LiveView.JS
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.{Client, Event, PointerTrack}
-  alias PhoenixReplay.Web.Format
+  alias PhoenixReplay.Web.{Format, Highlight}
   alias PhoenixReplay.Web.Player.Events
+
+  # A value expands only when its row cannot show all of it: when the
+  # one-line preview leaves something out, or is longer than a row holds.
+  @short_value 40
 
   @doc "The icon for an event's type."
   attr :type, :atom, required: true, doc: "a `PhoenixReplay.Recording.Event` type"
@@ -112,6 +116,7 @@ defmodule PhoenixReplay.Web.Components.Player do
           <span class="group-data-copied:hidden">Copy link to {Format.clock(@at)}</span>
           <span class="hidden group-data-copied:inline">Copied</span>
         </.button>
+        <.theme_toggle id="theme-toggle" />
         <.menu :if={@can_delete} id="replay-menu" label="More actions">
           <:trigger><.icon name="lucide:ellipsis" class="size-4" /></:trigger>
           <:item tone="danger">
@@ -409,6 +414,7 @@ defmodule PhoenixReplay.Web.Components.Player do
       assign(assigns,
         ev: event,
         index: index,
+        code: Events.code_label(event),
         details: if(index == assigns.current, do: Events.details(event), else: [])
       )
 
@@ -429,7 +435,8 @@ defmodule PhoenixReplay.Web.Components.Player do
       ]}
     >
       <.event_icon type={@ev.type} class="size-3.5 shrink-0 opacity-70" />
-      <span class="min-w-0 flex-1 truncate">{Events.label(@ev)}</span>
+      <span :if={@code} class="min-w-0 flex-1 truncate font-mono text-xs">{@code}</span>
+      <span :if={!@code} class="min-w-0 flex-1 truncate">{Events.label(@ev)}</span>
       <span
         :if={duration = Event.duration(@ev)}
         class="shrink-0 font-mono text-[11px] tabular-nums text-muted"
@@ -456,7 +463,7 @@ defmodule PhoenixReplay.Web.Components.Player do
 
   @spec state(map()) :: Phoenix.LiveView.Rendered.t()
   def state(assigns) do
-    assigns = assign(assigns, :keys, assigns.assigns |> Map.keys() |> Enum.sort())
+    assigns = assign(assigns, :rows, assigns.assigns |> Enum.sort() |> Enum.map(&state_row/1))
 
     ~H"""
     <div class="flex items-center justify-between gap-3 border-b border-line px-3.5 py-3">
@@ -467,21 +474,36 @@ defmodule PhoenixReplay.Web.Components.Player do
       id="replay-assigns"
       class="max-h-[calc(100dvh-12rem)] min-h-60 overflow-y-auto py-2 font-mono text-xs"
     >
-      <li :for={key <- @keys}>
-        <details class="group">
-          <summary class={[
-            "grid cursor-pointer list-none grid-cols-[0.75rem_minmax(0,8rem)_minmax(0,1fr)] gap-2 px-3.5 py-1.5 hover:bg-hover",
-            key in @changed && "bg-accent-soft"
-          ]}>
+      <li :for={row <- @rows}>
+        <details :if={row.full} class="group">
+          <summary
+            data-assign={row.key}
+            class={[
+              "grid cursor-pointer list-none grid-cols-[0.75rem_minmax(0,8rem)_minmax(0,1fr)] gap-2 px-3.5 py-1.5 hover:bg-hover",
+              row.key in @changed && "bg-accent-soft"
+            ]}
+          >
             <.icon
               name="lucide:chevron-right"
               class="mt-0.5 size-3 text-muted transition-transform group-open:rotate-90"
             />
-            <span class={["truncate", key in @changed && "text-accent"]}>{key}</span>
-            <span class="truncate text-muted">{inspect(@assigns[key], limit: 8, printable_limit: 80)}</span>
+            <span class={["truncate", row.key in @changed && "text-accent"]}>{row.key}</span>
+            <span class="truncate">{row.preview}</span>
           </summary>
-          <pre class="mx-3.5 my-1 overflow-x-auto rounded-md bg-canvas p-2.5 leading-relaxed whitespace-pre-wrap text-ink">{inspect(@assigns[key], pretty: true, limit: 50)}</pre>
+          <pre class="mx-3.5 my-1 overflow-x-auto rounded-md bg-canvas p-2.5 leading-relaxed whitespace-pre-wrap text-ink">{row.full}</pre>
         </details>
+        <div
+          :if={!row.full}
+          data-assign={row.key}
+          class={[
+            "grid grid-cols-[0.75rem_minmax(0,8rem)_minmax(0,1fr)] gap-2 px-3.5 py-1.5",
+            row.key in @changed && "bg-accent-soft"
+          ]}
+        >
+          <span></span>
+          <span class={["truncate", row.key in @changed && "text-accent"]}>{row.key}</span>
+          <span>{row.preview}</span>
+        </div>
       </li>
     </ul>
     """
@@ -584,4 +606,16 @@ defmodule PhoenixReplay.Web.Components.Player do
   end
 
   defp heading, do: "mb-1.5 text-xs font-medium tracking-wide text-muted uppercase"
+
+  defp state_row({key, value}) do
+    preview = inspect(value, limit: 8, printable_limit: 80)
+    full = inspect(value, pretty: true, limit: 50)
+    expand? = full != preview or String.length(preview) > @short_value
+
+    %{
+      key: key,
+      preview: Highlight.code(preview, :elixir),
+      full: if(expand?, do: Highlight.code(full, :elixir))
+    }
+  end
 end

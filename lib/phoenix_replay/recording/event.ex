@@ -17,8 +17,10 @@ defmodule PhoenixReplay.Recording.Event do
     * `:component_destroyed` — `%{module: module, id: term}`, a
       LiveComponent removed from the page
     * `:telemetry` — `%{event: [atom], summary: String.t() | nil,
-      measurements: map, metadata: map, error: String.t() | nil}`, a
-      telemetry event captured by a `PhoenixReplay.Collector`
+      language: :sql | nil, measurements: map, metadata: map,
+      error: String.t() | nil}`, a telemetry event captured by a
+      `PhoenixReplay.Collector`; `language` is what the summary is written
+      in, absent from events recorded before 0.6
     * `:log` — `%{level: Logger.level(), message: String.t(), metadata: map}`,
       a log message, see `PhoenixReplay.Capture.Logs`
     * `:exit` — `%{reason: String.t()}`, the LiveView process exited

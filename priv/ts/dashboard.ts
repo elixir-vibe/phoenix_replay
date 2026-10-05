@@ -5,6 +5,7 @@ import { confirmClicks } from './dom/confirm'
 import { copyLinks } from './dom/copy'
 import { replayInputs } from './client/replay_inputs'
 import { searchShortcut } from './dom/shortcut'
+import { themeToggle } from './dom/theme'
 import { EventList } from './hooks/event_list'
 import { FrameViewport } from './hooks/frame_viewport'
 import { Pointer } from './hooks/pointer'
@@ -22,4 +23,5 @@ confirmClicks(window)
 copyLinks(window)
 replayInputs(window)
 searchShortcut(window)
+themeToggle(window)
 liveSocket.connect()

@@ -46,6 +46,11 @@ defmodule PhoenixReplay.MixProject do
         {:ex2ms, "~> 1.7"},
         {:phoenix_iconify, "~> 0.3.7"},
         {:ua_parser, "~> 1.10"},
+        # Highlights SQL and inspected Elixir terms in the player.
+        {:lumis, "~> 0.10"},
+        {:lumis_wasm_elixir, "~> 0.26.6"},
+        {:lumis_wasm_sql, "~> 0.26.3"},
+        {:lumis_wasm_comment, "~> 0.26.2"},
         {:ecto, "~> 3.12", optional: true},
         {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
         {:ecto_sql, "~> 3.12", optional: true},

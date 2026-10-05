@@ -147,6 +147,18 @@
     },
     {
       "hidden": false,
+      "name": "lucide:moon",
+      "left": 0,
+      "width": 24,
+      "body": "<path fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401\"/>",
+      "height": 24,
+      "top": 0,
+      "rotate": 0,
+      "h_flip": false,
+      "v_flip": false
+    },
+    {
+      "hidden": false,
       "name": "lucide:mouse-pointer-2",
       "left": 0,
       "width": 24,
@@ -319,6 +331,18 @@
       "left": 0,
       "width": 24,
       "body": "<g fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\"><rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"/><path d=\"M12 18h.01\"/></g>",
+      "height": 24,
+      "top": 0,
+      "rotate": 0,
+      "h_flip": false,
+      "v_flip": false
+    },
+    {
+      "hidden": false,
+      "name": "lucide:sun",
+      "left": 0,
+      "width": 24,
+      "body": "<g fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41\"/></g>",
       "height": 24,
       "top": 0,
       "rotate": 0,

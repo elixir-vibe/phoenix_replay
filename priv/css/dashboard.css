@@ -71,6 +71,14 @@
   --color-kind-component: #7c3aed;
   --color-kind-query: #0f8b7e;
   --color-kind-log: #6b7280;
+
+  /* Highlighted code; see PhoenixReplay.Web.Highlight. */
+  --color-code-keyword: #8250df;
+  --color-code-string: #0a7b55;
+  --color-code-atom: #a8510b;
+  --color-code-constant: #1f5fc4;
+  --color-code-module: #0f6c8b;
+  --color-code-function: #953800;
 }
 
 @layer base {
@@ -98,11 +106,66 @@
       --color-kind-component: #a78bfa;
       --color-kind-query: #2dd4bf;
       --color-kind-log: #9ca3af;
+      --color-code-keyword: #c4a5ff;
+      --color-code-string: #7ee2b0;
+      --color-code-atom: #f0a868;
+      --color-code-constant: #79b8ff;
+      --color-code-module: #67d4f0;
+      --color-code-function: #ffa657;
     }
   }
 
   :focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
+  }
+}
+
+/*
+  Lumis writes each token as a span with an `l-` class named after its
+  highlight scope, such as `l-keyword` or `l-string-special-symbol`.
+*/
+@layer components {
+  [class^="l-keyword"] {
+    color: var(--color-code-keyword);
+  }
+
+  .l-string,
+  .l-string-escape {
+    color: var(--color-code-string);
+  }
+
+  /* Atoms and keyword keys. */
+  .l-string-special-symbol,
+  .l-string-special {
+    color: var(--color-code-atom);
+  }
+
+  .l-number,
+  .l-boolean,
+  .l-constant,
+  .l-constant-builtin,
+  .l-variable-parameter {
+    color: var(--color-code-constant);
+  }
+
+  .l-module,
+  .l-type,
+  .l-type-builtin {
+    color: var(--color-code-module);
+  }
+
+  [class^="l-function"] {
+    color: var(--color-code-function);
+  }
+
+  [class^="l-punctuation"],
+  .l-operator {
+    color: var(--color-muted);
+  }
+
+  [class^="l-comment"] {
+    color: var(--color-faint);
+    font-style: italic;
   }
 }

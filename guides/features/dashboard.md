@@ -77,7 +77,9 @@ Each viewer drives a private frame, so several people can watch the same recordi
 
 ## Light and dark
 
-The dashboard follows the system's light or dark appearance. To pin one, set `data-theme="light"` or `data-theme="dark"` on its `<html>`. It ships its own fonts, Geist and Geist Mono, and icons, so it looks the same in every app.
+The dashboard follows the system's light or dark appearance. The sun and moon button in its header switches to the other one, and the browser remembers the choice. It ships its own fonts, Geist and Geist Mono, and icons, so it looks the same in every app.
+
+SQL from `PhoenixReplay.Collector.Ecto`, metadata, and the assigns in the **State** tab are highlighted with [Lumis](https://hexdocs.pm/lumis) in Geist Mono, in colours that follow the theme. A custom collector gets its summary highlighted by setting `language: :sql` on the `PhoenixReplay.Collector.Captured` it returns. In the **State** tab, values the row shows whole are not expandable; longer ones open to their full, pretty-printed form.
 
 ## The replay frame
 

@@ -247,6 +247,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         >
           Docs
         </a>
+        <.theme_toggle id="theme-toggle" />
         <.menu :if={@can_clear?} id="recordings-menu" label="More actions">
           <:trigger><.icon name="lucide:ellipsis" class="size-4" /></:trigger>
           <:item tone="danger">

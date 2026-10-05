@@ -93,7 +93,29 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     view |> element("#replay-event-search") |> render_change(%{"q" => ""})
 
     open_tab(view, "State")
-    assert has_element?(view, "#replay-assigns summary.bg-accent-soft", "count")
+    assert has_element?(view, ~s(#replay-assigns [data-assign="count"].bg-accent-soft))
+  end
+
+  test "expands only values its row cannot show whole, and offers a theme switch" do
+    recording = Fixtures.counter_recording(id: "values", clicks: 1)
+    long = Enum.to_list(1..30)
+
+    render = %Event{
+      at: 5,
+      type: :render,
+      data: %{assigns: %{count: 0, items: long, note: "short"}}
+    }
+
+    Storage.save(Fixtures.storage(), %{recording | events: [hd(recording.events), render]})
+
+    {:ok, view, _html} = live(build_conn(), "/replay/values?at=1")
+    open_tab(view, "State")
+
+    assert has_element?(view, ~s(#replay-assigns div[data-assign="count"]))
+    assert has_element?(view, ~s(#replay-assigns div[data-assign="note"]))
+    assert has_element?(view, ~s(#replay-assigns details summary[data-assign="items"]))
+    assert has_element?(view, ~s(#replay-assigns span.l-number), "0")
+    assert has_element?(view, "#theme-toggle[data-theme-toggle]")
   end
 
   test "lists client state in a lane of its own, as steps" do
@@ -156,7 +178,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     render_hook(view, "seek", %{"index" => 5})
     assert assigns(view).index == 5
     assert open_tab(view, "State") =~ "count"
-    assert has_element?(view, "#replay-assigns summary", "2")
+    assert has_element?(view, ~s(#replay-assigns [data-assign="count"]), "2")
   end
 
   test "redacts a live session before showing it, and hands it to the frame" do

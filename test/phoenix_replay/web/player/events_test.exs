@@ -136,4 +136,26 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
     assert Events.details(event(2, :exit, %{reason: "boom"})) == [{"Reason", "boom"}]
     assert Events.details(event(3, :mount, %{assigns: %{}})) == []
   end
+
+  test "highlights what a collector said is code, and only that" do
+    sql =
+      event(1, :telemetry, %{
+        event: [:repo, :query],
+        summary: "SELECT id\n  FROM users",
+        language: :sql,
+        measurements: %{},
+        metadata: %{source: "users"},
+        error: nil
+      })
+
+    html = fn safe -> Phoenix.HTML.safe_to_string(safe) end
+    details = Map.new(Events.details(sql))
+
+    assert html.(details["Summary"]) =~ ~s(<span class="l-keyword">SELECT</span>)
+    assert html.(details["Metadata"]) =~ ~s(<span class="l-string">&quot;users&quot;</span>)
+
+    # One line in the event list.
+    assert html.(Events.code_label(sql)) =~ ~r/id<\/span> <span class="l-keyword">FROM/
+    assert Events.code_label(%{sql | data: Map.delete(sql.data, :language)}) == nil
+  end
 end

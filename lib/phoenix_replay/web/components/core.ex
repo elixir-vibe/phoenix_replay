@@ -13,6 +13,8 @@ defmodule PhoenixReplay.Web.Components.Core do
 
   use Phoenix.Component
 
+  import PhoenixIconify, only: [icon: 1]
+
   alias Phoenix.LiveView.JS
 
   @button_variants %{
@@ -64,6 +66,23 @@ defmodule PhoenixReplay.Web.Components.Core do
     "md" => "size-8 rounded-md pointer-coarse:size-11",
     "lg" => "size-11 rounded-full"
   }
+
+  @doc """
+  Switches the dashboard between its light and dark themes, overriding the
+  system's appearance; the choice is kept in the browser. See
+  `priv/ts/dom/theme.ts`.
+  """
+  attr :rest, :global
+
+  @spec theme_toggle(map()) :: Phoenix.LiveView.Rendered.t()
+  def theme_toggle(assigns) do
+    ~H"""
+    <.icon_button label="Switch theme" variant="ghost" data-theme-toggle {@rest}>
+      <.icon name="lucide:moon" class="size-4 dark:hidden" />
+      <.icon name="lucide:sun" class="hidden size-4 dark:block" />
+    </.icon_button>
+    """
+  end
 
   @doc """
   A square button showing only an icon. `label` names it for assistive
@@ -453,7 +472,7 @@ defmodule PhoenixReplay.Web.Components.Core do
     >
       <%= for item <- @item do %>
         <dt class="text-muted">{item.title}</dt>
-        <dd class="break-all whitespace-pre-wrap text-ink">{render_slot(item)}</dd>
+        <dd class="wrap-break-word whitespace-pre-wrap text-ink">{render_slot(item)}</dd>
       <% end %>
     </dl>
     """

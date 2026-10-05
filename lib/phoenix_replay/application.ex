@@ -19,6 +19,10 @@ defmodule PhoenixReplay.Application do
     :ok = PhoenixReplay.Session.Buffer.create_table()
     config = PhoenixReplay.Config.load()
 
+    # The player highlights SQL and inspected values; compiling the parsers
+    # now keeps the first replay from waiting on it.
+    _loading = Lumis.Languages.async_load(~w(elixir sql comment))
+
     children =
       PhoenixReplay.Storage.children(config.storage) ++
         [
