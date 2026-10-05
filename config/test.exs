@@ -30,7 +30,9 @@ config :logger, level: :warning
 config :volt, :test,
   root: "priv/ts",
   include: ["**/*.test.ts"],
-  bundle: [resolve_dirs: ["deps"]]
+  # @sinonjs/fake-timers requires Node's timers/promises, which its
+  # package maps to nothing in browsers; Volt does not read that mapping.
+  bundle: [resolve_dirs: ["deps"], external: ["timers/promises"]]
 
 # Repos the Ecto storage is tested on; see test/support/repos.ex. Each test
 # runs in a sandboxed transaction.

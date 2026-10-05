@@ -1,12 +1,16 @@
 import { afterEach, expect, test } from 'volt:test'
 
+import { type Clock, fakeClock } from '../test/clock'
 import { ViewportRecorder } from './viewport'
 
 let recorder: ViewportRecorder | undefined
+let clock: Clock | undefined
 
 afterEach(() => {
   recorder?.stop()
   recorder = undefined
+  clock?.uninstall()
+  clock = undefined
 })
 
 // A window whose size the test sets, as a rotation would.
@@ -21,9 +25,8 @@ class FakeWindow extends EventTarget {
   }
 }
 
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
-
-test('sends the viewport once it settles after a rotation, and only when it changed', async () => {
+test('sends the viewport once it settles after a rotation, and only when it changed', () => {
+  clock = fakeClock()
   const target = new FakeWindow()
   const pushed: [string, unknown][] = []
   recorder = new ViewportRecorder(
@@ -36,12 +39,15 @@ test('sends the viewport once it settles after a rotation, and only when it chan
   target.dispatchEvent(new Event('resize'))
   expect(pushed).toEqual([])
 
-  await wait(260)
+  // Quiet for 200 ms: not a moment before.
+  clock.tick(199)
+  expect(pushed).toEqual([])
+  clock.tick(1)
   expect(pushed).toEqual([['phx_replay:viewport', { width: 844, height: 390, dpr: 3 }]])
 
   // A resize that ends where it started sends nothing.
   target.rotate()
   target.rotate()
-  await wait(260)
+  clock.tick(200)
   expect(pushed.length).toBe(1)
 })

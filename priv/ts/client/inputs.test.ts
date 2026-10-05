@@ -1,12 +1,20 @@
-import { afterEach, expect, test } from 'volt:test'
+import { afterEach, beforeEach, expect, test } from 'volt:test'
 
+import { type Clock, fakeClock } from '../test/clock'
 import { INPUTS_KEY, InputRecorder, type InputValues, restoreInputs } from './inputs'
 import { STATE_EVENT, type StateReport } from './state'
 
 let recorder: InputRecorder | undefined
 let stopListening = (): void => {}
+let clock: Clock
+
+// Debounces run when the test ticks the clock, not after real waits.
+beforeEach(() => {
+  clock = fakeClock()
+})
 
 afterEach(() => {
+  clock.uninstall()
   recorder?.stop()
   recorder = undefined
   stopListening()
@@ -40,9 +48,7 @@ const click = (selector: string): void => {
   ;(document.querySelector(selector) as HTMLInputElement).click()
 }
 
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
-
-test('records what is typed once it pauses, not every key', async () => {
+test('records what is typed once it pauses, not every key', () => {
   page('<input id="search" name="q">')
   const reports = listen()
   recorder = new InputRecorder(window, 30)
@@ -50,7 +56,10 @@ test('records what is typed once it pauses, not every key', async () => {
   for (const text of ['s', 'sh', 'sho', 'shoes']) type('#search', text)
   expect(reports).toEqual([])
 
-  await wait(60)
+  // The pause is 30 ms from the last key, not a moment less.
+  clock.tick(29)
+  expect(reports).toEqual([])
+  clock.tick(1)
   expect(reports).toEqual([{ '#search': { q: 'shoes' } }])
 })
 
@@ -79,19 +88,19 @@ test('never reads passwords, hidden inputs, card fields or ignored controls', as
     .querySelector('#f')
     ?.insertAdjacentHTML('beforeend', '<input id="late" type="password" name="pin">')
   document.querySelector('#late')?.setAttribute('type', 'text')
-  await wait(0)
+  await Promise.resolve()
 
   const unread = ['#pass', '#shown', '#late', '#card', '#code', '#new', '#private']
   for (const selector of [...unread, '[name="loose"]', '[name="formless"]']) type(selector, 'x')
   type('#kept', 'yes')
-  await wait(40)
+  clock.tick(40)
 
   // An input without an id is found by its form's id and its name; one
   // with neither is skipped.
   expect(reports).toEqual([{ '#f [name="loose"]': { loose: 'x' } }, { '#kept': { kept: 'yes' } }])
 })
 
-test('records checkboxes by value and a radio group by the chosen value', async () => {
+test('records checkboxes by value and a radio group by the chosen value', () => {
   page(`
     <form id="f">
       <input type="checkbox" name="tags" value="a">
@@ -105,7 +114,7 @@ test('records checkboxes by value and a radio group by the chosen value', async 
 
   click('[value="b"]')
   click('[value="m"]')
-  await wait(40)
+  clock.tick(40)
 
   expect(reports).toEqual([
     { '#f [name="tags"][value="b"]': { tags: true } },
@@ -160,17 +169,17 @@ test('puts values back, resets what is no longer recorded, and skips filtered on
   expect(value('#q')).toBe('shoes')
 })
 
-test('adds nothing when a box is left after its typing was recorded', async () => {
+test('adds nothing when a box is left after its typing was recorded', () => {
   page('<input id="search" name="q">')
   const reports = listen()
   recorder = new InputRecorder(window, 10)
 
   type('#search', 'shoes')
-  await wait(30)
+  clock.tick(30)
   ;(document.querySelector('#search') as HTMLInputElement).dispatchEvent(
     new Event('change', { bubbles: true })
   )
-  await wait(30)
+  clock.tick(30)
 
   expect(reports).toEqual([{ '#search': { q: 'shoes' } }])
 })

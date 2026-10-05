@@ -1,12 +1,20 @@
-import { afterEach, expect, test } from 'volt:test'
+import { afterEach, beforeEach, expect, test } from 'volt:test'
 
+import { type Clock, fakeClock } from '../test/clock'
 import type { PointerSettings } from './pointer'
 import type { Batch } from './pointer_track'
 import { replayRecorder } from './recorder'
 
 let stop = (): void => {}
+let clock: Clock
+
+// Sampling runs on the clock the test ticks.
+beforeEach(() => {
+  clock = fakeClock()
+})
 
 afterEach(() => {
+  clock.uninstall()
   stop()
   document.body.replaceChildren()
 })
@@ -61,8 +69,6 @@ const pointer = (type: string, x: number, y: number, init: PointerEventInit = {}
   )
 }
 
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
-
 // Dispatches a touch event in which `changed` fingers, `[id, x, y]`, changed.
 const touch = (type: string, changed: [number, number, number][]): void => {
   const target =
@@ -84,14 +90,14 @@ test('records nothing until a LiveView asks', () => {
   expect(batches).toEqual([])
 })
 
-test('samples moves at most every sample ms, keeping where the pointer came to rest', async () => {
+test('samples moves at most every sample ms, keeping where the pointer came to rest', () => {
   const batches = setup()
   announce()
 
   pointer('pointermove', 10, 10)
   pointer('pointermove', 11, 11)
   pointer('pointermove', 12, 12)
-  await wait(80)
+  clock.tick(80)
   leave('redirect')
 
   const [batch] = batches
@@ -142,7 +148,7 @@ test('gives each finger its own slot, and sends a full batch early', () => {
   ])
 })
 
-test('follows both fingers of a pinch, which the browser cancels as pointer events', async () => {
+test('follows both fingers of a pinch, which the browser cancels as pointer events', () => {
   const batches = setup()
   announce({ sample: 10 })
 
@@ -159,7 +165,7 @@ test('follows both fingers of a pinch, which the browser cancels as pointer even
       [5, 100 - step, 100 - step],
       [6, 200 + step, 200 + step]
     ])
-    await wait(15)
+    clock.tick(15)
   }
 
   touch('touchend', [

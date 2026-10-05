@@ -32,6 +32,10 @@ const stage = async (): Promise<{
   return { el, frame, pushed }
 }
 
+const frames = async (count: number): Promise<void> => {
+  for (let i = 0; i < count; i++) await new Promise((resolve) => requestAnimationFrame(resolve))
+}
+
 const shown = (frame: HTMLIFrameElement, index: number): void => {
   frame.contentWindow?.dispatchEvent(new CustomEvent('phx:phx_replay:shown', { detail: { index } }))
 }
@@ -48,11 +52,12 @@ test('shows a moment once the frame has rendered its event', async () => {
       done = true
     })
 
-  // Not before the frame shows event 3.
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  // Not before the frame shows event 3: given the frames show waits for
+  // after a render, it would have resolved by now.
+  await frames(3)
   expect(done).toBe(false)
   shown(frame, 2)
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  await frames(3)
   expect(done).toBe(false)
 
   shown(frame, 3)
