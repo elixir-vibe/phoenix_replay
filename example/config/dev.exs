@@ -14,7 +14,12 @@ config :example, ExampleWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4005],
   check_origin: false,
   code_reloader: true,
-  reloadable_apps: [:example, :phoenix_replay],
+  # Not :phoenix_replay: compiling a path dependency deletes this app's
+  # consolidated protocols in Elixir 1.20.0-1.20.4 (elixir-lang/elixir#15727),
+  # so every request would reconsolidate them and regenerate the colocated
+  # hooks, which makes Volt reload the page. Restart the server to pick up
+  # changes to the library until an Elixir release has the fix.
+  reloadable_apps: [:example],
   debug_errors: true,
   secret_key_base: "B5k/fPcLUFF31abKOAoHjDRW/RVOIq+IKaKVNqGN6Z6i9vLtMnMg8sQjQ0NvS4/S"
 
