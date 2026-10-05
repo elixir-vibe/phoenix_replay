@@ -61,6 +61,14 @@ defmodule PhoenixReplay.Storage.Ecto.MigrationTest do
     assert {:ok, ^recording} = PhoenixReplay.Storage.Ecto.fetch("old", repo: Repo)
   end
 
+  test "reports a database error as a failed save instead of raising" do
+    # No table: every insert fails.
+    assert {:error, %Exqlite.Error{}} =
+             PhoenixReplay.Storage.Ecto.save(PhoenixReplay.Test.Fixtures.counter_recording(),
+               repo: Repo
+             )
+  end
+
   test "upgrades the released table and back" do
     run = &Ecto.Migrator.run(Repo, &1, &2, all: true, log: false)
     new = MapSet.new(~w(error_count tab viewport device source saved_at))

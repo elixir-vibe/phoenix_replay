@@ -81,6 +81,15 @@ defmodule PhoenixReplay.Config do
       * `:backoff` — base delay in milliseconds, multiplied by the attempt
         number (default `1_000`)
 
+  ## Switching options off and overriding them
+
+  `:flush`, `:logs`, `:pointer`, `:redact`, `:max_memory` and the context's
+  `:landing` can be switched off with `nil` or `false`. `true` turns one on
+  with its defaults, and a keyword list sets some of its settings onto
+  whatever is already set, as `:keep`, `:retention` and `:persist` do. So a
+  live session's `{PhoenixReplay.Recorder, flush: [events: 50]}` keeps the
+  application's `:interval`.
+
   ## Tail sampling
 
   `:sample_rate` decides when a session mounts whether it is recorded.
@@ -99,6 +108,21 @@ defmodule PhoenixReplay.Config do
 
   Every session is then buffered until it ends, so set `:max_memory`.
   """
+
+  # Defaults of the options that can be switched off. `nil` and `false`
+  # switch one off, `true` turns it on with these, and a keyword list sets
+  # some of them, onto whatever is already set.
+  @flush %{events: 200, interval: 5_000}
+  @logs %{level: :info, metadata: [], limit: 1_000}
+  @pointer %{sample: 50, scroll: 100, flush: 1_000, max_points: 500, limit: 3_600}
+  @landing %{params: [], referrer: true, attribution: :first}
+  @off [nil, false]
+
+  @secret_headers ~w(cookie authorization proxy-authorization)
+  @param_presets %{
+    utm: ~w(utm_source utm_medium utm_campaign utm_term utm_content),
+    click_ids: ~w(gclid fbclid msclkid)
+  }
 
   @type retention :: %{
           max_age: pos_integer() | nil,
@@ -223,12 +247,10 @@ defmodule PhoenixReplay.Config do
   defp put({:collect, entries}, config) when is_list(entries),
     do: %{config | collect: Enum.map(entries, &collector/1)}
 
-  defp put({:logs, nil}, config), do: %{config | logs: nil}
+  defp put({:logs, value}, config),
+    do: %{config | logs: switch(:logs, value, config.logs, @logs, &valid_logs?/2)}
 
-  defp put({:logs, opts}, config) when is_list(opts),
-    do: %{config | logs: merge(%{level: :info, metadata: [], limit: 1_000}, opts, &valid_logs?/2)}
-
-  defp put({:redact, []}, config), do: %{config | redact: nil}
+  defp put({:redact, off}, config) when off in [nil, false, []], do: %{config | redact: nil}
 
   defp put({:redact, patterns}, config) when is_list(patterns),
     do: %{
@@ -239,38 +261,30 @@ defmodule PhoenixReplay.Config do
   defp put({:redact, {module, opts}}, config) when is_atom(module) and is_list(opts),
     do: %{config | redact: {module, opts}}
 
-  defp put({:redact, module}, config) when is_atom(module) and not is_nil(module),
+  defp put({:redact, module}, config) when is_atom(module) and not is_boolean(module),
     do: %{config | redact: {module, []}}
 
-  defp put({:max_memory, max}, config) when is_nil(max) or (is_integer(max) and max > 0),
+  defp put({:max_memory, off}, config) when off in @off, do: %{config | max_memory: nil}
+
+  defp put({:max_memory, max}, config) when is_integer(max) and max > 0,
     do: %{config | max_memory: max}
 
   defp put({:context, opts}, config) when is_list(opts) do
     context =
       Enum.reduce(opts, config.context, fn
         {:headers, names}, acc when is_list(names) -> %{acc | headers: Enum.map(names, &header/1)}
-        {:landing, nil}, acc -> %{acc | landing: nil}
-        {:landing, landing}, acc when is_list(landing) -> %{acc | landing: landing(landing)}
+        {:landing, value}, acc -> %{acc | landing: landing(value, acc.landing)}
         {key, value}, _acc -> invalid!(key, value)
       end)
 
     %{config | context: context}
   end
 
-  @pointer %{sample: 50, scroll: 100, flush: 1_000, max_points: 500, limit: 3_600}
+  defp put({:pointer, value}, config),
+    do: %{config | pointer: switch(:pointer, value, config.pointer, @pointer, &positive?/2)}
 
-  defp put({:pointer, disabled}, config) when disabled in [false, nil],
-    do: %{config | pointer: nil}
-
-  defp put({:pointer, true}, config), do: %{config | pointer: @pointer}
-
-  defp put({:pointer, opts}, config) when is_list(opts),
-    do: %{config | pointer: merge(@pointer, opts, fn _key, value -> pos_integer?(value) end)}
-
-  defp put({:flush, false}, config), do: %{config | flush: nil}
-
-  defp put({:flush, opts}, config) when is_list(opts),
-    do: %{config | flush: merge(%{events: 200, interval: 5_000}, opts, &valid_flush?/2)}
+  defp put({:flush, value}, config),
+    do: %{config | flush: switch(:flush, value, config.flush, @flush, &positive?/2)}
 
   defp put({:retention, opts}, config) when is_list(opts),
     do: %{config | retention: merge(config.retention, opts, &valid_retention?/2)}
@@ -278,19 +292,23 @@ defmodule PhoenixReplay.Config do
   defp put({:persist, opts}, config) when is_list(opts),
     do: %{config | persist: merge(config.persist, opts, &valid_persist?/2)}
 
-  defp put({key, value}, _config) do
-    raise ArgumentError,
-          "invalid :phoenix_replay configuration #{inspect(key)}: #{inspect(value)}"
-  end
+  defp put({key, value}, _config), do: invalid!(key, value)
 
-  defp merge(defaults, opts, valid?) do
-    Enum.reduce(opts, defaults, fn {key, value}, acc ->
-      if Map.has_key?(acc, key) and valid?.(key, value) do
-        Map.put(acc, key, value)
-      else
-        raise ArgumentError,
-              "invalid :phoenix_replay configuration #{inspect(key)}: #{inspect(value)}"
-      end
+  # An option that can be off: nil or false switch it off, true turns it on
+  # as it was or with the defaults, and a keyword list sets some of it.
+  defp switch(_key, off, _current, _defaults, _valid?) when off in @off, do: nil
+  defp switch(_key, true, current, defaults, _valid?), do: current || defaults
+
+  defp switch(_key, opts, current, defaults, valid?) when is_list(opts),
+    do: merge(current || defaults, opts, valid?)
+
+  defp switch(key, value, _current, _defaults, _valid?), do: invalid!(key, value)
+
+  defp merge(current, opts, valid?) do
+    Enum.reduce(opts, current, fn {key, value}, acc ->
+      if Map.has_key?(acc, key) and valid?.(key, value),
+        do: Map.put(acc, key, value),
+        else: invalid!(key, value)
     end)
   end
 
@@ -303,14 +321,12 @@ defmodule PhoenixReplay.Config do
   defp collector({module, opts}) when is_atom(module) and is_list(opts), do: {module, opts}
   defp collector(module) when is_atom(module), do: {module, []}
 
-  defp collector(entry),
-    do: raise(ArgumentError, "invalid :phoenix_replay :collect entry: #{inspect(entry)}")
+  defp collector(entry), do: invalid!(:collect, entry)
 
   defp pattern(%Regex{} = regex), do: regex
   defp pattern(source) when is_binary(source), do: Regex.compile!(source)
 
-  defp pattern(pattern),
-    do: raise(ArgumentError, "invalid :phoenix_replay :redact pattern: #{inspect(pattern)}")
+  defp pattern(pattern), do: invalid!(:redact, pattern)
 
   defp valid_keep?(:rate, value), do: is_number(value) and value >= 0 and value <= 1
   defp valid_keep?(:errors, value), do: is_boolean(value)
@@ -320,13 +336,7 @@ defmodule PhoenixReplay.Config do
   defp valid_logs?(:metadata, value), do: is_list(value) and Enum.all?(value, &is_atom/1)
   defp valid_logs?(:limit, value), do: pos_integer?(value)
 
-  defp valid_flush?(_key, value), do: pos_integer?(value)
-
-  @secret_headers ~w(cookie authorization proxy-authorization)
-  @param_presets %{
-    utm: ~w(utm_source utm_medium utm_campaign utm_term utm_content),
-    click_ids: ~w(gclid fbclid msclkid)
-  }
+  defp positive?(_key, value), do: pos_integer?(value)
 
   defp header(name) when is_binary(name) or is_atom(name) do
     name = name |> to_string() |> String.downcase()
@@ -338,9 +348,11 @@ defmodule PhoenixReplay.Config do
 
   defp header(name), do: invalid!(:headers, name)
 
-  defp landing(opts) do
-    landing = merge(%{params: [], referrer: true, attribution: :first}, opts, &valid_landing?/2)
-    %{landing | params: landing.params |> Enum.flat_map(&param/1) |> Enum.uniq()}
+  defp landing(value, current) do
+    case switch(:landing, value, current, @landing, &valid_landing?/2) do
+      nil -> nil
+      landing -> %{landing | params: landing.params |> Enum.flat_map(&param/1) |> Enum.uniq()}
+    end
   end
 
   defp param(preset) when is_map_key(@param_presets, preset), do: @param_presets[preset]

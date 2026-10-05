@@ -60,7 +60,7 @@ defmodule PhoenixReplay.Recording.Summary do
       view: inspect(recording.view),
       url: recording.url,
       connected_at: recording.connected_at,
-      event_count: Enum.count(recording.events, &(&1.type != :pointer)),
+      event_count: event_count(recording.events),
       event_names: event_names(recording.events),
       error_count: Enum.count(recording.events, &Event.error?/1),
       tab: recording.client[:tab],
@@ -89,6 +89,10 @@ defmodule PhoenixReplay.Recording.Summary do
   """
   @spec sort([t()]) :: [t()]
   def sort(summaries), do: Enum.sort_by(summaries, &{&1.connected_at, &1.id}, :desc)
+
+  @doc "The events a recording counts: all but pointer batches, which are not shown as events."
+  @spec event_count([Event.t()]) :: non_neg_integer()
+  def event_count(events), do: Enum.count(events, &(&1.type != :pointer))
 
   @doc "Distinct `handle_event/3` names among `events`, sorted."
   @spec event_names([Event.t()]) :: [String.t()]

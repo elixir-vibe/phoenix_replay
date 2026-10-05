@@ -53,7 +53,7 @@ defmodule PhoenixReplay.Session.Finalizer do
   end
 
   defp attempt(recording, config, attempt) do
-    case Storage.save(config.storage, recording) do
+    case save(config.storage, recording) do
       :ok ->
         :ok
 
@@ -64,5 +64,12 @@ defmodule PhoenixReplay.Session.Finalizer do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  # A backend that raises instead of returning an error is retried too.
+  defp save(storage, recording) do
+    Storage.save(storage, recording)
+  rescue
+    error -> {:error, error}
   end
 end

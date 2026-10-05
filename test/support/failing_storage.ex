@@ -6,7 +6,7 @@ defmodule PhoenixReplay.Test.FailingStorage do
   @impl true
   def save(recording, opts) do
     if pid = opts[:notify], do: send(pid, {:save_attempt, recording.id})
-    {:error, :unavailable}
+    if opts[:raise], do: raise("storage is down"), else: {:error, :unavailable}
   end
 
   @impl true

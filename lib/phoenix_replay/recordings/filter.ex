@@ -81,9 +81,9 @@ defmodule PhoenixReplay.Recordings.Filter do
   Which page of matching summaries to read:
 
     * `:now` — the current time in Unix milliseconds, for `"within"`
-    * `:until` — only sessions that started at or before this time, so pages
-      stay put while new sessions arrive
-    * `:since` — only sessions that started after this time
+    * `:until` — only recordings saved at or before this time, so pages stay
+      put while sessions end; see `PhoenixReplay.Recording.Summary.stored_at/1`
+    * `:since` — only recordings saved after this time
     * `:offset` and `:limit` — the slice to return
   """
   @type page_opts :: [

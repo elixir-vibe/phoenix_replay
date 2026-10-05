@@ -27,14 +27,17 @@ defmodule PhoenixReplay.Telemetry do
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Keep, Timeline}
+  alias PhoenixReplay.Recording.{Keep, Summary, Timeline}
 
   @doc "Emits `[:phoenix_replay, :recording, :persisted]`."
   @spec persisted(Recording.t()) :: :ok
   def persisted(%Recording{} = recording) do
     :telemetry.execute(
       [:phoenix_replay, :recording, :persisted],
-      %{event_count: length(recording.events), duration_ms: Timeline.duration_ms(recording)},
+      %{
+        event_count: Summary.event_count(recording.events),
+        duration_ms: Timeline.duration_ms(recording)
+      },
       %{id: recording.id, view: recording.view}
     )
   end
@@ -44,7 +47,10 @@ defmodule PhoenixReplay.Telemetry do
   def recovered(%Recording{} = recording) do
     :telemetry.execute(
       [:phoenix_replay, :recording, :recovered],
-      %{event_count: length(recording.events), duration_ms: Timeline.duration_ms(recording)},
+      %{
+        event_count: Summary.event_count(recording.events),
+        duration_ms: Timeline.duration_ms(recording)
+      },
       %{id: recording.id, view: recording.view}
     )
   end
