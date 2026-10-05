@@ -148,5 +148,27 @@ defmodule PhoenixReplay.Storage.FileTest do
 
       assert FileStorage.partials(opts) == ["mine"]
     end
+
+    # Two VMs that are not distributed share a node name on one host.
+    test "leaves the parts of another VM of this node while it runs", %{opts: opts} do
+      :ok = FileStorage.append(Fixtures.counter_recording(id: "mine"), [], opts)
+      [own] = File.ls!(opts[:path])
+      node = own |> String.split(".") |> Enum.at(1) |> String.split("-") |> hd()
+
+      # Another VM, still running.
+      port = Port.open({:spawn_executable, System.find_executable("sleep")}, args: ["30"])
+      {:os_pid, running} = Port.info(port, :os_pid)
+      on_exit(fn -> if Port.info(port), do: Port.close(port) end)
+      File.write!(Path.join(opts[:path], "live.#{node}-#{running}.part"), "")
+
+      # One that is gone, as after a crash.
+      {gone, 0} = System.cmd("sh", ["-c", "echo $$"])
+      File.write!(Path.join(opts[:path], "crashed.#{node}-#{String.trim(gone)}.part"), "")
+
+      # Written before the tag had a process id.
+      File.write!(Path.join(opts[:path], "older.#{node}.part"), "")
+
+      assert Enum.sort(FileStorage.partials(opts)) == ["crashed", "mine", "older"]
+    end
   end
 end
