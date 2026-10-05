@@ -25,14 +25,15 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     Channel.seek(channel, index)
   end
 
-  test "replays client state through replay_render/1, under change tracking" do
+  test "replays client state through replay_render/1, back and forth" do
     save(%PhoenixReplay.Recording{
       id: "client",
       view: PhoenixReplay.Test.Live.ClientSearch,
       connected_at: 0,
       events: [
         %Event{at: 0, type: :mount, data: %{assigns: %{}}},
-        %Event{at: 5, type: :render, data: %{assigns: %{title: "Shop"}}},
+        # The live view renders without a query: the browser holds it.
+        %Event{at: 5, type: :render, data: %{assigns: %{title: "Shop", query: nil}}},
         %Event{
           at: 300,
           type: :state,

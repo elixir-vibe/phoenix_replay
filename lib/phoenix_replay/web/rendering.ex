@@ -34,13 +34,18 @@ defmodule PhoenixReplay.Web.Rendering do
   would, plus the client state the browser reported up to this point in
   `PhoenixReplay.Recording.State.assign/0`, `%{key => merged changes}`,
   and returns a rendered template the replay frame can show without that
-  code. The assigns are change-tracked as in a LiveView, so `@` access in
-  `~H` works as usual.
+  code.
+
+  It is rendered in full on every step, without change tracking: a view
+  typically derives assigns from the reported state with `assign/3`, and
+  tracking would compare them with the recorded assigns, not with the
+  previous step, so a value that went back to what was recorded would stay
+  stale on the page.
   """
   @spec render(module(), map()) :: Phoenix.LiveView.Rendered.t()
   def render(view, assigns) do
     if Code.ensure_loaded?(view) and function_exported?(view, :replay_render, 1),
-      do: view.replay_render(assigns),
+      do: view.replay_render(Map.put(assigns, :__changed__, nil)),
       else: view.render(assigns)
   end
 

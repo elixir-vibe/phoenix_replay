@@ -195,7 +195,7 @@ def replay_render(assigns) do
 end
 ```
 
-The assigns are change-tracked as in a live render, so `@` access in `~H` works as usual. Each report is a step on the player's timeline, in a lane of its own, so seeking to a moment shows the state as it was then. Form control values are under the `"phx_replay:inputs"` key, `%{selector => %{name => value}}`. Don't name an assign of your own `:phoenix_replay_state`.
+It is rendered in full on every step, so values you derive in it with `assign/3` always show; `@` access in `~H` works as usual. Each report is a step on the player's timeline, in a lane of its own, so seeking to a moment shows the state as it was then. Form control values are under the `"phx_replay:inputs"` key, `%{selector => %{name => value}}`. Don't name an assign of your own `:phoenix_replay_state`.
 
 ### Limits
 
