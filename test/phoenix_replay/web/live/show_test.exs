@@ -96,6 +96,30 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert has_element?(view, "#replay-assigns summary.bg-accent-soft", "count")
   end
 
+  test "lists client state in a lane of its own, as steps" do
+    recording = Fixtures.counter_recording(id: "stateful", clicks: 1)
+    inputs = PhoenixReplay.Recording.State.inputs_key()
+
+    typed = %Event{
+      at: 3_000,
+      type: :state,
+      data: %{
+        span: 100,
+        entries: [
+          [0, inputs, %{"#note" => %{"note" => "call"}}],
+          [100, "search", %{"query" => "x"}]
+        ]
+      }
+    }
+
+    Storage.save(Fixtures.storage(), %{recording | events: [typed | recording.events]})
+    {:ok, view, _html} = live(build_conn(), "/replay/stateful")
+
+    assert has_element?(view, "#replay-events", "input #note")
+    assert has_element?(view, "#replay-events", "search: query")
+    assert has_element?(view, ~s(button[phx-value-kind="state"]), "Client state")
+  end
+
   test "jumps to the first error" do
     recording = Fixtures.counter_recording(id: "failing")
     error = %Event{at: 1500, type: :log, data: %{level: :error, message: "boom", metadata: %{}}}

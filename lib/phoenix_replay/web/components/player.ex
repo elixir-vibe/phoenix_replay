@@ -48,6 +48,8 @@ defmodule PhoenixReplay.Web.Components.Player do
         <.icon name="lucide:octagon-x" class={@class} />
       <% :viewport -> %>
         <.icon name="lucide:scaling" class={@class} />
+      <% :state -> %>
+        <.icon name="lucide:text-cursor-input" class={@class} />
     <% end %>
     """
   end
