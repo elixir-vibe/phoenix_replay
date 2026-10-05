@@ -9,7 +9,11 @@ afterEach(() => {
   delete window.phoenixReplayStage
 })
 
-const stage = async (): Promise<{ el: HTMLElement; frame: HTMLIFrameElement }> => {
+const stage = async (): Promise<{
+  el: HTMLElement
+  frame: HTMLIFrameElement
+  pushed: [string, unknown][]
+}> => {
   const el = html(`
     <div style="position: fixed; inset: 0; width: 800px; height: 600px">
       <div style="position: absolute">
@@ -20,9 +24,12 @@ const stage = async (): Promise<{ el: HTMLElement; frame: HTMLIFrameElement }> =
   `)
   const frame = el.querySelector('iframe') as HTMLIFrameElement
   const loaded = new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }))
-  mountHook(ExportStage, el)
+  const { pushed, receive } = mountHook(ExportStage, el)
   await loaded
-  return { el, frame }
+  // The stage announces the frame once its LiveView connected.
+  receive('phx_replay:frame_ready')
+  await window.phoenixReplayStage?.ready()
+  return { el, frame, pushed }
 }
 
 const shown = (frame: HTMLIFrameElement, index: number): void => {
@@ -30,7 +37,7 @@ const shown = (frame: HTMLIFrameElement, index: number): void => {
 }
 
 test('shows a moment once the frame has rendered its event', async () => {
-  const { el, frame } = await stage()
+  const { el, frame, pushed } = await stage()
   const times: number[] = []
   window.addEventListener(TIME_EVENT, (event) => times.push((event as CustomEvent<number>).detail))
 
@@ -59,7 +66,11 @@ test('shows a moment once the frame has rendered its event', async () => {
   const overlay = el.querySelector<HTMLElement>('[data-frame-overlay]')
   expect([overlay?.dataset.width, overlay?.dataset.height]).toEqual(['400', '300'])
 
-  // The same event again needs no new render.
+  // The stage was asked to seek, once.
+  expect(pushed).toEqual([['seek', { index: 3 }]])
+
+  // The same event again needs no seek and no new render.
   await window.phoenixReplayStage?.show({ index: 3, at: 1_600, width: 400, height: 300 })
   expect(times).toEqual([1_500, 1_600])
+  expect(pushed).toHaveLength(1)
 })

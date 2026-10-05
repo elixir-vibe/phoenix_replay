@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Web.Download do
+defmodule PhoenixReplay.Web.Export.Download do
   @moduledoc """
   Serves an exported video to the player that asked for it.
 

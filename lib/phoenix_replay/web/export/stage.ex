@@ -1,14 +1,16 @@
-defmodule PhoenixReplay.Export.Stage do
+defmodule PhoenixReplay.Web.Export.Stage do
   @moduledoc """
   The page the export browser films: the replay frame at the recorded
   viewport, centred on a dark canvas, with the player's pointer overlay
   over it and nothing else.
 
-  `PhoenixReplay.Export.Capture` drives the frame through
-  `PhoenixReplay.Web.Player.Channel`, like the player does, and calls
-  `window.phoenixReplayStage.show/1`, set up by the `ExportStage` hook,
-  to size the frame, wait for the event to render and move the pointer to
-  the moment before each screenshot.
+  It drives its frame as the player does, over a private
+  `PhoenixReplay.Web.Player.Channel`: the frame is rendered once the stage
+  has subscribed, so its announcement is never missed, and the stage passes
+  it on to the `ExportStage` hook as `"phx_replay:frame_ready"`. The hook
+  asks for each event with `"seek"`. `PhoenixReplay.Export.Screenshots`
+  only calls the hook, `window.phoenixReplayStage`, to wait for the frame
+  and to show each moment before its screenshot.
 
   `pointer=false` hides the pointer while the page still scrolls as
   recorded; `rotated=true` turns both off, as the player does when rotated.
@@ -16,9 +18,10 @@ defmodule PhoenixReplay.Export.Stage do
 
   use Phoenix.LiveView
 
-  alias PhoenixReplay.Export.Access
   alias PhoenixReplay.Recording.{Client, PointerTrack, Timeline}
   alias PhoenixReplay.Web.{Context, Layouts}
+  alias PhoenixReplay.Web.Export.Access
+  alias PhoenixReplay.Web.Player.Channel
 
   @impl true
   def mount(%{"token" => token} = params, _session, socket) do
@@ -26,13 +29,21 @@ defmodule PhoenixReplay.Export.Stage do
     id = Access.recording_id(socket)
     recording = Context.fetch_recording!(socket, id)
     {_playback, track} = Timeline.for_playback(recording)
-    query = URI.encode_query(channel: params["channel"] || "", stage: 1)
+    channel = Channel.new()
+
+    frame_src =
+      if connected?(socket) do
+        :ok = Channel.subscribe(channel)
+        query = URI.encode_query(channel: channel, stage: 1)
+        Context.path(context, ["frame", token, id]) <> "?" <> query
+      end
 
     {:ok,
      assign(socket,
        assets: Layouts.dashboard_assets(context),
        page_title: "Replay",
-       frame_src: Context.path(context, ["frame", token, id]) <> "?" <> query,
+       channel: channel,
+       frame_src: frame_src,
        viewport: recording.client.viewport || Client.default_viewport(),
        track: track,
        pointer?: PointerTrack.any?(track),
@@ -41,6 +52,20 @@ defmodule PhoenixReplay.Export.Stage do
      ), layout: false}
   end
 
+  @impl true
+  def handle_event("seek", %{"index" => index}, socket) when is_integer(index) do
+    :ok = Channel.seek(socket.assigns.channel, index)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({Channel, :frame_ready}, socket),
+    do: {:noreply, push_event(socket, "phx_replay:frame_ready", %{})}
+
+  def handle_info({Channel, _message}, socket), do: {:noreply, socket}
+
+  # Nothing re-renders the stage once it is connected, so the sizes the
+  # hook sets on the device stay.
   @impl true
   def render(assigns) do
     ~H"""
@@ -51,10 +76,10 @@ defmodule PhoenixReplay.Export.Stage do
     >
       <div
         id="replay-stage-device"
-        phx-update="ignore"
         style={"position: absolute; left: 0; top: 0; width: #{@viewport.width}px; height: #{@viewport.height}px;"}
       >
         <iframe
+          :if={@frame_src}
           id="replay-frame"
           title="Replay"
           src={@frame_src}

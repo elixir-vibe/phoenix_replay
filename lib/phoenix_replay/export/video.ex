@@ -11,7 +11,7 @@ defmodule PhoenixReplay.Export.Video do
   """
 
   alias PhoenixReplay.{Catalog, Config, Recording}
-  alias PhoenixReplay.Export.{Capture, Encoder, Job, Options, Runtime, Schedule}
+  alias PhoenixReplay.Export.{Encoder, Job, Options, Runtime, Schedule, Screenshots}
   alias PhoenixReplay.Recording.{PointerTrack, Timeline}
 
   @captured 0.9
@@ -31,7 +31,7 @@ defmodule PhoenixReplay.Export.Video do
            :ok <- bounded(schedule, export.max_shots),
            {:ok, runtime} <- Runtime.ensure(config.export),
            {:ok, list} <-
-             Capture.run(
+             Screenshots.run(
                runtime,
                recording_id,
                schedule,

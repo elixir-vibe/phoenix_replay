@@ -7,22 +7,10 @@ app_config = [
   "Application.delete_env"
 ]
 
-# Video export drives a browser through its own endpoint, so most of it
-# is an adapter; its plan and jobs are data, and ffmpeg is infrastructure.
 adapter = [
   "Mix.Tasks.PhoenixReplay.*",
   "PhoenixReplay",
   "PhoenixReplay.Export",
-  "PhoenixReplay.Export.Access",
-  "PhoenixReplay.Export.Capture",
-  "PhoenixReplay.Export.Endpoint",
-  "PhoenixReplay.Export.ErrorHTML",
-  "PhoenixReplay.Export.Router",
-  "PhoenixReplay.Export.Runtime",
-  "PhoenixReplay.Export.Server",
-  "PhoenixReplay.Export.Stage",
-  "PhoenixReplay.Export.Supervisor",
-  "PhoenixReplay.Export.Video",
   "PhoenixReplay.Plug",
   "PhoenixReplay.Recorder",
   "PhoenixReplay.Router",
@@ -37,7 +25,11 @@ orchestrator = [
   "PhoenixReplay.Session.Finalizer",
   "PhoenixReplay.Session.Flusher",
   "PhoenixReplay.Session.Monitor",
-  "PhoenixReplay.Session.Recovery"
+  "PhoenixReplay.Session.Recovery",
+  # Video export: the queue and the render of one video.
+  "PhoenixReplay.Export.Server",
+  "PhoenixReplay.Export.Supervisor",
+  "PhoenixReplay.Export.Video"
 ]
 
 model = [
@@ -63,7 +55,10 @@ logic = [
 infrastructure = [
   "PhoenixReplay.Application",
   "PhoenixReplay.Capture.*",
+  # Video export's outside processes: the endpoint and Chromium, and ffmpeg.
   "PhoenixReplay.Export.Encoder",
+  "PhoenixReplay.Export.Runtime",
+  "PhoenixReplay.Export.Screenshots",
   "PhoenixReplay.Session.Buffer",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",

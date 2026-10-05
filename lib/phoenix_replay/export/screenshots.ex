@@ -1,23 +1,26 @@
 if Code.ensure_loaded?(PlaywrightEx) do
-  defmodule PhoenixReplay.Export.Capture do
+  defmodule PhoenixReplay.Export.Screenshots do
     @moduledoc """
     Screenshots each shot of a `PhoenixReplay.Export.Schedule` in Chromium.
 
-    It opens `PhoenixReplay.Export.Stage` in a browser context the size of
-    the schedule's canvas, at its device pixel ratio, waits for the frame
-    to connect, then for each shot seeks the frame when the event changes,
-    lets the stage show the moment, and saves a PNG. The browser is closed
-    whatever happens.
+    It opens `PhoenixReplay.Web.Export.Stage` in a browser context the size
+    of the schedule's canvas, at its device pixel ratio, waits until the
+    stage's frame is ready, then has the stage show each shot's moment and
+    saves a PNG of it. The stage seeks its frame itself. The browser is
+    closed whatever happens, and a `{PhoenixReplay.Export, :cancel}` message
+    stops it between screenshots.
     """
 
-    alias PhoenixReplay.Export.{Access, Encoder, Options, Runtime, Schedule}
-    alias PhoenixReplay.Web.Player.Channel
+    alias PhoenixReplay.Export.{Encoder, Options, Runtime, Schedule}
     alias PlaywrightEx.{Browser, BrowserContext, Frame, Page}
 
-    # Resolves once the stage's hook has mounted.
+    # Resolves once the stage's hook has mounted and its frame is ready.
     @ready """
     () => new Promise((resolve) => {
-      const check = () => (window.phoenixReplayStage ? resolve(true) : setTimeout(check, 20))
+      const check = () =>
+        window.phoenixReplayStage
+          ? window.phoenixReplayStage.ready().then(() => resolve(true))
+          : setTimeout(check, 20)
       check()
     })
     """
@@ -38,8 +41,6 @@ if Code.ensure_loaded?(PlaywrightEx) do
             (float() -> any())
           ) :: {:ok, Encoder.shots()} | {:error, term()}
     def run(runtime, recording_id, schedule, dir, export, options, progress) do
-      channel = Channel.new()
-      :ok = Channel.subscribe(channel)
       opts = [connection: runtime.connection, timeout: export.timeout]
 
       with {:ok, browser} <- PlaywrightEx.launch_browser(:chromium, opts) do
@@ -48,15 +49,14 @@ if Code.ensure_loaded?(PlaywrightEx) do
                {:ok, _response} <-
                  Frame.goto(
                    page.main_frame.guid,
-                   [url: stage_url(runtime, recording_id, channel, options)] ++ opts
+                   [url: Runtime.stage_url(runtime, recording_id, options)] ++ opts
                  ),
-               :ok <- await_frame(channel, export.timeout),
                {:ok, true} <-
                  Frame.evaluate(
                    page.main_frame.guid,
                    [expression: @ready, is_function: true] ++ opts
                  ) do
-            shoot(schedule, page, channel, dir, opts, progress)
+            shoot(schedule, page, dir, opts, progress)
           end
         after
           Browser.close(browser.guid, opts)
@@ -72,43 +72,25 @@ if Code.ensure_loaded?(PlaywrightEx) do
            do: BrowserContext.new_page(context.guid, opts)
     end
 
-    defp stage_url(runtime, recording_id, channel, options) do
-      token = Access.sign(recording_id)
-      query = [channel: channel, pointer: options.pointer, rotated: options.rotated]
-      "#{runtime.url}/_phoenix_replay/stage/#{token}?" <> URI.encode_query(query)
-    end
-
-    # The frame announces itself on the channel once its LiveView connects.
-    defp await_frame(channel, timeout) do
-      receive do
-        {Channel, :frame_ready} -> :ok
-        {PhoenixReplay.Export, :cancel} -> {:error, :cancelled}
-      after
-        timeout -> {:error, {:browser, "the replay frame did not connect for #{channel}"}}
-      end
-    end
-
-    defp shoot(schedule, page, channel, dir, opts, progress) do
+    defp shoot(schedule, page, dir, opts, progress) do
       count = length(schedule.shots)
 
       schedule.shots
       |> Enum.with_index()
-      |> Enum.reduce_while({:ok, [], nil}, fn {shot, number}, {:ok, shots, shown} ->
-        if shot.index != shown, do: Channel.seek(channel, shot.index)
-
+      |> Enum.reduce_while({:ok, []}, fn {shot, number}, {:ok, shots} ->
         case if(cancelled?(), do: {:error, :cancelled}, else: screenshot(page, shot, opts)) do
           {:ok, png} ->
             path = Path.join(dir, "#{number}.png")
             File.write!(path, png)
             progress.((number + 1) / count)
-            {:cont, {:ok, [{path, shot.frames} | shots], shot.index}}
+            {:cont, {:ok, [{path, shot.frames} | shots]}}
 
           {:error, reason} ->
             {:halt, {:error, reason}}
         end
       end)
       |> case do
-        {:ok, shots, _shown} -> {:ok, Enum.reverse(shots)}
+        {:ok, shots} -> {:ok, Enum.reverse(shots)}
         error -> error
       end
     end

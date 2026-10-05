@@ -32,7 +32,8 @@ defmodule PhoenixReplay.Web.Live.Show do
   alias PhoenixReplay.Recording.{Filter, PointerTrack, Timeline}
   alias PhoenixReplay.{Catalog, Export}
   alias PhoenixReplay.Export.Options
-  alias PhoenixReplay.Web.{Context, Download, Highlight, Layouts, Params}
+  alias PhoenixReplay.Web.{Context, Highlight, Layouts, Params}
+  alias PhoenixReplay.Web.Export.Download
   alias PhoenixReplay.Web.Player.{Channel, Events}
 
   @speeds [1, 2, 5, 10]

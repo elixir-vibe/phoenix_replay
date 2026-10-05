@@ -1,6 +1,6 @@
-defmodule PhoenixReplay.Export.ErrorHTML do
+defmodule PhoenixReplay.Web.Export.ErrorHTML do
   @moduledoc """
-  Renders errors of `PhoenixReplay.Export.Endpoint` as their status text,
+  Renders errors of `PhoenixReplay.Web.Export.Endpoint` as their status text,
   such as "Not Found" for a page asked for with an invalid token. Only the
   export browser sees them.
   """

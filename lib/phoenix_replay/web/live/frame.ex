@@ -12,7 +12,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
   `replay_render/1`, which the frame calls in place of `render/1`; see
   `PhoenixReplay.Web.Rendering.render/2`.
 
-  Opened with `stage=1`, as `PhoenixReplay.Export.Stage` opens it, the
+  Opened with `stage=1`, as `PhoenixReplay.Web.Export.Stage` opens it, the
   frame pushes a `"phx_replay:shown"` event with the index after each
   render, so the export takes its screenshot once the page shows it.
 

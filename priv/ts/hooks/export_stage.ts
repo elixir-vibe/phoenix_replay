@@ -15,41 +15,41 @@ export interface Shot {
 
 declare global {
   interface Window {
-    phoenixReplayStage?: { show: (shot: Shot) => Promise<void> }
+    phoenixReplayStage?: { ready: () => Promise<void>; show: (shot: Shot) => Promise<void> }
   }
 }
 
 /**
- * The stage video exports film: sizes and centres the replay frame, waits
- * until the frame shows the event it was sought to, and moves the pointer
- * overlay to the moment.
+ * The stage video exports film: sizes and centres the replay frame, has
+ * the stage seek it, waits until it shows that event, and moves the
+ * pointer overlay to the moment.
  *
  * The element holds the frame's box, with the iframe and the
- * `[data-frame-overlay]` in it. The frame pushes `phx_replay:shown` with
- * the index after each render; the export seeks it over the player
- * channel, then calls `window.phoenixReplayStage.show` and takes the
- * screenshot once it resolves.
+ * `[data-frame-overlay]` in it. The stage announces the frame with
+ * `phx_replay:frame_ready` once its LiveView connects; the frame pushes
+ * `phx_replay:shown` with the index after each render. The export calls
+ * `window.phoenixReplayStage.ready`, then `show` for each moment, and
+ * takes the screenshot once it resolves.
  */
 export class ExportStage extends ViewHook {
   private shown = -1
+  private sought: number | undefined
   private waiting: { index: number; resolve: () => void } | null = null
+  private listening: Window | null = null
+  private frameReady!: Promise<void>
 
   mounted(): void {
-    const frame = this.el.querySelector('iframe')
-    const listen = (): void =>
-      frame?.contentWindow?.addEventListener('phx:phx_replay:shown', (event) => {
-        this.onShown((event as CustomEvent<{ index: number }>).detail.index)
+    // The frame's LiveView has connected, so its document is the one that
+    // will show events; a reload makes a new one, heard on its load.
+    this.frameReady = new Promise((resolve) => {
+      this.handleEvent('phx_replay:frame_ready', () => {
+        this.listen()
+        resolve()
       })
+    })
 
-    // The frame may have loaded before the stage's LiveView connected.
-    if (
-      frame?.contentDocument?.readyState === 'complete' &&
-      frame.contentWindow?.location.href !== 'about:blank'
-    )
-      listen()
-    frame?.addEventListener('load', listen)
-
-    window.phoenixReplayStage = { show: (shot) => this.show(shot) }
+    this.el.querySelector('iframe')?.addEventListener('load', () => this.listen())
+    window.phoenixReplayStage = { ready: () => this.frameReady, show: (shot) => this.show(shot) }
   }
 
   destroyed(): void {
@@ -71,11 +71,26 @@ export class ExportStage extends ViewHook {
       overlay.dataset.height = String(height)
     }
 
+    if (index !== this.sought) {
+      this.sought = index
+      this.pushEvent('seek', { index }).catch(() => undefined)
+    }
+
     await this.until(index)
     window.dispatchEvent(new CustomEvent(TIME_EVENT, { detail: at }))
     // Two frames: one for the page to lay out, one for it to paint.
     await nextFrame()
     await nextFrame()
+  }
+
+  private listen(): void {
+    const page = this.el.querySelector('iframe')?.contentWindow ?? null
+    if (!page || page === this.listening) return
+
+    this.listening = page
+    page.addEventListener('phx:phx_replay:shown', (event) => {
+      this.onShown((event as CustomEvent<{ index: number }>).detail.index)
+    })
   }
 
   private onShown(index: number): void {

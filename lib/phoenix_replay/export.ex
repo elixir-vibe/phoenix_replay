@@ -8,14 +8,14 @@ defmodule PhoenixReplay.Export do
     1. `PhoenixReplay.Export.Schedule` plans the video: a constant frame
        rate from the first render, idle stretches shortened, and a
        screenshot only where the picture changes.
-    2. `PhoenixReplay.Export.Capture` loads the replay into Chromium through
+    2. `PhoenixReplay.Export.Screenshots` loads the replay into Chromium through
        [`playwright_ex`](https://hexdocs.pm/playwright_ex), at the recorded
        viewport and pixel ratio, steps it through the plan with the
        player's own pointer overlay, and screenshots each change.
     3. `PhoenixReplay.Export.Encoder` encodes the screenshots with `ffmpeg`
        into an H.264 MP4.
 
-  The browser loads the replay from `PhoenixReplay.Export.Endpoint`, a
+  The browser loads the replay from `PhoenixReplay.Web.Export.Endpoint`, a
   private endpoint on 127.0.0.1 started with the first export, so it
   needs no route or login in your app.
 

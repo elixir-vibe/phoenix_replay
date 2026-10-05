@@ -1,11 +1,11 @@
-defmodule PhoenixReplay.Export.Access do
+defmodule PhoenixReplay.Web.Export.Access do
   @moduledoc """
-  Lets the export browser, and nothing else, into `PhoenixReplay.Export.Router`.
+  Lets the export browser, and nothing else, into `PhoenixReplay.Web.Export.Router`.
 
-  An export signs the recording's id with `sign/1`; the stage and the
-  frame take the token in their path and mount only with a valid one for
-  that recording. The secret is made when `PhoenixReplay.Export.Endpoint`
-  starts, so tokens die with it.
+  An export signs the recording's id with `PhoenixReplay.Export.Runtime.stage_url/3`;
+  the stage and the frame take the token in their path and mount only with
+  a valid one for that recording. The secret is made when
+  `PhoenixReplay.Web.Export.Endpoint` starts, so tokens die with it.
 
   It also points the frame at your endpoint for its stylesheet, and
   renders the frame in the `:frame_layout` the `:export` configuration
@@ -15,18 +15,11 @@ defmodule PhoenixReplay.Export.Access do
   import Phoenix.LiveView, only: [put_private: 3]
 
   alias PhoenixReplay.Config
-  alias PhoenixReplay.Export.Endpoint
+  alias PhoenixReplay.Export.Runtime
+  alias PhoenixReplay.Web.Export.Endpoint
   alias PhoenixReplay.Web.{Context, Layouts, NotFoundError}
 
-  @salt "phoenix_replay export"
-  # As long as an export may take.
-  @max_age 6 * 60 * 60
-
   @private :phoenix_replay_export
-
-  @doc "A token that opens the stage and frame of a recording."
-  @spec sign(PhoenixReplay.Recording.id()) :: String.t()
-  def sign(recording_id), do: Phoenix.Token.sign(Endpoint, @salt, recording_id)
 
   @doc "The id of the recording the stage was opened for."
   @spec recording_id(Phoenix.LiveView.Socket.t()) :: PhoenixReplay.Recording.id()
@@ -40,7 +33,7 @@ defmodule PhoenixReplay.Export.Access do
           {:cont, Phoenix.LiveView.Socket.t()}
   def on_mount(:default, params, _session, socket) do
     with token when is_binary(token) <- params["token"],
-         {:ok, id} <- Phoenix.Token.verify(Endpoint, @salt, token, max_age: @max_age),
+         {:ok, id} <- Runtime.verify(Endpoint, token),
          true <- params["id"] in [nil, id] do
       {:cont,
        socket
