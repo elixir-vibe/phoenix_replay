@@ -176,9 +176,13 @@ defmodule PhoenixReplay.Web.Player.Events do
   said what language it is in, or `nil` for the rest, which show `label/1`.
   """
   @spec code_label(Event.t()) :: Phoenix.HTML.safe() | nil
-  def code_label(%Event{type: :telemetry, data: %{summary: summary, language: language}})
-      when is_binary(summary) and language != nil,
-      do: summary |> String.replace(~r/\s+/, " ") |> Highlight.code(language)
+  def code_label(%Event{type: :telemetry, data: %{summary: summary} = data})
+      when is_binary(summary) do
+    case language(data) do
+      nil -> nil
+      language -> summary |> String.replace(~r/\s+/, " ") |> Highlight.code(language)
+    end
+  end
 
   def code_label(%Event{}), do: nil
 
@@ -255,11 +259,24 @@ defmodule PhoenixReplay.Web.Player.Events do
   defp metadata(metadata) when metadata == %{}, do: nil
   defp metadata(metadata), do: Highlight.term(metadata, pretty: true, limit: 50)
 
-  defp summary(%{summary: summary, language: language})
-       when is_binary(summary) and language != nil,
-       do: Highlight.code(summary, language)
+  defp summary(%{summary: summary} = data) when is_binary(summary) do
+    case language(data) do
+      nil -> summary
+      language -> Highlight.code(summary, language)
+    end
+  end
 
   defp summary(%{summary: summary}), do: summary
+
+  # Events recorded before collectors said what language a summary is in
+  # have no `:language`; Ecto's are the queries, named `[..., :query]`.
+  defp language(%{language: language}), do: language
+  defp language(%{event: event}) when is_list(event), do: if(query?(event), do: :sql)
+  defp language(_data), do: nil
+
+  defp query?([:query]), do: true
+  defp query?([_name | rest]), do: query?(rest)
+  defp query?([]), do: false
 
   defp type_marker_class(:mount), do: "size-1.5 bg-ink"
   defp type_marker_class(:event), do: "size-1.5 bg-kind-event"

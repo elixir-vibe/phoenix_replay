@@ -121,6 +121,7 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
       event(1, :telemetry, %{
         event: [:repo, :query],
         summary: "SELECT 1",
+        language: nil,
         measurements: %{duration: 1.5},
         metadata: %{},
         error: "timeout"
@@ -156,6 +157,10 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
 
     # One line in the event list.
     assert html.(Events.code_label(sql)) =~ ~r/id<\/span> <span class="l-keyword">FROM/
-    assert Events.code_label(%{sql | data: Map.delete(sql.data, :language)}) == nil
+    assert Events.code_label(%{sql | data: %{sql.data | language: nil}}) == nil
+
+    # Recorded before collectors named a language: Ecto's queries still are SQL.
+    legacy = %{sql | data: Map.delete(sql.data, :language)}
+    assert html.(Events.code_label(legacy)) =~ "l-keyword"
   end
 end
