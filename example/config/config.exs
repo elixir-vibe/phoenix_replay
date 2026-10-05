@@ -89,7 +89,13 @@ config :phoenix_replay,
   # Which language visitors browse in and which campaign brought them.
   context: [headers: ["accept-language"], landing: [params: [:utm, :click_ids]]],
   # Where the pointer moved and what it pressed, shown over the replay.
-  pointer: true
+  pointer: true,
+  # Recordings exported as videos, from the player or with
+  # `mix phoenix_replay.export`.
+  export: [
+    endpoint: ExampleWeb.Endpoint,
+    playwright: [executable: "node_modules/.bin/playwright"]
+  ]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
