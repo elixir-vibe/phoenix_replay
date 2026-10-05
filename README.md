@@ -153,6 +153,8 @@ mix assets.build
 mix ci
 ```
 
+`mix ci` runs every check, including the video export tests, which film real replays with Chromium and need `ffmpeg`. A plain `mix test` leaves those out; set `PHOENIX_REPLAY_EXPORT_TESTS=1` to run them with it.
+
 The Ecto storage tests run on SQLite, on DuckDB through [QuackDB](https://hexdocs.pm/quackdb) (Elixir 1.19+; install its binary once with `MIX_ENV=test mix quackdb.install`), and on PostgreSQL when `PHOENIX_REPLAY_POSTGRES_URL` names a database. Any PostgreSQL works; without Docker or Homebrew, [theseus-rs/postgresql-binaries](https://github.com/theseus-rs/postgresql-binaries) has plain builds:
 
 ```bash

@@ -182,6 +182,9 @@ defmodule PhoenixReplay.MixProject do
     ])
   end
 
+  # The gate runs the video export tests, which a plain `mix test` skips.
+  defp export_tests(_args), do: System.put_env("PHOENIX_REPLAY_EXPORT_TESTS", "1")
+
   defp aliases do
     [
       "assets.build": [
@@ -197,6 +200,7 @@ defmodule PhoenixReplay.MixProject do
       "hex.publish": ["cmd mix assets.build", "hex.publish"],
       # Built in its own process, so this one compiles Web.Assets with it.
       ci: [
+        &export_tests/1,
         "cmd mix assets.build",
         "compile --warnings-as-errors",
         "format --check-formatted",
