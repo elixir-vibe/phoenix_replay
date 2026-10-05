@@ -7,7 +7,7 @@ defmodule PhoenixReplay.Recording.TimelineTest do
 
   defp recording(events), do: %Recording{id: "r", view: V, connected_at: 0, events: events}
 
-  test "assigns_at/2 starts from mount assigns and merges renders" do
+  test "starts from mount assigns and merges renders" do
     recording =
       recording([
         %Event{at: 0, type: :mount, data: %{assigns: %{a: 0}}},
@@ -16,9 +16,9 @@ defmodule PhoenixReplay.Recording.TimelineTest do
         %Event{at: 3, type: :render, data: %{assigns: %{b: 2}}}
       ])
 
-    assert Timeline.assigns_at(recording, 0) == %{a: 0}
-    assert Timeline.assigns_at(recording, 2) == %{a: 1, b: 1}
-    assert Timeline.assigns_at(recording, 3) == %{a: 1, b: 2}
+    assert Timeline.at(recording, 0).assigns == %{a: 0}
+    assert Timeline.at(recording, 2).assigns == %{a: 1, b: 1}
+    assert Timeline.at(recording, 3).assigns == %{a: 1, b: 2}
   end
 
   test "duration, indexes and clamping" do
@@ -27,14 +27,17 @@ defmodule PhoenixReplay.Recording.TimelineTest do
     assert Timeline.duration_ms(recording) == 2001
     assert Timeline.last_index(recording) == 5
     assert Timeline.first_render_index(recording) == 1
-    assert Timeline.clamp(recording, -3) == 0
-    assert Timeline.clamp(recording, 99) == 5
-    assert %Event{type: :event} = Timeline.event_at(recording, 2)
+    assert Timeline.at(recording, -3).index == 0
+    assert Timeline.at(recording, 99).index == 5
+    assert %Event{type: :event} = Timeline.at(recording, 2).event
+    assert %Event{type: :render} = recording |> Timeline.at(2) |> Timeline.next()
+    assert recording |> Timeline.at(5) |> Timeline.next() == nil
     assert Timeline.duration_ms(recording([])) == 0
     assert Timeline.last_index(recording([])) == 0
+    assert %Timeline{index: 0, event: nil} = Timeline.at(recording([]), 3)
   end
 
-  test "viewport_at/2 follows viewport events from the connected viewport" do
+  test "follows viewport events from the connected viewport" do
     vp = fn width -> %{width: width, height: 800, dpr: 1} end
 
     recording = %{
@@ -46,12 +49,12 @@ defmodule PhoenixReplay.Recording.TimelineTest do
       | client: %PhoenixReplay.Recording.Client{viewport: vp.(1200)}
     }
 
-    assert Timeline.viewport_at(recording, 0) == vp.(1200)
-    assert Timeline.viewport_at(recording, 2) == vp.(800)
-    assert Timeline.viewport_at(recording([]), 0) == nil
+    assert Timeline.at(recording, 0).viewport == vp.(1200)
+    assert Timeline.at(recording, 2).viewport == vp.(800)
+    assert Timeline.at(recording([]), 0).viewport == nil
   end
 
-  test "url_at/2 follows navigation from the URL the session started on" do
+  test "follows navigation from the URL the session started on" do
     recording = %{
       recording([
         %Event{at: 0, type: :mount, data: %{assigns: %{}}},
@@ -61,7 +64,17 @@ defmodule PhoenixReplay.Recording.TimelineTest do
       | url: "http://x/a"
     }
 
-    assert Timeline.url_at(recording, 0) == "http://x/a"
-    assert Timeline.url_at(recording, 2) == "http://x/b"
+    assert Timeline.at(recording, 0).url == "http://x/a"
+    assert Timeline.at(recording, 2).url == "http://x/b"
+  end
+
+  test "seeking forward applies only the events in between, and back starts over" do
+    recording = Fixtures.counter_recording(clicks: 2)
+    timeline = Timeline.new(recording)
+
+    for {path, last} <- [{[5, 1], 1}, {[1, 3, 5], 5}, {[5, 5, 0, 4], 4}] do
+      walked = Enum.reduce(path, timeline, &Timeline.seek(&2, &1))
+      assert walked == Timeline.at(recording, last)
+    end
   end
 end

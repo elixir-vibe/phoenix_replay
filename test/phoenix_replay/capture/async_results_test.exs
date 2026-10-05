@@ -19,7 +19,7 @@ defmodule PhoenixReplay.Capture.AsyncResultsTest do
 
   defp component_state(id) do
     {:ok, recording} = Buffer.fetch(id)
-    Timeline.components_at(recording, Timeline.last_index(recording))[{AsyncPrice, "price"}]
+    Timeline.at(recording, Timeline.last_index(recording)).components[{AsyncPrice, "price"}]
   end
 
   test "records component state applied by async results", %{sessions: sessions} do

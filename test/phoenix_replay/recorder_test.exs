@@ -74,7 +74,7 @@ defmodule PhoenixReplay.RecorderTest do
     assert Sessions.stop(sessions, view) == :persisted
     assert Buffer.fetch(id) == :error
     assert {:ok, recording} = Storage.fetch(Fixtures.storage(), id)
-    assert Timeline.assigns_at(recording, Timeline.last_index(recording)).count == 1
+    assert Timeline.at(recording, Timeline.last_index(recording)).assigns.count == 1
   end
 
   test "sanitizes params and assigns", %{sessions: sessions} do
@@ -85,7 +85,7 @@ defmodule PhoenixReplay.RecorderTest do
     refute inspect(recording) =~ "hunter2"
 
     assert %{name: "dan", password: "[FILTERED]"} =
-             Timeline.assigns_at(recording, Timeline.last_index(recording))
+             Timeline.at(recording, Timeline.last_index(recording)).assigns
   end
 
   test "applies live session options", %{sessions: sessions} do
@@ -182,7 +182,7 @@ defmodule PhoenixReplay.RecorderTest do
                Enum.find(recording.events, &(&1.type == :viewport))
 
       assert Enum.all?(recording.events, &(not Map.has_key?(&1.data[:params] || %{}, "_replay")))
-      assert Timeline.viewport_at(recording, Timeline.last_index(recording)).width == 844
+      assert Timeline.at(recording, Timeline.last_index(recording)).viewport.width == 844
     end
   end
 end

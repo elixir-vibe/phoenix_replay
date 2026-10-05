@@ -59,6 +59,23 @@ defmodule PhoenixReplay.Web.Player.Events do
     |> Enum.chunk_while(nil, &interaction/2, &close_interaction/1)
   end
 
+  @typedoc "What the event list shows: hidden kinds, a search, and errors only."
+  @type filters :: %{hidden: MapSet.t(kind()), query: String.t(), errors_only: boolean()}
+
+  @doc """
+  Keeps the events of `interactions/1` that `filters` show. An interaction
+  stays while any of its events does, or its own first event.
+  """
+  @spec visible([{indexed(), [indexed()]}], filters()) :: [{indexed(), [indexed()]}]
+  def visible(interactions, filters) do
+    Enum.flat_map(interactions, fn {{head, _index} = first, rows} ->
+      case Enum.filter(rows, fn {event, _index} -> visible?(event, filters) end) do
+        [] -> if visible?(head, filters), do: [{first, []}], else: []
+        rows -> [{first, rows}]
+      end
+    end)
+  end
+
   @doc "The events of each kind in a recording, as timeline lanes."
   @spec lanes(Recording.t()) :: [{kind(), [indexed()]}]
   def lanes(%Recording{events: events} = recording) do
@@ -243,4 +260,9 @@ defmodule PhoenixReplay.Web.Player.Events do
   defp flatten_param({_key, %{} = nested}), do: Enum.flat_map(nested, &flatten_param/1)
   defp flatten_param({key, value}) when is_binary(value) and value != "", do: [{key, value}]
   defp flatten_param(_param), do: []
+
+  defp visible?(event, filters) do
+    not MapSet.member?(filters.hidden, kind(event.type)) and matches?(event, filters.query) and
+      (not filters.errors_only or Event.error?(event))
+  end
 end

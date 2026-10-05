@@ -97,16 +97,21 @@ defmodule PhoenixReplay.Web.Live.Show do
     |> assign(
       page_title: "Replay · #{inspect(recording.view)}",
       recording: recording,
+      timeline: Timeline.new(recording),
       pointer: pointer,
       progress: nil,
       # The pointer can move on after the last LiveView event.
       duration_ms: max(Timeline.duration_ms(recording), Pointer.end_at(pointer)),
       error_count: Events.error_count(recording),
+      interactions: Events.interactions(recording.events),
+      kinds: Events.kinds(recording),
+      kind_counts: Events.kind_counts(recording),
       first_error: Events.first_error_index(recording),
       dropped: Events.dropped_count(recording),
       journey: journey(socket, recording)
     )
     |> hand_over()
+    |> filter_events()
     |> seek(socket.assigns.start_at || Timeline.first_render_index(recording))
   end
 
@@ -173,16 +178,16 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   def handle_event("errors_only", _params, socket) do
-    {:noreply, update(socket, :errors_only, &(not &1))}
+    {:noreply, socket |> update(:errors_only, &(not &1)) |> filter_events()}
   end
 
   def handle_event("search_events", %{"q" => query}, socket) do
-    {:noreply, assign(socket, :query, String.trim(query))}
+    {:noreply, socket |> assign(:query, String.trim(query)) |> filter_events()}
   end
 
   def handle_event("toggle_kind", %{"kind" => name}, socket) do
     case Events.parse_kind(name) do
-      {:ok, kind} -> {:noreply, update(socket, :hidden, &toggle(&1, kind))}
+      {:ok, kind} -> {:noreply, socket |> update(:hidden, &toggle(&1, kind)) |> filter_events()}
       :error -> {:noreply, socket}
     end
   end
@@ -206,15 +211,15 @@ defmodule PhoenixReplay.Web.Live.Show do
   # Steps to the next event; after the last one, plays on to the end of
   # the pointer track, then stops.
   def handle_info({:advance, ref}, %{assigns: %{playing: {_timer, ref}}} = socket) do
-    %{index: index, recording: recording} = socket.assigns
+    %{index: index, timeline: timeline} = socket.assigns
 
     socket =
-      if index < Timeline.last_index(recording),
+      if index < Timeline.last_index(timeline),
         do: seek(socket, index + 1),
         else: assign(socket, :at, socket.assigns.next_at)
 
     # Events can share a time; only the end of the recording stops playing.
-    if socket.assigns.index < Timeline.last_index(recording) or
+    if socket.assigns.index < Timeline.last_index(timeline) or
          socket.assigns.next_at > socket.assigns.at,
        do: {:noreply, schedule(socket)},
        else: {:noreply, assign(socket, :playing, nil)}
@@ -239,36 +244,36 @@ defmodule PhoenixReplay.Web.Live.Show do
   def handle_info({:redaction_progress, _done, _total}, socket), do: {:noreply, socket}
 
   defp seek(socket, index) do
-    %{recording: recording, channel: channel} = socket.assigns
-    index = Timeline.clamp(recording, index)
-    :ok = Playback.seek(channel, index)
-
-    event = Timeline.event_at(recording, index)
+    timeline = Timeline.seek(socket.assigns.timeline, index)
+    :ok = Playback.seek(socket.assigns.channel, timeline.index)
 
     assign(socket,
-      index: index,
-      at: event_at(recording, index),
-      next_at: next_at(socket, index),
-      viewport: Timeline.viewport_at(recording, index),
-      url: Timeline.url_at(recording, index),
-      replayed: Timeline.assigns_at(recording, index),
-      changed: Events.changed_keys(event)
+      timeline: timeline,
+      index: timeline.index,
+      at: if(timeline.event, do: timeline.event.at, else: 0),
+      next_at: next_at(timeline, socket.assigns.duration_ms),
+      viewport: timeline.viewport,
+      url: timeline.url,
+      replayed: timeline.assigns,
+      changed: Events.changed_keys(timeline.event)
     )
   end
 
   # The next event's offset, or the end of the recording after the last.
-  defp next_at(%{assigns: %{recording: recording, duration_ms: duration_ms}}, index) do
-    if index < Timeline.last_index(recording),
-      do: event_at(recording, index + 1),
-      else: duration_ms
+  defp next_at(timeline, duration_ms) do
+    case Timeline.next(timeline) do
+      nil -> duration_ms
+      event -> event.at
+    end
   end
 
   defp play(socket) do
     %{recording: recording, index: index} = socket.assigns
 
-    if index >= Timeline.last_index(recording) and socket.assigns.at >= socket.assigns.duration_ms,
-      do: socket |> seek(Timeline.first_render_index(recording)) |> schedule(),
-      else: schedule(socket)
+    if index >= Timeline.last_index(socket.assigns.timeline) and
+         socket.assigns.at >= socket.assigns.duration_ms,
+       do: socket |> seek(Timeline.first_render_index(recording)) |> schedule(),
+       else: schedule(socket)
   end
 
   defp schedule(socket) do
@@ -284,13 +289,6 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   defp pause(socket), do: socket
-
-  defp event_at(recording, index) do
-    case Timeline.event_at(recording, index) do
-      nil -> 0
-      event -> event.at
-    end
-  end
 
   defp redaction_label(nil), do: "Redacting the session before showing it…"
   defp redaction_label({_done, 0}), do: "Redacting the session before showing it…"
@@ -407,7 +405,10 @@ defmodule PhoenixReplay.Web.Live.Show do
         <div id="replay-tabs-panel" role="tabpanel" class="flex min-h-0 flex-1 flex-col">
           <.event_list
             :if={@tab == "events"}
-            recording={@recording}
+            groups={@event_groups}
+            kinds={@kinds}
+            counts={@kind_counts}
+            error_count={@error_count}
             index={@index}
             hidden={@hidden}
             query={@query}
@@ -431,5 +432,11 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   defp toggle(set, member) do
     if MapSet.member?(set, member), do: MapSet.delete(set, member), else: MapSet.put(set, member)
+  end
+
+  # The event list's groups change with its filters, not with the position.
+  defp filter_events(%{assigns: %{interactions: interactions} = assigns} = socket) do
+    filters = Map.take(assigns, [:hidden, :query, :errors_only])
+    assign(socket, :event_groups, Events.visible(interactions, filters))
   end
 end

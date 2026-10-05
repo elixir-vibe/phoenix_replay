@@ -325,7 +325,13 @@ defmodule PhoenixReplay.Web.Components.Player do
   filters and, when there are errors, a filter to them alone. The current
   event's details open under it.
   """
-  attr :recording, Recording, required: true
+  attr :groups, :list,
+    required: true,
+    doc: "the interactions shown, from `PhoenixReplay.Web.Player.Events.visible/2`"
+
+  attr :kinds, :list, required: true
+  attr :counts, :map, required: true, doc: "events of each kind"
+  attr :error_count, :integer, required: true
   attr :index, :integer, required: true
   attr :hidden, :any, required: true, doc: "a `MapSet` of hidden kinds"
   attr :query, :string, default: ""
@@ -333,30 +339,6 @@ defmodule PhoenixReplay.Web.Components.Player do
 
   @spec event_list(map()) :: Phoenix.LiveView.Rendered.t()
   def event_list(assigns) do
-    kinds = Events.kinds(assigns.recording)
-
-    visible? =
-      &(not MapSet.member?(assigns.hidden, Events.kind(&1.type)) and
-          Events.matches?(&1, assigns.query) and
-          (not assigns.errors_only or Event.error?(&1)))
-
-    groups =
-      Enum.flat_map(Events.interactions(assigns.recording.events), fn {{head, _index} = first,
-                                                                       rows} ->
-        case Enum.filter(rows, fn {event, _index} -> visible?.(event) end) do
-          [] -> if visible?.(head), do: [{first, []}], else: []
-          rows -> [{first, rows}]
-        end
-      end)
-
-    assigns =
-      assign(assigns,
-        kinds: kinds,
-        counts: Events.kind_counts(assigns.recording),
-        error_count: Events.error_count(assigns.recording),
-        groups: groups
-      )
-
     ~H"""
     <div class="flex flex-col gap-2.5 border-b border-line p-3">
       <form id="replay-event-search" phx-change="search_events" phx-submit="search_events">

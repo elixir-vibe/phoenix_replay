@@ -50,7 +50,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
     {:ok,
      socket
-     |> put_private(@private, %{recording: recording, keys: []})
+     |> put_private(@private, private(recording))
      |> assign(@private, frame)
      |> show_first(), layout: false}
   end
@@ -69,7 +69,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
     if Context.allowed?(socket, :view, recording) do
       {:noreply,
        socket
-       |> put_private(@private, %{recording: recording, keys: []})
+       |> put_private(@private, private(recording))
        |> update(@private, &%{&1 | view: recording.view})
        |> show_first()}
     else
@@ -107,12 +107,16 @@ defmodule PhoenixReplay.Web.Live.Frame do
     """
   end
 
+  defp private(nil), do: %{recording: nil, timeline: nil, keys: []}
+
+  defp private(recording),
+    do: %{recording: recording, timeline: Timeline.new(recording), keys: []}
+
   defp show(socket, index) do
-    %{recording: recording, keys: previous_keys} = socket.private[@private]
-    index = Timeline.clamp(recording, index)
-    recorded = Timeline.assigns_at(recording, index)
-    states = Timeline.components_at(recording, index)
-    {flash, recorded} = Map.pop(recorded, :flash, %{})
+    %{timeline: timeline, keys: previous_keys} = private = socket.private[@private]
+    timeline = Timeline.seek(timeline, index)
+    states = timeline.components
+    {flash, recorded} = Map.pop(timeline.assigns, :flash, %{})
     recorded = Rendering.assignable(recorded)
     keys = Map.keys(recorded)
 
@@ -122,7 +126,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
     |> replace_flash(flash)
     |> update(@private, &%{&1 | components: states})
     |> refresh_components(states)
-    |> put_private(@private, %{recording: recording, keys: keys})
+    |> put_private(@private, %{private | timeline: timeline, keys: keys})
     |> check_render()
   end
 
