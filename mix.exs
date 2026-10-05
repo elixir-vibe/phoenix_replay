@@ -95,6 +95,7 @@ defmodule PhoenixReplay.MixProject do
         priv/static/*.d.ts
         package.json
         guides
+        usage-rules
         mix.exs
         .formatter.exs
         README.md

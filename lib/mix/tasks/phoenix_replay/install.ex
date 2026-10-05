@@ -22,9 +22,11 @@ if Code.ensure_loaded?(Igniter) do
        request context `:context` asks for; it does nothing until then
     6. Add `:user_agent` to the `:connect_info` of the endpoint's LiveView
        socket, so recordings name the browser
-    7. Send the browser's viewport and tab from `assets/js/app.js` (or
-       `app.ts`) with PhoenixReplay's client module, when its `LiveSocket`
-       params are the ones Phoenix generates
+    7. Wire PhoenixReplay's client module into `assets/js/app.js` (or
+       `app.ts`), when its `LiveSocket` setup is the one Phoenix generates:
+       `replayParams` and `replayMetadata` send the browser's viewport and
+       tab, and `replayRecorder(liveSocket)` records form controls, client
+       state and, with `:pointer`, the pointer
 
     Choosing which live sessions to record is up to you; the installer
     prints how to add `PhoenixReplay.Recorder` to them. Before using the
