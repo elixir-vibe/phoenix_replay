@@ -84,14 +84,6 @@ defmodule PhoenixReplay.Web.Format do
     "#{width} × #{height}#{density}"
   end
 
-  @doc """
-  A viewport's orientation as CSS's `orientation` media feature tells it:
-  portrait when it is at least as tall as it is wide.
-  """
-  @spec orientation(%{width: pos_integer(), height: pos_integer()}) :: :portrait | :landscape
-  def orientation(%{width: width, height: height}) when height >= width, do: :portrait
-  def orientation(_viewport), do: :landscape
-
   defp format_dpr(dpr) when is_integer(dpr), do: Integer.to_string(dpr)
   defp format_dpr(dpr) when dpr == trunc(dpr), do: dpr |> trunc() |> Integer.to_string()
   defp format_dpr(dpr), do: :erlang.float_to_binary(dpr / 1, decimals: 1)

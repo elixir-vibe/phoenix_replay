@@ -1,7 +1,7 @@
 defmodule PhoenixReplay.Web.Player.DiffTest do
   use ExUnit.Case, async: true
 
-  alias PhoenixReplay.Web.Player.Diff
+  alias PhoenixReplay.Recording.Diff
 
   defmodule Task do
     defstruct [:id, :title, done: false]

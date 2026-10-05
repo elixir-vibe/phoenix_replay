@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Web.Player.Diff do
+defmodule PhoenixReplay.Recording.Diff do
   @moduledoc """
   What an event changed in an assign, for the player's **State** tab.
 

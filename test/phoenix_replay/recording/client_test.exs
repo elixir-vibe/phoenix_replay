@@ -51,4 +51,11 @@ defmodule PhoenixReplay.Recording.ClientTest do
     assert Client.decode_viewport("garbage") == nil
     assert Client.decode_viewport(nil) == nil
   end
+
+  test "tells a viewport's orientation as CSS does" do
+    assert Client.orientation(%{width: 390, height: 844}) == :portrait
+    assert Client.orientation(%{width: 844, height: 390}) == :landscape
+    # As CSS has it, a square viewport is portrait.
+    assert Client.orientation(%{width: 600, height: 600}) == :portrait
+  end
 end

@@ -189,7 +189,7 @@ defmodule PhoenixReplay.Web.Components.Player do
         following?: scrolls? and assigns.follow_scroll and not assigns.rotated,
         pointer?: assigns.pointer != nil and PointerTrack.any?(assigns.pointer),
         shown: shown,
-        orientation: shown && Format.orientation(shown)
+        orientation: shown && Client.orientation(shown)
       )
 
     ~H"""
@@ -465,7 +465,7 @@ defmodule PhoenixReplay.Web.Components.Player do
                 Events.marker_class(event)
               ]}
               style={"left: #{position(event.at, @duration_ms)}%"}
-              title={Events.label(event)}
+              title={Event.label(event)}
             ></span>
           </div>
           <span
@@ -602,7 +602,7 @@ defmodule PhoenixReplay.Web.Components.Player do
     >
       <header class="sticky top-0 flex items-center gap-2 border-b border-line bg-canvas/95 px-3.5 py-2 text-[13px] backdrop-blur">
         <.event_icon type={@ev.type} class="size-3.5 shrink-0 opacity-70" />
-        <span class="min-w-0 flex-1 truncate font-medium" title={Events.label(@ev)}>
+        <span class="min-w-0 flex-1 truncate font-medium" title={Event.label(@ev)}>
           <%= for {kind, content} <- Events.parts(@ev) do %>
             <span :if={kind == :text}>{content}</span>
             <code :if={kind == :code} class="font-mono text-xs font-normal">{content}</code>
@@ -663,7 +663,7 @@ defmodule PhoenixReplay.Web.Components.Player do
       ]}
     >
       <.event_icon type={@ev.type} class="size-3.5 shrink-0 opacity-70" />
-      <span class="min-w-0 flex-1 truncate" title={Events.label(@ev)}>
+      <span class="min-w-0 flex-1 truncate" title={Event.label(@ev)}>
         <%= for {kind, content} <- @parts do %>
           <span :if={kind == :text}>{content}</span>
           <code :if={kind == :code} class="font-mono text-xs">{content}</code>

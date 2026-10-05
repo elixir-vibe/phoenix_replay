@@ -2,11 +2,11 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
   use ExUnit.Case, async: true
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.Event
+  alias PhoenixReplay.Recording.{Event, Timeline}
   alias PhoenixReplay.Web.Player.Events
 
   test "labels events" do
-    event = fn type, data -> Events.label(%Event{at: 0, type: type, data: data}) end
+    event = fn type, data -> Event.label(%Event{at: 0, type: type, data: data}) end
 
     assert event.(:event, %{name: "save", params: %{}}) == "save"
 
@@ -70,15 +70,15 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
       info = event(4, :info, %{tag: :tick})
     ]
 
-    assert Events.interactions(events) == [
+    assert Timeline.interactions(events) == [
              {{mount, 0}, [{render, 1}]},
              {{click, 2}, [{query, 3}]},
              {{info, 4}, []}
            ]
 
     # Events before the first leader start a group of their own.
-    assert Events.interactions([render, click]) == [{{render, 0}, []}, {{click, 1}, []}]
-    assert Events.interactions([]) == []
+    assert Timeline.interactions([render, click]) == [{{render, 0}, []}, {{click, 1}, []}]
+    assert Timeline.interactions([]) == []
   end
 
   test "describes kinds, lanes, the first error and what an event changed" do
@@ -99,9 +99,9 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
     assert [{:liveview, [_mount, _render]}, {:logs, [{^log, 2}]}] = Events.lanes(recording)
     assert Events.first_error_index(recording) == 2
     assert Events.first_error_index(%{recording | events: []}) == nil
-    assert Events.changed_keys(Enum.at(recording.events, 1)) == [:b]
-    assert Events.changed_keys(log) == []
-    assert Events.changed_keys(nil) == []
+    assert Event.changed_keys(Enum.at(recording.events, 1)) == [:b]
+    assert Event.changed_keys(log) == []
+    assert Event.changed_keys(nil) == []
     assert Events.kind_class(:logs) == "bg-kind-log"
   end
 

@@ -36,6 +36,14 @@ defmodule PhoenixReplay.Recording.Client do
 
   @default_viewport %{width: 1280, height: 800, dpr: 1}
 
+  @doc """
+  A viewport's orientation as CSS's `orientation` media feature tells it:
+  portrait when it is at least as tall as it is wide.
+  """
+  @spec orientation(%{width: pos_integer(), height: pos_integer()}) :: :portrait | :landscape
+  def orientation(%{width: width, height: height}) when height >= width, do: :portrait
+  def orientation(_viewport), do: :landscape
+
   @doc "The viewport a recording without one is shown at, such as in an export."
   @spec default_viewport() :: PhoenixReplay.Recording.viewport()
   def default_viewport, do: @default_viewport

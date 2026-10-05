@@ -70,6 +70,22 @@ defmodule PhoenixReplay.Recording.Event do
   def error?(%__MODULE__{type: :telemetry, data: %{error: error}}), do: error != nil
   def error?(%__MODULE__{}), do: false
 
+  @doc "One line describing the event; see `PhoenixReplay.Recording.Label`."
+  @spec label(t()) :: String.t()
+  defdelegate label(event), to: PhoenixReplay.Recording.Label, as: :of
+
+  @doc """
+  The assigns an event set: a mount's or render's, or the client state an
+  entry reported.
+  """
+  @spec changed_keys(t() | nil) :: [atom()]
+  def changed_keys(%__MODULE__{type: type, data: %{assigns: assigns}})
+      when type in [:mount, :render],
+      do: Map.keys(assigns)
+
+  def changed_keys(%__MODULE__{type: :state}), do: [PhoenixReplay.Recording.State.assign()]
+  def changed_keys(_event), do: []
+
   @doc "Duration in milliseconds of a telemetry event, if it has one."
   @spec duration(t()) :: number() | nil
   def duration(%__MODULE__{type: :telemetry, data: %{measurements: %{duration: duration}}}),

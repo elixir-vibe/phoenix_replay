@@ -6,16 +6,13 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   alias PhoenixReplay.Collector
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Event, State}
+  alias PhoenixReplay.Recording.{Client, Event, Label, State, Timeline}
   alias PhoenixReplay.Web.{Format, Highlight}
 
   @typedoc "What the event list filters by."
   @type kind :: :liveview | :state | :telemetry | :logs
 
   @kinds [:liveview, :state, :telemetry, :logs]
-
-  # Events that start an interaction; the rest follow the one before them.
-  @starts [:mount, :event, :params, :info]
 
   # Errors stand out: larger, red, with a soft ring.
   @error_marker "size-2.5 bg-error ring-3 ring-error-soft"
@@ -45,29 +42,14 @@ defmodule PhoenixReplay.Web.Player.Events do
     |> Enum.sort_by(&(&1 != :liveview))
   end
 
-  @typedoc "An event with its index in the recording."
-  @type indexed :: {Event.t(), non_neg_integer()}
-
-  @doc """
-  Groups events into interactions: a mount, user event, navigation or
-  message, followed by the renders, component updates and collected events
-  it caused.
-  """
-  @spec interactions([Event.t()]) :: [{indexed(), [indexed()]}]
-  def interactions(events) do
-    events
-    |> Enum.with_index()
-    |> Enum.chunk_while(nil, &interaction/2, &close_interaction/1)
-  end
-
   @typedoc "What the event list shows: hidden kinds, a search, and errors only."
   @type filters :: %{hidden: MapSet.t(kind()), query: String.t(), errors_only: boolean()}
 
   @doc """
-  Keeps the events of `interactions/1` that `filters` show. An interaction
+  Keeps the events of `PhoenixReplay.Recording.Timeline.interactions/1` that `filters` show. An interaction
   stays while any of its events does, or its own first event.
   """
-  @spec visible([{indexed(), [indexed()]}], filters()) :: [{indexed(), [indexed()]}]
+  @spec visible([Timeline.interaction()], filters()) :: [Timeline.interaction()]
   def visible(interactions, filters) do
     Enum.flat_map(interactions, fn {{head, _index} = first, rows} ->
       case Enum.filter(rows, fn {event, _index} -> visible?(event, filters) end) do
@@ -78,7 +60,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   end
 
   @doc "The events of each kind in a recording, as timeline lanes."
-  @spec lanes(Recording.t()) :: [{kind(), [indexed()]}]
+  @spec lanes(Recording.t()) :: [{kind(), [Timeline.indexed()]}]
   def lanes(%Recording{events: events} = recording) do
     indexed = Enum.with_index(events)
 
@@ -101,20 +83,12 @@ defmodule PhoenixReplay.Web.Player.Events do
   @spec first_error_index(Recording.t()) :: non_neg_integer() | nil
   def first_error_index(%Recording{events: events}), do: Enum.find_index(events, &Event.error?/1)
 
-  @doc "The assigns an event set, which the state view marks as changed."
-  @spec changed_keys(Event.t() | nil) :: [atom()]
-  def changed_keys(%Event{type: type, data: %{assigns: assigns}}) when type in [:mount, :render],
-    do: Map.keys(assigns)
-
-  def changed_keys(%Event{type: :state}), do: [State.assign()]
-  def changed_keys(_event), do: []
-
   @doc "Whether an event's label contains `query`, ignoring case."
   @spec matches?(Event.t(), String.t()) :: boolean()
   def matches?(_event, ""), do: true
 
   def matches?(event, query),
-    do: event |> label() |> String.downcase() |> String.contains?(String.downcase(query))
+    do: event |> Event.label() |> String.downcase() |> String.contains?(String.downcase(query))
 
   @doc """
   Name–value pairs describing an event in full, for the details pane:
@@ -128,7 +102,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   def details(%Event{type: :event, data: %{name: name, params: params} = data}) do
     present([
       {"Event", name},
-      {"Component", with({module, id} <- data[:target], do: component_label(module, id))},
+      {"Component", with({module, id} <- data[:target], do: Label.component(module, id))},
       {"Params", term(params)}
     ])
   end
@@ -144,15 +118,15 @@ defmodule PhoenixReplay.Web.Player.Events do
   def details(%Event{type: :render, data: %{assigns: assigns}}), do: [{"Assigns", term(assigns)}]
 
   def details(%Event{type: :component, data: %{module: module, id: id, assigns: assigns}}),
-    do: [{"Component", component_label(module, id)}, {"Assigns", term(assigns)}]
+    do: [{"Component", Label.component(module, id)}, {"Assigns", term(assigns)}]
 
   def details(%Event{type: :component_destroyed, data: %{module: module, id: id}}),
-    do: [{"Component", component_label(module, id)}]
+    do: [{"Component", Label.component(module, id)}]
 
   def details(%Event{type: :viewport, data: %{width: width, height: height} = viewport}) do
     present([
       {"Size", "#{width} × #{height}"},
-      {"Orientation", viewport |> Format.orientation() |> Atom.to_string()},
+      {"Orientation", viewport |> Client.orientation() |> Atom.to_string()},
       {"Pixel ratio", with(dpr when is_number(dpr) <- viewport[:dpr], do: "#{dpr}")}
     ])
   end
@@ -266,7 +240,7 @@ defmodule PhoenixReplay.Web.Player.Events do
     do: [
       {:text, "viewport"},
       {:code, token("number", "#{width} × #{height}")},
-      {:text, Atom.to_string(Format.orientation(viewport))}
+      {:text, Atom.to_string(Client.orientation(viewport))}
     ]
 
   def parts(%Event{type: :state, data: %{key: key, changes: changes}}) do
@@ -279,72 +253,7 @@ defmodule PhoenixReplay.Web.Player.Events do
       ]
   end
 
-  def parts(%Event{} = event), do: [{:text, label(event)}]
-
-  @doc "One-line description of an event."
-  @spec label(Event.t()) :: String.t()
-  def label(%Event{type: :mount}), do: "mount"
-
-  # A form control's change reads as the control and its value; other
-  # client state as its key and fields.
-  def label(%Event{type: :state, data: %{key: key, changes: changes}}) do
-    if key == State.inputs_key(),
-      do: "input " <> Enum.map_join(changes, ", ", &input_label/1),
-      else: "#{key}: " <> Enum.map_join(Enum.sort(changes), ", ", &field_label/1)
-  end
-
-  def label(%Event{type: :params, data: %{uri: uri}}), do: "navigate → #{uri}"
-  def label(%Event{type: :info, data: %{tag: nil}}), do: "handle_info"
-  def label(%Event{type: :info, data: %{tag: tag}}), do: "handle_info #{inspect(tag)}"
-  def label(%Event{type: :render, data: %{assigns: assigns}}), do: assigns_label(assigns)
-
-  def label(%Event{type: :component, data: %{module: module, id: id, assigns: assigns}}),
-    do: "#{component_label(module, id)} #{assigns_label(assigns)}"
-
-  def label(%Event{type: :component_destroyed, data: %{module: module, id: id}}),
-    do: "#{component_label(module, id)} removed"
-
-  def label(%Event{type: :telemetry, data: %{event: event} = data}) do
-    label = data.summary || Collector.name(event)
-    if data.error, do: "#{label} — #{data.error}", else: label
-  end
-
-  def label(%Event{type: :log, data: %{level: level, message: message}}),
-    do: "[#{level}] #{message}"
-
-  def label(%Event{type: :viewport, data: %{width: width, height: height} = viewport}),
-    do: "viewport #{width} × #{height} #{Format.orientation(viewport)}"
-
-  def label(%Event{type: :exit, data: %{reason: reason}}),
-    do: "exited: " <> (reason |> String.split("\n", parts: 2) |> hd())
-
-  def label(%Event{type: :event, data: %{name: name, params: params} = data}) do
-    name =
-      case data do
-        %{target: {module, id}} -> "#{name} → #{component_label(module, id)}"
-        %{} -> name
-      end
-
-    case params_label(params) do
-      "" -> name
-      label -> "#{name}: #{label}"
-    end
-  end
-
-  defp interaction({%Event{type: type}, _index} = item, acc) when type in @starts do
-    case acc do
-      nil -> {:cont, {item, []}}
-      acc -> {:cont, close(acc), {item, []}}
-    end
-  end
-
-  defp interaction(item, nil), do: {:cont, {item, []}}
-  defp interaction(item, {head, rows}), do: {:cont, {head, [item | rows]}}
-
-  defp close_interaction(nil), do: {:cont, nil}
-  defp close_interaction(acc), do: {:cont, close(acc), nil}
-
-  defp close({head, rows}), do: {head, Enum.reverse(rows)}
+  def parts(%Event{} = event), do: [{:text, Event.label(event)}]
 
   defp present(details), do: Enum.reject(details, fn {_name, value} -> value == nil end)
 
@@ -389,38 +298,10 @@ defmodule PhoenixReplay.Web.Player.Events do
   defp type_marker_class(:viewport), do: "size-1 bg-kind-render"
   defp type_marker_class(:state), do: "size-1 bg-kind-component"
 
-  defp component_label(module, id) when is_binary(id), do: "#{inspect(module)}##{id}"
-  defp component_label(module, id), do: "#{inspect(module)}##{inspect(id)}"
-
-  defp assigns_label(assigns) do
-    "assigns " <> (assigns |> Map.keys() |> Enum.sort() |> Enum.map_join(", ", &to_string/1))
-  end
-
-  defp params_label(params) do
-    params
-    |> Enum.reject(fn {key, _value} -> String.starts_with?(key, "_") end)
-    |> Enum.flat_map(&flatten_param/1)
-    |> Enum.map_join(", ", fn {key, value} -> "#{key}=#{String.slice(value, 0, 40)}" end)
-  end
-
-  defp flatten_param({_key, %{} = nested}), do: Enum.flat_map(nested, &flatten_param/1)
-  defp flatten_param({key, value}) when is_binary(value) and value != "", do: [{key, value}]
-  defp flatten_param(_param), do: []
-
   defp visible?(event, filters) do
     not MapSet.member?(filters.hidden, kind(event.type)) and matches?(event, filters.query) and
       (not filters.errors_only or Event.error?(event))
   end
-
-  defp input_label({selector, %{} = fields}),
-    do: "#{selector} " <> Enum.map_join(fields, ", ", fn {_name, value} -> state_value(value) end)
-
-  defp input_label({selector, _filtered}), do: selector
-
-  defp field_label({field, value}), do: "#{field} #{state_value(value)}"
-
-  defp state_value(value) when is_binary(value), do: inspect(String.slice(value, 0, 40))
-  defp state_value(value), do: value |> inspect(limit: 5) |> String.slice(0, 40)
 
   defp error_parts(%Event{data: %{error: error}}) when is_binary(error),
     do: [{:text, "— " <> error}]
@@ -428,9 +309,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   defp error_parts(%Event{}), do: []
 
   defp params_parts(params) do
-    case params
-         |> Enum.reject(fn {key, _value} -> String.starts_with?(key, "_") end)
-         |> Enum.flat_map(&flatten_param/1) do
+    case Label.params(params) do
       [] ->
         []
 

@@ -3,7 +3,7 @@ defmodule PhoenixReplay.Web.Components.State do
   The player's **State** tab: the assigns at the current moment, each with
   a one-line preview that expands to the full value when the row cannot
   show it, and what the current event changed inside it, by path, from
-  `PhoenixReplay.Web.Player.Diff`.
+  `PhoenixReplay.Recording.Diff`.
   """
 
   use Phoenix.Component
@@ -11,7 +11,7 @@ defmodule PhoenixReplay.Web.Components.State do
   import PhoenixIconify, only: [icon: 1]
 
   alias PhoenixReplay.Web.{Format, Highlight}
-  alias PhoenixReplay.Web.Player.Diff
+  alias PhoenixReplay.Recording.Diff
 
   # A value expands only when its row cannot show all of it: when the
   # one-line preview leaves something out, or is longer than a row holds.

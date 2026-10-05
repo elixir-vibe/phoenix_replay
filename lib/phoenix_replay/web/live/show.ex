@@ -29,7 +29,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.{Core, Export, Player, State}
 
-  alias PhoenixReplay.Recording.{Filter, PointerTrack, Timeline}
+  alias PhoenixReplay.Recording.{Event, Filter, PointerTrack, Timeline}
   alias PhoenixReplay.{Catalog, Export}
   alias PhoenixReplay.Export.Options
   alias PhoenixReplay.Web.{Context, Highlight, Layouts, Params}
@@ -153,7 +153,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       # The pointer can move on after the last LiveView event.
       duration_ms: max(Timeline.duration_ms(recording), PointerTrack.end_at(pointer)),
       error_count: Events.error_count(recording),
-      interactions: Events.interactions(recording.events),
+      interactions: Timeline.interactions(recording.events),
       kinds: Events.kinds(recording),
       kind_counts: Events.kind_counts(recording),
       first_error: Events.first_error_index(recording),
@@ -383,7 +383,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       url: timeline.url,
       replayed: shown_assigns(timeline.assigns),
       before: timeline.before,
-      changed: Events.changed_keys(timeline.event)
+      changed: Event.changed_keys(timeline.event)
     )
   end
 

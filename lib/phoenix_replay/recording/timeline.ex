@@ -69,6 +69,42 @@ defmodule PhoenixReplay.Recording.Timeline do
     {State.spread(recording), track}
   end
 
+  # Events that start an interaction; the rest follow the one before them.
+  @starts [:mount, :event, :params, :info]
+
+  @typedoc "An event with its index in the recording."
+  @type indexed :: {Event.t(), non_neg_integer()}
+
+  @typedoc "An event that starts an interaction, and the events it caused."
+  @type interaction :: {indexed(), [indexed()]}
+
+  @doc """
+  Groups events into interactions: a mount, user event, navigation or
+  message, followed by the renders, component updates and collected events
+  it caused. Events before the first one form an interaction of their own.
+  """
+  @spec interactions([Event.t()]) :: [interaction()]
+  def interactions(events) do
+    events
+    |> Enum.with_index()
+    |> Enum.chunk_while(nil, &interaction/2, &close_interaction/1)
+  end
+
+  defp interaction({%Event{type: type}, _index} = item, acc) when type in @starts do
+    case acc do
+      nil -> {:cont, {item, []}}
+      acc -> {:cont, close(acc), {item, []}}
+    end
+  end
+
+  defp interaction(item, nil), do: {:cont, {item, []}}
+  defp interaction(item, {head, rows}), do: {:cont, {head, [item | rows]}}
+
+  defp close_interaction(nil), do: {:cont, nil}
+  defp close_interaction(acc), do: {:cont, close(acc), nil}
+
+  defp close({head, rows}), do: {head, Enum.reverse(rows)}
+
   @doc "A timeline of `recording`, before its first event."
   @spec new(Recording.t()) :: t()
   def new(%Recording{events: events, url: url, client: client}) do

@@ -18,8 +18,7 @@ defmodule PhoenixReplay.Trace do
   """
 
   alias PhoenixReplay.{Catalog, Config, Recording}
-  alias PhoenixReplay.Recording.{Event, Filter, State, Summary, Timeline}
-  alias PhoenixReplay.Web.Player.{Diff, Events}
+  alias PhoenixReplay.Recording.{Diff, Event, Filter, State, Summary, Timeline}
 
   @filters [:text, :view, :event, :within, :min_events, :errors, :tab, :live, :limit]
 
@@ -125,7 +124,7 @@ defmodule PhoenixReplay.Trace do
   # The events of a recording laid out for playback.
   defp listed(%Recording{events: events}) do
     events
-    |> Events.interactions()
+    |> Timeline.interactions()
     |> Enum.flat_map(fn {{_head, head_index} = head, rows} ->
       [event(head, nil) | Enum.map(rows, &event(&1, head_index))]
     end)
@@ -168,7 +167,7 @@ defmodule PhoenixReplay.Trace do
       index: index,
       at: event.at,
       type: event.type,
-      label: Events.label(event),
+      label: Event.label(event),
       error?: Event.error?(event),
       caused_by: caused_by,
       data: event.data
@@ -176,7 +175,7 @@ defmodule PhoenixReplay.Trace do
   end
 
   defp changes(timeline) do
-    Enum.flat_map(Events.changed_keys(timeline.event), fn key ->
+    Enum.flat_map(Event.changed_keys(timeline.event), fn key ->
       timeline.before
       |> Map.get(key)
       |> Diff.changes(Map.get(timeline.assigns, key))
