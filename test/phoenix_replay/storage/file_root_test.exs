@@ -7,6 +7,21 @@ defmodule PhoenixReplay.Storage.FileRootTest do
 
   @moduletag :tmp_dir
 
+  test "lists from disk while its index is not running", %{tmp_dir: tmp_dir} do
+    opts = [path: Path.join(tmp_dir, "unindexed")]
+    :ok = FileStorage.save(Fixtures.counter_recording(id: "kept"), opts)
+
+    :ok = Supervisor.terminate_child(PhoenixReplay.Supervisor, PhoenixReplay.Storage.File.Index)
+
+    on_exit(fn ->
+      Supervisor.restart_child(PhoenixReplay.Supervisor, PhoenixReplay.Storage.File.Index)
+    end)
+
+    assert [%{id: "kept"}] = FileStorage.list(opts)
+    assert :ok = FileStorage.delete("kept", opts)
+    assert FileStorage.list(opts) == []
+  end
+
   test "resolves relative paths against the directory PhoenixReplay started in", %{
     tmp_dir: tmp_dir
   } do

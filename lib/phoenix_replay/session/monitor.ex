@@ -157,7 +157,7 @@ defmodule PhoenixReplay.Session.Monitor do
   defp check(state, _id, %{ended?: true}), do: state
 
   defp check(state, id, track) do
-    if due?(Buffer.pending_count(id), track.flush, track) do
+    if due?(Buffer.pending_count(id), track) do
       track = observe(track, id)
       if track.committed?, do: start_flush(state, id, track), else: put_track(state, id, track)
     else
@@ -165,9 +165,9 @@ defmodule PhoenixReplay.Session.Monitor do
     end
   end
 
-  defp due?(0, _flush, _track), do: false
+  defp due?(0, _track), do: false
 
-  defp due?(pending, flush, track),
+  defp due?(pending, %{flush: flush} = track),
     do: pending >= flush.events or now() - track.flushed_at >= flush.interval
 
   defp observe(%{committed?: true} = track, _id), do: track
@@ -289,7 +289,7 @@ defmodule PhoenixReplay.Session.Monitor do
   defp record_exit(_pid, {:shutdown, _reason}), do: :ok
 
   defp record_exit(pid, reason) do
-    with {:ok, session, _config} <- Buffer.attribute([pid]) do
+    with {:ok, session, _sanitizer} <- Buffer.attribute([pid]) do
       text = reason |> Exception.format_exit() |> String.slice(0, @max_reason)
       Buffer.collect(session, :exit, %{reason: text}, "exit", 1)
     end

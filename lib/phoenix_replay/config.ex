@@ -99,11 +99,14 @@ defmodule PhoenixReplay.Config do
   ## Switching options off and overriding them
 
   `:flush`, `:logs`, `:pointer`, `:state`, `:redact`, `:max_memory` and
-  the context's `:landing` can be switched off with `nil` or `false`. `true` turns one on
-  with its defaults, and a keyword list sets some of its settings onto
-  whatever is already set, as `:keep`, `:retention` and `:persist` do. So a
-  live session's `{PhoenixReplay.Recorder, flush: [events: 50]}` keeps the
-  application's `:interval`.
+  the context's `:landing` can be switched off with `nil` or `false`.
+
+  For `:flush`, `:logs`, `:pointer`, `:state` and `:landing`, `true` turns
+  one on with whatever is already set, or its defaults, and a keyword list
+  sets some of its settings onto that, as `:keep`, `:retention` and
+  `:persist` do. So a live session's `{PhoenixReplay.Recorder, flush:
+  [events: 50]}` keeps the application's `:interval`. `:redact` and
+  `:max_memory` have no defaults to turn on: give them a value.
 
   ## Tail sampling
 
