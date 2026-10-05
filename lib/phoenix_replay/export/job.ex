@@ -46,6 +46,13 @@ defmodule PhoenixReplay.Export.Job do
       options: options
     }
 
+  @doc """
+  Whether `name`, a file or directory in the export directory, is one an
+  export made: `<id>.mp4` or the `<id>` directory of its screenshots.
+  """
+  @spec file?(String.t()) :: boolean()
+  def file?(name), do: Regex.match?(~r/\A[A-Za-z0-9_-]{16}(\.mp4)?\z/, name)
+
   @doc "Whether the export has finished, either way."
   @spec finished?(t()) :: boolean()
   def finished?(%__MODULE__{status: status}), do: status in [:done, :failed, :cancelled]

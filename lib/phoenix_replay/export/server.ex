@@ -6,8 +6,9 @@ defmodule PhoenixReplay.Export.Server do
   It keeps every job until its video is `:ttl` old, broadcasts each change
   to a job on the recording's topic, and deletes expired videos. A job
   whose task crashes fails, and the next one starts. When it starts it
-  deletes what the export directory holds that is older than `:ttl`, left
-  by a server that stopped, so videos do not pile up across deploys.
+  deletes the videos and screenshots in the export directory older than
+  `:ttl`, left by a server that stopped, so they do not pile up across
+  deploys. Other files there are left alone, so `:dir` may be shared.
 
   Cancelling a queued job takes it out of the queue. A running one is sent
   `{PhoenixReplay.Export, :cancel}` rather than killed, so it closes its
@@ -63,6 +64,7 @@ defmodule PhoenixReplay.Export.Server do
 
     with {:ok, names} <- File.ls(dir) do
       for name <- names,
+          Job.file?(name),
           path = Path.join(dir, name),
           {:ok, %File.Stat{mtime: mtime}} <- [File.stat(path, time: :posix)],
           mtime < cutoff,

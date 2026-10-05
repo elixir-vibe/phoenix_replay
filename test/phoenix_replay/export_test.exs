@@ -102,11 +102,15 @@ defmodule PhoenixReplay.ExportTest do
   test "deletes what a stopped server left in the export directory, once it is old" do
     dir = Video.dir(PhoenixReplay.Config.load().export)
     File.mkdir_p!(dir)
-    old = Path.join(dir, "left-behind.mp4")
-    fresh = Path.join(dir, "another-vm.mp4")
-    File.write!(old, "")
-    File.write!(fresh, "")
-    File.touch!(old, System.os_time(:second) - 2 * 3_600)
+    two_hours_ago = System.os_time(:second) - 2 * 3_600
+    old = Path.join(dir, "Lft-BehindVideo0.mp4")
+    old_shots = Path.join(dir, "Lft-BehindShots0")
+    fresh = Path.join(dir, "AnotherVmVideo00.mp4")
+    # Not an export's: the directory may be shared.
+    other = Path.join(dir, "notes.txt")
+    File.mkdir_p!(old_shots)
+    for path <- [old, fresh, other], do: File.write!(path, "")
+    for path <- [old, old_shots, other], do: File.touch!(path, two_hours_ago)
 
     :ok = Supervisor.terminate_child(PhoenixReplay.Export.Supervisor, PhoenixReplay.Export.Server)
 
@@ -114,8 +118,10 @@ defmodule PhoenixReplay.ExportTest do
       Supervisor.restart_child(PhoenixReplay.Export.Supervisor, PhoenixReplay.Export.Server)
 
     refute File.exists?(old)
+    refute File.exists?(old_shots)
     assert File.exists?(fresh)
-    File.rm(fresh)
+    assert File.exists?(other)
+    for path <- [fresh, other], do: File.rm(path)
   end
 
   test "stops ffmpeg when it goes quiet for longer than the timeout" do
