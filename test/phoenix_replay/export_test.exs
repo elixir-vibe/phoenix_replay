@@ -169,6 +169,41 @@ defmodule PhoenixReplay.ExportTest do
              )
   end
 
+  test "kills an ffmpeg that stopped reading its input" do
+    dir = Path.join(System.tmp_dir!(), "phoenix_replay_stuck_ffmpeg")
+    File.mkdir_p!(dir)
+    on_exit(fn -> File.rm_rf(dir) end)
+    pid_file = Path.join(dir, "pid")
+    stuck = Path.join(dir, "ffmpeg")
+    # Never reads `q`, and never reports progress.
+    File.write!(stuck, "#!/bin/sh\necho $$ > #{pid_file}\nexec sleep 60\n")
+    File.chmod!(stuck, 0o755)
+
+    shot = %{index: 0, at: 0, viewport: %{width: 64, height: 64}, frames: 1}
+
+    schedule = %PhoenixReplay.Export.Schedule{
+      shots: [shot],
+      canvas: %{width: 64, height: 64},
+      dpr: 1,
+      fps: 30
+    }
+
+    export = %{PhoenixReplay.Config.load().export | ffmpeg: stuck, timeout: 200}
+
+    assert {:error, {:ffmpeg, :timeout}} =
+             PhoenixReplay.Export.Encoder.run(
+               [{Path.join(dir, "0.png"), 1}],
+               schedule,
+               Path.join(dir, "out.mp4"),
+               export,
+               fn _progress -> :ok end
+             )
+
+    os_pid = pid_file |> File.read!() |> String.trim()
+    assert {_out, status} = System.cmd("kill", ["-0", os_pid], stderr_to_stdout: true)
+    assert status != 0, "ffmpeg #{os_pid} is still running"
+  end
+
   test "fails a recording that is not saved" do
     :ok = Export.subscribe("missing")
     {:ok, job} = Export.start("missing")

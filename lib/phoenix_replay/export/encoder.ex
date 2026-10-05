@@ -75,7 +75,7 @@ defmodule PhoenixReplay.Export.Encoder do
         :ok
 
       {PhoenixReplay.Export, :cancel} ->
-        stop(port)
+        stop(port, run.timeout)
         {:error, :cancelled}
 
       {^port, {:exit_status, status}} ->
@@ -86,24 +86,46 @@ defmodule PhoenixReplay.Export.Encoder do
         {:error, {:ffmpeg, status}}
     after
       run.timeout ->
-        stop(port)
+        stop(port, run.timeout)
         {:error, {:ffmpeg, :timeout}}
     end
   end
 
-  # ffmpeg stops when it reads `q`, on every platform; closing the port
-  # alone would leave it running until it next writes.
+  # ffmpeg stops when it reads `q`, on every platform. One that is stuck
+  # and no longer reads it is killed after `:timeout`, at most 5 s: closing
+  # the port alone would leave it running.
   @stop_wait 5_000
 
-  defp stop(port) do
-    if Port.info(port) do
+  defp stop(port, timeout) do
+    with {:os_pid, os_pid} <- Port.info(port, :os_pid) do
       Port.command(port, "q")
 
       receive do
         {^port, {:exit_status, _status}} -> :ok
       after
-        @stop_wait -> Port.close(port)
+        min(timeout, @stop_wait) ->
+          kill(os_pid)
+          # Killed, it may have closed the port already.
+          if Port.info(port), do: Port.close(port)
       end
+    end
+  end
+
+  defp kill(os_pid) do
+    {command, args} =
+      case :os.type() do
+        {:win32, _name} -> {"taskkill", ["/F", "/PID", Integer.to_string(os_pid)]}
+        {:unix, _name} -> {"kill", ["-9", Integer.to_string(os_pid)]}
+      end
+
+    case System.find_executable(command) do
+      nil ->
+        Logger.error(
+          "PhoenixReplay: could not stop ffmpeg #{os_pid}: no #{command} to kill it with"
+        )
+
+      path ->
+        System.cmd(path, args, stderr_to_stdout: true)
     end
   end
 
