@@ -110,6 +110,22 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     refute has_element?(view, "#recordings-new button")
   end
 
+  test "reads storage once more for changes made just after a reload" do
+    {:ok, view, _html} = live(build_conn(), "/replay")
+    until = :sys.get_state(view.pid).socket.assigns.until
+
+    save_at("first", until + 1)
+    Recordings.broadcast_change()
+    assert has_element?(view, "#recordings-new button", "1 new recording · Show")
+
+    save_at("second", until + 2)
+    Recordings.broadcast_change()
+    assert has_element?(view, "#recordings-new button", "1 new recording · Show")
+
+    send(view.pid, :reload_window)
+    assert has_element?(view, "#recordings-new button", "2 new recordings · Show")
+  end
+
   test "offers quick filters on phones" do
     save("one")
     {:ok, view, _html} = live(build_conn(), "/replay?errors=1")
