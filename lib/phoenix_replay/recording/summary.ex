@@ -60,7 +60,7 @@ defmodule PhoenixReplay.Recording.Summary do
       view: inspect(recording.view),
       url: recording.url,
       connected_at: recording.connected_at,
-      event_count: length(recording.events),
+      event_count: Enum.count(recording.events, &(&1.type != :pointer)),
       event_names: event_names(recording.events),
       error_count: Enum.count(recording.events, &Event.error?/1),
       tab: recording.client[:tab],

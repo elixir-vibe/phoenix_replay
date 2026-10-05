@@ -85,7 +85,7 @@ defmodule PhoenixReplay.MixProject do
         priv/fonts/LICENSE
         priv/iconify/manifest.json
         priv/static/phoenix_replay.js
-        priv/static/phoenix_replay.d.ts
+        priv/static/*.d.ts
         package.json
         guides
         mix.exs

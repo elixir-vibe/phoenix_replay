@@ -186,6 +186,7 @@ defmodule ExampleWeb.Catalog.Live do
       <.panel title="Recording list" padded>
         <.filter_bar
           filter={%Filter{errors: true}}
+          path={&("?" <> URI.encode_query(Filter.to_params(&1)))}
           views={["ExampleWeb.TaskLive.Index"]}
           event_names={["save"]}
         />

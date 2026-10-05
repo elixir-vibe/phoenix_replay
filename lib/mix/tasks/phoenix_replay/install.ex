@@ -188,7 +188,7 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @live_socket_params ~r/params:\s*\{\s*_csrf_token:\s*csrfToken\s*\},?/
-    @client_import ~s(import { replayParams, replayMetadata } from "phoenix_replay"\n)
+    @live_socket_connect ~r/^([^\S\n]*)liveSocket\.connect\(\);?[^\S\n]*$/m
 
     defp send_client_context(igniter) do
       case Enum.find(["assets/js/app.js", "assets/js/app.ts"], &Igniter.exists?(igniter, &1)) do
@@ -213,30 +213,37 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
+    # replayPointer records nothing until a LiveView configures :pointer,
+    # so it is wired whenever the setup connects the socket.
     defp wire_client(content) do
-      content
-      |> String.replace(
-        @live_socket_params,
-        "params: () => ({_csrf_token: csrfToken, ...replayParams()}),\n  metadata: replayMetadata,",
-        global: false
-      )
-      |> add_client_import()
+      content =
+        String.replace(
+          content,
+          @live_socket_params,
+          "params: () => ({_csrf_token: csrfToken, ...replayParams()}),\n  metadata: replayMetadata,",
+          global: false
+        )
+
+      {content, helpers} =
+        if Regex.match?(@live_socket_connect, content) do
+          {Regex.replace(@live_socket_connect, content, "\\0\n\\1replayPointer(liveSocket)",
+             global: false
+           ), "replayParams, replayMetadata, replayPointer"}
+        else
+          {content, "replayParams, replayMetadata"}
+        end
+
+      add_client_import(content, ~s(import { #{helpers} } from "phoenix_replay"))
     end
 
     # After the last import, so it lands among the others: the greedy match
     # runs from the start of the file to the last line starting an import,
     # then on to its module string, which ends the statement even when the
     # imported names span several lines.
-    defp add_client_import(content) do
+    defp add_client_import(content, import) do
       case Regex.run(~r/\A[\s\S]*^import\b[\s\S]*?["'][^"'\n]+["'];?[^\S\n]*$/m, content) do
-        [imports] ->
-          imports <>
-            "\n" <>
-            String.trim_trailing(@client_import) <>
-            String.replace_prefix(content, imports, "")
-
-        nil ->
-          @client_import <> content
+        [imports] -> imports <> "\n" <> import <> String.replace_prefix(content, imports, "")
+        nil -> import <> "\n" <> content
       end
     end
 
@@ -255,12 +262,17 @@ if Code.ensure_loaded?(Igniter) do
       To record the browser's viewport and follow users across LiveViews,
       pass PhoenixReplay's client context to your LiveSocket:
 
-          import { replayParams, replayMetadata } from "phoenix_replay"
+          import { replayParams, replayMetadata, replayPointer } from "phoenix_replay"
 
           const liveSocket = new LiveSocket("/live", Socket, {
             params: () => ({_csrf_token: csrfToken, ...replayParams()}),
             metadata: replayMetadata
           })
+          liveSocket.connect()
+          replayPointer(liveSocket)
+
+      replayPointer records the pointer, touches and scrolling for live
+      sessions that configure :pointer, and nothing otherwise.
       """
     end
 

@@ -13,7 +13,9 @@ const MIN_HEIGHT = 320
  * `data-height`, and `data-mode`: `"fit"` scales the frame down until both
  * dimensions fit the element's width and the window's height below it,
  * centring narrower devices; `"actual"` renders it at 100% inside a box
- * that scrolls. `data-max-height` caps the height instead of the window.
+ * that scrolls. A `[data-frame-overlay]` beside the frame gets its size,
+ * scale and position too, so what it draws lines up with the page.
+ * `data-max-height` caps the height instead of the window.
  * `data-below` names an element shown under the frame, such as playback
  * controls, whose height is kept free too.
  *
@@ -77,11 +79,11 @@ export class FrameViewport extends ViewHook {
     // A rotated device eases into its new size, unless motion is reduced.
     style.textContent =
       `#${box.id}{height:${boxHeight}px;overflow:${actual ? 'auto' : 'hidden'}}` +
-      `#${frame.id}{width:${width}px;height:${height}px;margin-left:${inset}px;` +
+      `#${frame.id},#${box.id}>[data-frame-overlay]{width:${width}px;height:${height}px;margin-left:${inset}px;` +
       `transform:scale(${scale});transform-origin:top left}` +
       `@media (prefers-reduced-motion:no-preference){` +
       `#${box.id}{transition:height .2s ease}` +
-      `#${frame.id}{transition:transform .2s ease,margin-left .2s ease}}`
+      `#${frame.id},#${box.id}>[data-frame-overlay]{transition:transform .2s ease,margin-left .2s ease}}`
 
     if (label) label.textContent = `${width} × ${height} · ${Math.round(scale * 100)}%`
   }

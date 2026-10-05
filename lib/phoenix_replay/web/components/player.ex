@@ -14,8 +14,9 @@ defmodule PhoenixReplay.Web.Components.Player do
   import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.Core
 
+  alias Phoenix.LiveView.JS
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Client, Event}
+  alias PhoenixReplay.Recording.{Client, Event, Pointer}
   alias PhoenixReplay.Web.Format
   alias PhoenixReplay.Web.Player.Events
 
@@ -135,8 +136,14 @@ defmodule PhoenixReplay.Web.Components.Player do
   attr :mode, :string, default: "fit"
   attr :below, :string, default: nil
 
+  attr :pointer, :map,
+    default: nil,
+    doc: "the recording's `PhoenixReplay.Recording.Pointer` track"
+
   @spec replay_frame(map()) :: Phoenix.LiveView.Rendered.t()
   def replay_frame(assigns) do
+    assigns = assign(assigns, :pointer?, assigns.pointer != nil and Pointer.any?(assigns.pointer))
+
     ~H"""
     <section
       id="replay-viewport"
@@ -162,6 +169,19 @@ defmodule PhoenixReplay.Web.Components.Player do
           data-scale-label
           class="hidden font-mono tabular-nums sm:inline"
         ></span>
+        <button
+          :if={@pointer? and @viewport}
+          type="button"
+          aria-pressed="true"
+          phx-click={
+            %JS{}
+            |> JS.toggle_class("hidden", to: "#replay-pointer")
+            |> JS.toggle_attribute({"aria-pressed", "true", "false"})
+          }
+          class="inline-flex h-7 items-center gap-1.5 rounded-md border border-line px-2.5 text-muted transition-colors hover:text-ink aria-pressed:bg-hover aria-pressed:text-ink pointer-coarse:h-11"
+        >
+          <.icon name="lucide:mouse-pointer-2" class="size-3.5" /> Pointer
+        </button>
         <.segmented
           :if={@viewport}
           label="Frame size"
@@ -170,8 +190,23 @@ defmodule PhoenixReplay.Web.Components.Player do
           event="frame_mode"
         />
       </div>
-      <div id="replay-viewport-box" class="bg-canvas">
+      <div id="replay-viewport-box" class="relative bg-canvas">
         <iframe id="replay-frame" title="Replay" src={@src} class="block h-[600px] w-full border-0"></iframe>
+        <%!-- The Pointer hook draws the pointer track over the frame; FrameViewport
+             gives it the frame's size, scale and position. --%>
+        <div
+          :if={@pointer? and @viewport}
+          id="replay-pointer"
+          phx-hook="Pointer"
+          phx-update="ignore"
+          data-frame-overlay
+          data-track={JSON.encode!(@pointer)}
+          data-width={@viewport.width}
+          data-height={@viewport.height}
+          aria-hidden="true"
+          class="pointer-events-none absolute top-0 left-0"
+        >
+        </div>
       </div>
     </section>
     """

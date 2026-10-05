@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Pointer, touch and scroll recording, off by default. `:pointer` turns it on, globally or per live session, with every interval and cap configurable: `:sample`, `:scroll`, `:flush`, `:max_points` and `:limit`. The client module's new `replayPointer(liveSocket)` records only while a recorded LiveView asks for it, and sends batches over the LiveView socket as an event the recorder halts before the view sees it. The installer wires it.
+- The player draws the pointer over the replay: the cursor with a short trail, a ripple for each press, placed on the pressed element when the replay has it, and a fingertip for each touch, and it scrolls the replayed page as recorded. **Pointer** in the frame's bar toggles them.
+
 ## 0.5.1 - 2026-10-04
 
 The rest of the dashboard redesign.

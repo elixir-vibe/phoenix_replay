@@ -83,6 +83,42 @@ Headers such as `x-forwarded-for` or `cf-connecting-ip` hold IP addresses, which
 
 The client module is `deps/phoenix_replay/priv/static/phoenix_replay.js`, with types; bundlers that resolve packages from `deps`, as Phoenix's esbuild and Volt setups do, import it as `"phoenix_replay"`.
 
+## Pointer, touches and scrolling
+
+PhoenixReplay can also record where the pointer moved, what it pressed and how the page scrolled, and the player shows them over the replay. It is off by default. Turn it on globally or per live session:
+
+```elixir
+config :phoenix_replay, pointer: true
+
+live_session :checkout, on_mount: [{PhoenixReplay.Recorder, pointer: true}] do
+  # ...
+end
+```
+
+and call `replayPointer` from your JavaScript, after connecting the socket; `mix igniter.install phoenix_replay` adds it:
+
+```js
+import { replayParams, replayMetadata, replayPointer } from "phoenix_replay"
+
+liveSocket.connect()
+replayPointer(liveSocket)
+```
+
+`replayPointer` records nothing until a recorded LiveView with `:pointer` mounts and sends the settings to record with, and stops when the page navigates to another LiveView. The browser samples the pointer and the scroll offset, and sends them in batches over the LiveView socket as an event the recorder takes before your view sees it. Each setting has a default:
+
+```elixir
+config :phoenix_replay,
+  pointer: [
+    sample: 50,        # ms between recorded positions of a pointer
+    scroll: 100,       # ms between recorded scroll offsets
+    flush: 1_000,      # ms between the batches the browser sends
+    max_points: 500,   # entries a batch holds before it is sent early
+    limit: 3_600       # batches recorded per session
+  ]
+```
+
+At the defaults, a moving pointer costs about 20 samples a second, a few hundred bytes, and a still one nothing. Mouse, pen and touch are recorded alike, each finger on its own, and presses note the nearest element with an `id`, so the player can place them on it even if the replayed page lays out a little differently. Batches come from the browser, so the server drops anything malformed and caps each one at `:max_points`. They do not count towards `:max_events`, and pointer movement alone does not make a session interactive.
+
 ## Which sessions are kept
 
 Recording starts on every connected mount, but a session is saved only if the user interacted with it: it handled an event, in the view or a component, or navigated within the LiveView. Plain page views are discarded when the process exits.

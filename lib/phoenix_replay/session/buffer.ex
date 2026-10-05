@@ -223,7 +223,7 @@ defmodule PhoenixReplay.Session.Buffer do
     events = Enum.map(chunk, fn {_seq, event} -> event end)
 
     totals = %{
-      event_count: totals.event_count + length(events),
+      event_count: totals.event_count + Enum.count(events, &(&1.type != :pointer)),
       error_count: totals.error_count + Enum.count(events, &Event.error?/1),
       event_names: Enum.sort(Enum.uniq(totals.event_names ++ Summary.event_names(events))),
       duration_ms: Enum.reduce(events, totals.duration_ms, &max(&1.at, &2))
@@ -294,7 +294,7 @@ defmodule PhoenixReplay.Session.Buffer do
 
       %{
         Summary.new(recording, live?: Process.alive?(pid))
-        | event_count: flushed.event_count + event_count(recording.id),
+        | event_count: flushed.event_count + shown_count(recording.id),
           event_names: Enum.sort(Enum.uniq(flushed.event_names ++ event_names(recording.id))),
           error_count: flushed.error_count + error_count(recording.id),
           duration_ms: max(flushed.duration_ms, duration_ms(recording.id))
@@ -355,6 +355,14 @@ defmodule PhoenixReplay.Session.Buffer do
 
   defp event_count(id) do
     :ets.select_count(@table, events_of(id))
+  end
+
+  # Events a summary counts: pointer batches are not shown as events.
+  defp shown_count(id) do
+    :ets.select_count(
+      @table,
+      fun(do: ({{^id, seq}, %{type: type}} when is_integer(seq) and type != :pointer -> true))
+    )
   end
 
   defp event_names(id) do

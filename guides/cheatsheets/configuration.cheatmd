@@ -98,6 +98,15 @@ config :phoenix_replay, flush: [events: 200, interval: 5_000]
 
 Writes kept sessions to storage in chunks while they run. `flush: false` saves them only when they end.
 
+### Pointer, touches and scrolling
+
+```elixir
+config :phoenix_replay,
+  pointer: [sample: 50, scroll: 100, flush: 1_000, max_points: 500, limit: 3_600]
+```
+
+Off by default; `pointer: true` uses these defaults. Needs `replayPointer(liveSocket)` in the browser. See [Recording](recording.md#pointer-touches-and-scrolling).
+
 ### Retention
 
 ```elixir

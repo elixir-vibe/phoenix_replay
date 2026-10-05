@@ -40,6 +40,21 @@ defmodule PhoenixReplay.Config do
       * `:events` — events buffered before a chunk is written (default `200`)
       * `:interval` — milliseconds after which buffered events are written
         anyway (default `5_000`)
+    * `:pointer` — records the pointer, touches and scrolling, for the
+      player to show over the replay, when the client module's
+      `replayPointer/1` runs in the browser. `true` uses the defaults; a
+      keyword list sets any of them; `false` (the default) records none:
+      * `:sample` — milliseconds between recorded pointer positions
+        (default `50`)
+      * `:scroll` — milliseconds between recorded scroll positions
+        (default `100`)
+      * `:flush` — milliseconds between the batches the browser sends
+        (default `1_000`)
+      * `:max_points` — positions, presses and scrolls a batch may hold; a
+        fuller batch is sent early, and the server drops the rest
+        (default `500`)
+      * `:limit` — batches recorded per session (default `3_600`, an hour
+        of movement at the default `:flush`)
     * `:context` — request context `PhoenixReplay.Plug` keeps for a visit
       and recordings carry in `client`:
       * `:headers` — request header names to capture, refreshed on each
@@ -103,6 +118,14 @@ defmodule PhoenixReplay.Config do
 
   @type flush :: %{events: pos_integer(), interval: pos_integer()}
 
+  @type pointer :: %{
+          sample: pos_integer(),
+          scroll: pos_integer(),
+          flush: pos_integer(),
+          max_points: pos_integer(),
+          limit: pos_integer()
+        }
+
   @type landing :: %{
           params: [String.t()],
           referrer: boolean() | :full,
@@ -127,6 +150,7 @@ defmodule PhoenixReplay.Config do
           redact: redactor() | nil,
           max_memory: pos_integer() | nil,
           flush: flush() | nil,
+          pointer: pointer() | nil,
           context: context(),
           retention: retention(),
           persist: persist()
@@ -142,6 +166,7 @@ defmodule PhoenixReplay.Config do
             redact: nil,
             max_memory: nil,
             flush: %{events: 200, interval: 5_000},
+            pointer: nil,
             context: %{headers: [], landing: nil},
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
@@ -231,6 +256,16 @@ defmodule PhoenixReplay.Config do
 
     %{config | context: context}
   end
+
+  @pointer %{sample: 50, scroll: 100, flush: 1_000, max_points: 500, limit: 3_600}
+
+  defp put({:pointer, disabled}, config) when disabled in [false, nil],
+    do: %{config | pointer: nil}
+
+  defp put({:pointer, true}, config), do: %{config | pointer: @pointer}
+
+  defp put({:pointer, opts}, config) when is_list(opts),
+    do: %{config | pointer: merge(@pointer, opts, fn _key, value -> pos_integer?(value) end)}
 
   defp put({:flush, false}, config), do: %{config | flush: nil}
 

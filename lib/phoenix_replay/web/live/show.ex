@@ -24,7 +24,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.{Core, Player}
 
-  alias PhoenixReplay.Recording.Timeline
+  alias PhoenixReplay.Recording.{Pointer, Timeline}
   alias PhoenixReplay.Recordings
   alias PhoenixReplay.Recordings.Filter
   alias PhoenixReplay.Web.{Context, Layouts, Params, Playback}
@@ -89,10 +89,15 @@ defmodule PhoenixReplay.Web.Live.Show do
   defp report_progress(_player, _done, _total), do: :ok
 
   defp loaded(socket, recording) do
+    # Stepping and seeking follow LiveView events; the overlay plays the
+    # pointer track against the same clock.
+    {recording, pointer} = Pointer.split(recording)
+
     socket
     |> assign(
       page_title: "Replay · #{inspect(recording.view)}",
       recording: recording,
+      pointer: pointer,
       progress: nil,
       duration_ms: Timeline.duration_ms(recording),
       error_count: Events.error_count(recording),
@@ -361,6 +366,7 @@ defmodule PhoenixReplay.Web.Live.Show do
           viewport={@viewport}
           mode={@frame_mode}
           below="replay-playback"
+          pointer={@pointer}
         />
         <.playback
           id="replay-playback"

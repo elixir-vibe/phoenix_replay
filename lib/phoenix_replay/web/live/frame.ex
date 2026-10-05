@@ -21,6 +21,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
   use Phoenix.LiveView
 
   alias PhoenixReplay.Recording.Timeline
+  alias PhoenixReplay.Recording.Pointer
   alias PhoenixReplay.Recordings
   alias PhoenixReplay.Web.{Context, Layouts, Playback, Rendering}
   alias PhoenixReplay.Web.Live.ReplayComponent
@@ -30,7 +31,11 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
-    recording = if Recordings.live?(id), do: nil, else: Context.fetch_recording!(socket, id)
+    # Indexed like the player's, without the pointer track.
+    recording =
+      if Recordings.live?(id),
+        do: nil,
+        else: socket |> Context.fetch_recording!(id) |> Pointer.split() |> elem(0)
 
     if connected?(socket) and is_binary(params["channel"]) do
       :ok = Playback.subscribe(params["channel"])

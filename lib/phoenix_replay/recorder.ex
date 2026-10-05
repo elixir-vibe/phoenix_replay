@@ -8,7 +8,8 @@ defmodule PhoenixReplay.Recorder do
 
   Options given as `{PhoenixReplay.Recorder, opts}` override the
   `PhoenixReplay.Config` values for that live session. `:sample_rate`,
-  `:keep`, `:max_events`, `:sanitizer`, `:redact` and `:flush` are accepted:
+  `:keep`, `:max_events`, `:sanitizer`, `:redact`, `:flush` and `:pointer`
+  are accepted:
 
       live_session :checkout,
         on_mount: [{PhoenixReplay.Recorder, keep: [rate: 0.1, errors: true]}] do
@@ -37,15 +38,17 @@ defmodule PhoenixReplay.Recorder do
       connected?: 1,
       get_connect_info: 2,
       get_connect_params: 1,
+      push_event: 3,
       put_private: 3
     ]
 
   alias PhoenixReplay.{Config, Recording}
-  alias PhoenixReplay.Capture.Client
+  alias PhoenixReplay.Capture.{Client, Pointer}
   alias PhoenixReplay.Session.{Buffer, Monitor}
 
   @private :phoenix_replay
-  @session_options [:sample_rate, :keep, :max_events, :sanitizer, :redact, :flush]
+  @pointer_event Pointer.event()
+  @session_options [:sample_rate, :keep, :max_events, :sanitizer, :redact, :flush, :pointer]
 
   @doc """
   Starts recording on the connected mount, for the sampled share of sessions.
@@ -108,10 +111,11 @@ defmodule PhoenixReplay.Recorder do
     :ok = Buffer.open(recording, self(), config)
     Monitor.watch(self(), recording.id)
 
-    state = %{id: recording.id, url?: false, sanitizer: sanitizer}
+    state = %{id: recording.id, url?: false, sanitizer: sanitizer, pointer: config.pointer}
 
     socket
     |> put_private(@private, state)
+    |> record_pointer(config.pointer)
     |> record(:mount, %{assigns: sanitizer.sanitize_assigns(socket.assigns)})
     |> attach_hook(@private, :handle_event, &handle_event/3)
     |> attach_params_hook(params)
@@ -125,6 +129,22 @@ defmodule PhoenixReplay.Recorder do
 
   defp attach_params_hook(socket, _params),
     do: attach_hook(socket, @private, :handle_params, &handle_params/3)
+
+  # Tells the browser to record the pointer, with these settings; it sends
+  # batches until the page moves to another LiveView.
+  defp record_pointer(socket, nil), do: socket
+
+  defp record_pointer(socket, pointer),
+    do: push_event(socket, Pointer.event(), Pointer.settings(pointer))
+
+  defp handle_event(@pointer_event, params, socket) do
+    case socket.private[@private] do
+      %{pointer: %{} = pointer} -> Pointer.capture(self(), params, pointer)
+      _not_recording -> :ok
+    end
+
+    {:halt, socket}
+  end
 
   defp handle_event(name, params, socket) do
     %{sanitizer: sanitizer} = socket.private[@private]

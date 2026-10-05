@@ -152,6 +152,16 @@ defmodule Mix.Tasks.PhoenixReplay.InstallTest do
     refute app =~ "params: {_csrf_token: csrfToken}"
   end
 
+  test "records the pointer when the LiveSocket setup connects" do
+    app = @app_js <> "\nliveSocket.connect()\nwindow.liveSocket = liveSocket\n"
+    content = install(%{"assets/js/app.js" => app}) |> content("assets/js/app.js")
+
+    assert content =~
+             ~s(import { replayParams, replayMetadata, replayPointer } from "phoenix_replay")
+
+    assert content =~ "liveSocket.connect()\nreplayPointer(liveSocket)\nwindow.liveSocket"
+  end
+
   test "adds the import after a last import that spans several lines" do
     app =
       String.replace(

@@ -10,7 +10,13 @@
  *     })
  *
  * Both are optional: without them, recordings simply carry no viewport.
+ *
+ * `replayPointer(liveSocket)` also records the pointer, touches and
+ * scrolling for LiveViews that configure `:pointer`; see `./pointer`.
  */
+
+export { replayPointer } from './pointer'
+export type { PointerSettings, PointerSocket } from './pointer'
 
 export interface ReplayViewport {
   width: number

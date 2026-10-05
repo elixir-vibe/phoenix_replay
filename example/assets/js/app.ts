@@ -4,7 +4,7 @@ import 'phoenix_html'
 import { Socket } from 'phoenix'
 import { hooks as colocatedHooks } from 'phoenix-colocated/example'
 import { LiveSocket } from 'phoenix_live_view'
-import { replayMetadata, replayParams } from 'phoenix_replay'
+import { replayMetadata, replayParams, replayPointer } from 'phoenix_replay'
 
 import topbar from '../vendor/topbar'
 
@@ -26,6 +26,7 @@ window.addEventListener('phx:page-loading-stop', () => topbar.hide())
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
+replayPointer(liveSocket)
 
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()
