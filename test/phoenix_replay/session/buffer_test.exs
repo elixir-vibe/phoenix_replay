@@ -110,6 +110,12 @@ defmodule PhoenixReplay.Session.BufferTest do
     assert summary.duration_ms == events |> Enum.map(& &1.at) |> Enum.max()
     assert summary.duration_ms >= 5
 
+    # A session row whose key sorts before the others does not hide the
+    # latest event.
+    :ets.insert(Buffer, {{id, :aardvark}, nil})
+    assert Enum.find(Buffer.summaries(), &(&1.id == id)).duration_ms == summary.duration_ms
+    :ets.delete(Buffer, {id, :aardvark})
+
     :ok = Buffer.close(id)
     assert :ets.match(Buffer, {{:event_name, id, :_}}) == []
     assert :ets.match(Buffer, {{id, :_}, :_}) == []

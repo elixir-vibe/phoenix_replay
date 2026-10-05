@@ -373,10 +373,11 @@ defmodule PhoenixReplay.Session.Buffer do
     counts
   end
 
-  # Integer keys sort before atoms, so the row before the session's
-  # :config row is its most recent buffered event, if any.
+  # Integer keys sort before atoms, and the empty atom before every other
+  # atom, so the row before `{id, :""}` is the session's most recent
+  # buffered event, if any, whatever atom keys the session has.
   defp last_buffered_at(id) do
-    with {^id, seq} when is_integer(seq) <- :ets.prev(@table, {id, :config}),
+    with {^id, seq} when is_integer(seq) <- :ets.prev(@table, {id, :""}),
          [{_key, %Event{at: at}}] <- :ets.lookup(@table, {id, seq}) do
       at
     else
