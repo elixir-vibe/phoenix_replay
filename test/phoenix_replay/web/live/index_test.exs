@@ -4,7 +4,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.{Config, Recordings, Storage}
+  alias PhoenixReplay.{Catalog, Config, Storage}
   alias PhoenixReplay.Recording.Client.Landing
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
@@ -97,7 +97,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     # started earlier would otherwise push the rows down.
     save_at("ended", until - 60_000)
     save_at("fresh", until + 1)
-    Recordings.broadcast_change()
+    Catalog.broadcast_change()
 
     assert has_element?(view, "#recording-listed")
     refute has_element?(view, "#recording-ended")
@@ -115,11 +115,11 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     until = :sys.get_state(view.pid).socket.assigns.until
 
     save_at("first", until + 1)
-    Recordings.broadcast_change()
+    Catalog.broadcast_change()
     assert has_element?(view, "#recordings-new button", "1 new recording · Show")
 
     save_at("second", until + 2)
-    Recordings.broadcast_change()
+    Catalog.broadcast_change()
     assert has_element?(view, "#recordings-new button", "1 new recording · Show")
 
     send(view.pid, :reload_window)

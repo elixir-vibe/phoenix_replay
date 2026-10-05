@@ -14,7 +14,7 @@ defmodule PhoenixReplay.Capture.Logs do
   This is a `:logger` handler. `:logger` calls handlers in the process that
   logs, so a message belongs to the session of that process, or of the
   first of its `$callers` that has one, as for
-  `PhoenixReplay.Capture.Collectors`. Messages are formatted on one line,
+  `PhoenixReplay.Capture.TelemetryEvents`. Messages are formatted on one line,
   their metadata goes through the session's `PhoenixReplay.Sanitizer`, and
   each is recorded as a `:log` event. Their text is masked when the
   recording is saved, by the session's `PhoenixReplay.Redactor`.
@@ -24,7 +24,7 @@ defmodule PhoenixReplay.Capture.Logs do
   """
 
   alias PhoenixReplay.{Config, Telemetry}
-  alias PhoenixReplay.Capture.Collectors
+  alias PhoenixReplay.Capture.TelemetryEvents
   alias PhoenixReplay.Session.Buffer
 
   @formatter %{template: [:msg], single_line: true}
@@ -53,7 +53,7 @@ defmodule PhoenixReplay.Capture.Logs do
   """
   @spec log(:logger.log_event(), :logger.handler_config()) :: :ok
   def log(%{level: level, meta: meta} = event, %{config: logs}) do
-    case Buffer.attribute([self() | Collectors.callers()]) do
+    case Buffer.attribute([self() | TelemetryEvents.callers()]) do
       {:ok, session, sanitizer} ->
         data = %{
           level: level,

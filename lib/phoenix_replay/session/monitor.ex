@@ -5,7 +5,7 @@ defmodule PhoenixReplay.Session.Monitor do
   Each recorded process is monitored. While it runs, the monitor checks
   its sessions periodically and writes a session's buffered events to
   storage as a chunk, with `PhoenixReplay.Session.Flusher`, once
-  `PhoenixReplay.Recording.Keep` decides to keep it and `:flush` says a
+  `PhoenixReplay.Session.TailSampling` decides to keep it and `:flush` says a
   chunk is due. Keeping is decided from the events seen so far, which are
   observed incrementally, and never turns back, so nothing is written that
   would be discarded later.
@@ -27,9 +27,8 @@ defmodule PhoenixReplay.Session.Monitor do
 
   require Logger
 
-  alias PhoenixReplay.{Recordings, Storage, Telemetry}
-  alias PhoenixReplay.Session.{Buffer, Finalizer, Flusher}
-  alias PhoenixReplay.Recording.Keep
+  alias PhoenixReplay.{Catalog, Storage, Telemetry}
+  alias PhoenixReplay.Session.{Buffer, Finalizer, Flusher, TailSampling}
 
   @max_reason 4_000
   @max_tick 1_000
@@ -66,7 +65,7 @@ defmodule PhoenixReplay.Session.Monitor do
 
   @impl true
   def handle_cast({:watch, pid, id}, state) do
-    :ok = Recordings.broadcast_change()
+    :ok = Catalog.broadcast_change()
     {:noreply, watch(state, pid, id)}
   end
 
@@ -116,7 +115,7 @@ defmodule PhoenixReplay.Session.Monitor do
     track = %{
       flush: flush,
       keep: keep,
-      observation: Keep.new(),
+      observation: TailSampling.new(),
       checked: -1,
       committed?: Buffer.flushed?(id),
       flushed_at: now(),
@@ -174,14 +173,17 @@ defmodule PhoenixReplay.Session.Monitor do
 
   defp observe(track, id) do
     events = Buffer.pending(id, track.checked)
-    observation = Keep.observe(track.observation, Enum.map(events, &elem(&1, 1)), track.keep)
+
+    observation =
+      TailSampling.observe(track.observation, Enum.map(events, &elem(&1, 1)), track.keep)
+
     {:ok, draw} = Buffer.draw(id)
 
     %{
       track
       | observation: observation,
         checked: Enum.reduce(events, track.checked, fn {seq, _event}, acc -> max(seq, acc) end),
-        committed?: Keep.decision(observation, track.keep, draw) == :keep
+        committed?: TailSampling.decision(observation, track.keep, draw) == :keep
     }
   end
 
@@ -239,7 +241,7 @@ defmodule PhoenixReplay.Session.Monitor do
       :keep
     else
       {:ok, draw} = Buffer.draw(id)
-      Keep.decide(recording, config.keep, draw)
+      TailSampling.decide(recording, config.keep, draw)
     end
   end
 
@@ -299,7 +301,7 @@ defmodule PhoenixReplay.Session.Monitor do
 
   defp close(id) do
     :ok = Buffer.close(id)
-    Recordings.broadcast_change()
+    Catalog.broadcast_change()
   end
 
   defp now, do: System.monotonic_time(:millisecond)

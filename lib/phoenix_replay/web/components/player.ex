@@ -16,7 +16,7 @@ defmodule PhoenixReplay.Web.Components.Player do
 
   alias Phoenix.LiveView.JS
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Client, Event, Pointer}
+  alias PhoenixReplay.Recording.{Client, Event, PointerTrack}
   alias PhoenixReplay.Web.Format
   alias PhoenixReplay.Web.Player.Events
 
@@ -138,11 +138,12 @@ defmodule PhoenixReplay.Web.Components.Player do
 
   attr :pointer, :map,
     default: nil,
-    doc: "the recording's `PhoenixReplay.Recording.Pointer` track"
+    doc: "the recording's `PhoenixReplay.Recording.PointerTrack` track"
 
   @spec replay_frame(map()) :: Phoenix.LiveView.Rendered.t()
   def replay_frame(assigns) do
-    assigns = assign(assigns, :pointer?, assigns.pointer != nil and Pointer.any?(assigns.pointer))
+    assigns =
+      assign(assigns, :pointer?, assigns.pointer != nil and PointerTrack.any?(assigns.pointer))
 
     ~H"""
     <section

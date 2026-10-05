@@ -72,7 +72,7 @@ When the application stops, it waits for recordings being saved or written.
 
 ## Retention
 
-`PhoenixReplay.Recordings.Retention` deletes stored recordings older than `:max_age` milliseconds or beyond the newest `:max_count`, every `:interval` milliseconds:
+`PhoenixReplay.Storage.Retention` deletes stored recordings older than `:max_age` milliseconds or beyond the newest `:max_count`, every `:interval` milliseconds:
 
 ```elixir
 config :phoenix_replay,
@@ -91,7 +91,7 @@ Implement `PhoenixReplay.Storage`: `save/2`, `fetch/2`, `list/1`, `delete/2` and
 
 Two optional callbacks let a backend serve the dashboard without listing everything:
 
-  * `query/3` reads a page of summaries matching a `PhoenixReplay.Recordings.Filter`, with an offset, a limit and start-time bounds, and counts every match
+  * `query/3` reads a page of summaries matching a `PhoenixReplay.Recording.Filter`, with an offset, a limit and start-time bounds, and counts every match
   * `facets/1` returns the views and event names the dashboard's filters suggest
 
 Without them, both are worked out from `list/1`. The optional `append/3`, `fetch_partial/2` and `partials/1` take running sessions in chunks.

@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recordings.Retention do
+defmodule PhoenixReplay.Storage.Retention do
   @moduledoc """
   Deletes stored recordings beyond the configured age or count.
 
@@ -9,7 +9,7 @@ defmodule PhoenixReplay.Recordings.Retention do
 
   use GenServer
 
-  alias PhoenixReplay.{Config, Recordings, Storage}
+  alias PhoenixReplay.{Catalog, Config, Storage}
   alias PhoenixReplay.Recording.Summary
 
   @doc "Starts the retention process registered under its module name."
@@ -62,7 +62,7 @@ defmodule PhoenixReplay.Recordings.Retention do
   end
 
   defp notify([]), do: :ok
-  defp notify(_ids), do: Recordings.broadcast_change()
+  defp notify(_ids), do: Catalog.broadcast_change()
 
   defp too_old?(_summary, nil, _now), do: false
   defp too_old?(summary, max_age, now), do: now - summary.connected_at > max_age

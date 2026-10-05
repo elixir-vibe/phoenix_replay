@@ -55,7 +55,7 @@ defmodule PhoenixReplay.Storage.FileTest do
     for i <- 1..5,
         do: FileStorage.save(Fixtures.counter_recording(id: "r#{i}", connected_at: i), opts)
 
-    filter = %PhoenixReplay.Recordings.Filter{}
+    filter = %PhoenixReplay.Recording.Filter{}
 
     assert {[%{id: "r4"}, %{id: "r3"}], 5} =
              PhoenixReplay.Storage.query(storage, filter, now: 10, offset: 1, limit: 2)

@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Web.Components.Recordings do
+defmodule PhoenixReplay.Web.Components.RecordingList do
   @moduledoc """
   Components of the recording list. They take
   `PhoenixReplay.Recording.Summary` structs and functions that build URLs,
@@ -14,8 +14,7 @@ defmodule PhoenixReplay.Web.Components.Recordings do
   import PhoenixReplay.Web.Components.Core, only: [badge: 1]
 
   alias Phoenix.LiveView.JS
-  alias PhoenixReplay.Recording.Summary
-  alias PhoenixReplay.Recordings.Filter
+  alias PhoenixReplay.Recording.{Filter, Summary}
   alias PhoenixReplay.Web.Format
 
   # Columns on wider screens: mark, session, started, duration, events,
@@ -148,7 +147,7 @@ defmodule PhoenixReplay.Web.Components.Recordings do
 
   @doc """
   Narrows the list. Changes are sent as `filter` with the fields of
-  `PhoenixReplay.Recordings.Filter.from_params/1`.
+  `PhoenixReplay.Recording.Filter.from_params/1`.
   """
   attr :filter, Filter, required: true
   attr :views, :list, required: true

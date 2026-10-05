@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recordings do
+defmodule PhoenixReplay.Catalog do
   @moduledoc """
   Reads and deletes recordings across the live buffer and storage.
 
@@ -13,9 +13,8 @@ defmodule PhoenixReplay.Recordings do
   """
 
   alias PhoenixReplay.{Config, Recording, Redactor, Storage}
-  alias PhoenixReplay.Session.Buffer
-  alias PhoenixReplay.Recording.Summary
-  alias PhoenixReplay.Recordings.Filter
+  alias PhoenixReplay.Session.{Buffer, Finalizer}
+  alias PhoenixReplay.Recording.{Filter, Summary}
 
   @topic "phoenix_replay:recordings"
 
@@ -35,7 +34,7 @@ defmodule PhoenixReplay.Recordings do
 
   @doc """
   Reads a page of stored recordings matching `filter`, most recent first,
-  and counts every match. See `t:PhoenixReplay.Recordings.Filter.page_opts/0`.
+  and counts every match. See `t:PhoenixReplay.Recording.Filter.page_opts/0`.
 
   Storage pages the recordings itself, unless `:allow` is given: a function
   that decides which summaries the reader may see. Every summary is then
@@ -77,25 +76,9 @@ defmodule PhoenixReplay.Recordings do
   def fetch(%Config{storage: storage}, id, opts \\ []) do
     with {:ok, recording} <- Buffer.fetch(id),
          {:ok, config} <- Buffer.config(id) do
-      complete(recording, config, Keyword.take(opts, [:progress]))
+      Finalizer.complete(recording, config, Keyword.take(opts, [:progress]))
     else
       :error -> Storage.fetch(storage, id)
-    end
-  end
-
-  @doc """
-  Completes a buffered session's recording: redacts the events still in the
-  buffer and puts the chunks already flushed to storage, which were
-  redacted when they were written, before them.
-
-  Takes the `:progress` option of
-  `PhoenixReplay.Redactor.redact_recording/3`.
-  """
-  @spec complete(Recording.t(), Config.t(), keyword()) :: {:ok, Recording.t()} | {:error, term()}
-  def complete(%Recording{} = recording, %Config{} = config, opts \\ []) do
-    with {:ok, redacted} <- Redactor.redact_recording(recording, config.redact, opts),
-         {:ok, flushed} <- flushed_events(recording.id, config.storage) do
-      {:ok, %{redacted | events: flushed ++ redacted.events}}
     end
   end
 
@@ -123,16 +106,6 @@ defmodule PhoenixReplay.Recordings do
   @spec broadcast_change() :: :ok
   def broadcast_change do
     Phoenix.PubSub.broadcast(PhoenixReplay.PubSub, @topic, :recordings_changed)
-  end
-
-  # Events written concurrently can reach the buffer after a later one was
-  # flushed; they follow the flushed events here, microseconds out of order.
-  defp flushed_events(id, storage) do
-    if Buffer.flushed?(id) do
-      with {:ok, partial} <- Storage.fetch_partial(storage, id), do: {:ok, partial.events}
-    else
-      {:ok, []}
-    end
   end
 
   defp redact_url(%Summary{url: nil} = summary), do: summary

@@ -1,7 +1,7 @@
 defmodule PhoenixReplay.Recording.Client do
   @moduledoc """
   The browser and the visit a recording came from, when the browser told
-  PhoenixReplay (see `PhoenixReplay.Capture.Client`):
+  PhoenixReplay (see `PhoenixReplay.Capture.Browser`):
 
     * `:viewport` — `%{width: integer, height: integer, dpr: number}` when
       the LiveView connected; later changes are `:viewport` events

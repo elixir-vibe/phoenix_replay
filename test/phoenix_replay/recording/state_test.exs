@@ -2,7 +2,8 @@ defmodule PhoenixReplay.Recording.StateTest do
   use ExUnit.Case, async: true
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Event, Keep, State, Summary, Timeline}
+  alias PhoenixReplay.Recording.{Event, State, Summary, Timeline}
+  alias PhoenixReplay.Session.TailSampling
 
   defp recording(events), do: %Recording{id: "r", view: V, connected_at: 0, events: events}
 
@@ -74,8 +75,8 @@ defmodule PhoenixReplay.Recording.StateTest do
         batch(20, 0, [[0, "a", %{"x" => 2}]])
       ])
 
-    assert Keep.decide(first, keep, 0.5) == {:discard, :not_interactive}
-    assert Keep.decide(again, keep, 0.5) == :keep
+    assert TailSampling.decide(first, keep, 0.5) == {:discard, :not_interactive}
+    assert TailSampling.decide(again, keep, 0.5) == :keep
   end
 
   test "is not counted as events in summaries" do

@@ -1,8 +1,7 @@
-defmodule PhoenixReplay.Recordings.FilterTest do
+defmodule PhoenixReplay.Recording.FilterTest do
   use ExUnit.Case, async: true
 
-  alias PhoenixReplay.Recording.Summary
-  alias PhoenixReplay.Recordings.Filter
+  alias PhoenixReplay.Recording.{Filter, Summary}
 
   @now 10_000_000
 

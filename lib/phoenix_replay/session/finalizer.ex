@@ -5,15 +5,15 @@ defmodule PhoenixReplay.Session.Finalizer do
   Runs inside a task started by `PhoenixReplay.Session.Monitor`, so
   redaction and the backoff sleeps block only that task. The events still
   in the buffer are redacted with the session's `PhoenixReplay.Redactor`
-  and joined to the chunks already flushed to storage, see
-  `PhoenixReplay.Recordings.complete/3`. If that fails, nothing is saved.
+  and joined to the chunks already flushed to storage, see `complete/3`.
+  If that fails, nothing is saved.
   Attempts and backoff come from the `:persist` configuration; the delay
   grows linearly with the attempt number.
   """
 
   require Logger
 
-  alias PhoenixReplay.{Config, Recording, Recordings, Storage, Telemetry}
+  alias PhoenixReplay.{Catalog, Config, Recording, Redactor, Storage, Telemetry}
   alias PhoenixReplay.Session.Buffer
 
   @doc """
@@ -27,7 +27,7 @@ defmodule PhoenixReplay.Session.Finalizer do
   def finish(%Recording{id: id} = recording, %Config{} = config) do
     result = persist(recording, config)
     :ok = Buffer.close(id)
-    :ok = Recordings.broadcast_change()
+    :ok = Catalog.broadcast_change()
 
     case result do
       {:ok, saved} -> Telemetry.persisted(saved)
@@ -43,13 +43,30 @@ defmodule PhoenixReplay.Session.Finalizer do
   """
   @spec persist(Recording.t(), Config.t()) :: {:ok, Recording.t()} | {:error, term()}
   def persist(%Recording{} = recording, %Config{} = config) do
-    with {:ok, complete} <- Recordings.complete(recording, config),
+    with {:ok, complete} <- complete(recording, config),
          :ok <- attempt(complete, config, 1) do
       {:ok, complete}
     else
       {:error, reason} ->
         Logger.error("PhoenixReplay: dropping recording #{recording.id}: #{inspect(reason)}")
         {:error, reason}
+    end
+  end
+
+  @doc """
+  Completes a buffered session's recording, for saving it or for showing
+  it while it runs: redacts the events still in the buffer and puts the
+  chunks already flushed to storage, which were redacted when they were
+  written, before them.
+
+  Takes the `:progress` option of
+  `PhoenixReplay.Redactor.redact_recording/3`.
+  """
+  @spec complete(Recording.t(), Config.t(), keyword()) :: {:ok, Recording.t()} | {:error, term()}
+  def complete(%Recording{} = recording, %Config{} = config, opts \\ []) do
+    with {:ok, redacted} <- Redactor.redact_recording(recording, config.redact, opts),
+         {:ok, flushed} <- flushed_events(recording.id, config.storage) do
+      {:ok, %{redacted | events: flushed ++ redacted.events}}
     end
   end
 
@@ -74,5 +91,15 @@ defmodule PhoenixReplay.Session.Finalizer do
   rescue
     # reach:disable-next-line bare_rescue -- a storage backend may raise anything
     exception -> {:error, exception}
+  end
+
+  # Events written concurrently can reach the buffer after a later one was
+  # flushed; they follow the flushed events here, microseconds out of order.
+  defp flushed_events(id, storage) do
+    if Buffer.flushed?(id) do
+      with {:ok, partial} <- Storage.fetch_partial(storage, id), do: {:ok, partial.events}
+    else
+      {:ok, []}
+    end
   end
 end

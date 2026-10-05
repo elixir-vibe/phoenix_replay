@@ -27,7 +27,7 @@ defmodule PhoenixReplay.Application do
           {PhoenixReplay.Capture.Handlers, config},
           PhoenixReplay.Session.Monitor,
           {Task, &PhoenixReplay.Session.Recovery.run/0},
-          PhoenixReplay.Recordings.Retention
+          PhoenixReplay.Storage.Retention
         ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: PhoenixReplay.Supervisor)

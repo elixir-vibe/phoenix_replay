@@ -1,8 +1,8 @@
-defmodule PhoenixReplay.Recordings.RetentionTest do
+defmodule PhoenixReplay.Storage.RetentionTest do
   use ExUnit.Case, async: true
 
   alias PhoenixReplay.{Config, Storage}
-  alias PhoenixReplay.Recordings.Retention
+  alias PhoenixReplay.Storage.Retention
   alias PhoenixReplay.Recording.Summary
   alias PhoenixReplay.Test.Fixtures
 

@@ -10,7 +10,7 @@ defmodule PhoenixReplay.Web.Context do
 
   import Phoenix.LiveView, only: [put_private: 3]
 
-  alias PhoenixReplay.{Authorization, Config, Recording, Recordings}
+  alias PhoenixReplay.{Authorization, Catalog, Config, Recording}
   alias PhoenixReplay.Web.NotFoundError
 
   @type t :: %__MODULE__{
@@ -52,7 +52,7 @@ defmodule PhoenixReplay.Web.Context do
   """
   @spec fetch_recording!(Phoenix.LiveView.Socket.t(), Recording.id()) :: Recording.t()
   def fetch_recording!(socket, id) do
-    with {:ok, recording} <- Recordings.fetch(fetch(socket).config, id),
+    with {:ok, recording} <- Catalog.fetch(fetch(socket).config, id),
          true <- allowed?(socket, :view, recording) do
       recording
     else

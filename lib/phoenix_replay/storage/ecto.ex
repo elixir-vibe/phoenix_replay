@@ -37,8 +37,7 @@ if Code.ensure_loaded?(Ecto.Query) do
     import Ecto.Query
 
     alias PhoenixReplay.Recording
-    alias PhoenixReplay.Recording.{Client, Summary}
-    alias PhoenixReplay.Recordings.Filter
+    alias PhoenixReplay.Recording.{Client, Filter, Summary}
     alias PhoenixReplay.Storage.Codec
 
     @table "phoenix_replay_recordings"

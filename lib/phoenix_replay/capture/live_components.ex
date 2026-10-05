@@ -28,7 +28,7 @@ defmodule PhoenixReplay.Capture.LiveComponents do
   """
 
   alias PhoenixReplay.Telemetry
-  alias PhoenixReplay.Capture.{Assigns, AsyncResults, Client}
+  alias PhoenixReplay.Capture.{Assigns, AsyncResults, Browser}
   alias PhoenixReplay.Session.Buffer
 
   @handler __MODULE__
@@ -77,7 +77,7 @@ defmodule PhoenixReplay.Capture.LiveComponents do
        when is_map(params) do
     case Buffer.session(self()) do
       {:ok, _id, sanitizer} ->
-        params = sanitizer.sanitize_params(Client.observe(params))
+        params = sanitizer.sanitize_params(Browser.observe(params))
         record(:event, %{name: name, params: params, target: {module, id}})
 
       :error ->

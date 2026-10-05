@@ -6,8 +6,8 @@ defmodule ExampleWeb.Features.ReplayTest do
 
   setup do
     config = PhoenixReplay.Config.load()
-    PhoenixReplay.Recordings.clear(config)
-    on_exit(fn -> PhoenixReplay.Recordings.clear(config) end)
+    PhoenixReplay.Catalog.clear(config)
+    on_exit(fn -> PhoenixReplay.Catalog.clear(config) end)
 
     test = self()
     handler = {__MODULE__, :persisted}
@@ -146,7 +146,7 @@ defmodule ExampleWeb.Features.ReplayTest do
 
     # --- Verify what was recorded ---
     assert_receive {:persisted, id}, 5_000
-    {:ok, recording} = PhoenixReplay.Recordings.fetch(config, id)
+    {:ok, recording} = PhoenixReplay.Catalog.fetch(config, id)
 
     # Queries are recorded alongside the events that ran them, including
     # the stats component's query, which runs in an assign_async task

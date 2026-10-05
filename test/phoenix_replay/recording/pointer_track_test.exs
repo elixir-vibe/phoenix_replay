@@ -1,8 +1,8 @@
-defmodule PhoenixReplay.Recording.PointerTest do
+defmodule PhoenixReplay.Recording.PointerTrackTest do
   use ExUnit.Case, async: true
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Event, Pointer}
+  alias PhoenixReplay.Recording.{Event, PointerTrack}
 
   test "takes pointer batches out of a recording and times their samples" do
     batch = fn at, data ->
@@ -33,11 +33,11 @@ defmodule PhoenixReplay.Recording.PointerTest do
       ]
     }
 
-    assert {%Recording{events: [^mount, ^click]}, track} = Pointer.split(recording)
+    assert {%Recording{events: [^mount, ^click]}, track} = PointerTrack.split(recording)
     assert track.moves == [[200, 1, 1, 0], [600, 2, 2, 0], [1_500, 3, 3, 0]]
     assert track.presses == [[1_800, 0, 2, 2, 0, 0, nil, 0, 0]]
     assert track.scrolls == [[300, 0, 50]]
-    assert Pointer.any?(track)
-    refute Pointer.any?(elem(Pointer.split(%{recording | events: [mount]}), 1))
+    assert PointerTrack.any?(track)
+    refute PointerTrack.any?(elem(PointerTrack.split(%{recording | events: [mount]}), 1))
   end
 end

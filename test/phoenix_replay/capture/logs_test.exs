@@ -4,11 +4,10 @@ defmodule PhoenixReplay.Capture.LogsTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.{Config, Recordings}
+  alias PhoenixReplay.{Catalog, Config, Storage}
   alias PhoenixReplay.Capture.Logs
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Recording.Event
-  alias PhoenixReplay.Storage
   alias PhoenixReplay.Test.{Fixtures, Sessions}
 
   require Logger
@@ -56,7 +55,7 @@ defmodule PhoenixReplay.Capture.LogsTest do
     assert Event.error?(error)
 
     # The session's redactor masks the text whenever the session is read.
-    assert {:ok, %{events: events}} = Recordings.fetch(Config.load(), id)
+    assert {:ok, %{events: events}} = Catalog.fetch(Config.load(), id)
 
     assert %Event{data: %{message: "payment for [REDACTED] declined"}} =
              Enum.find(events, &(&1.type == :log))

@@ -37,8 +37,7 @@ defmodule PhoenixReplay.Storage do
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.Summary
-  alias PhoenixReplay.Recordings.Filter
+  alias PhoenixReplay.Recording.{Filter, Summary}
 
   @type t :: PhoenixReplay.Config.storage()
 
@@ -68,7 +67,7 @@ defmodule PhoenixReplay.Storage do
 
   @doc """
   Reads a page of summaries matching `filter`, most recent first, and counts
-  every match. See `t:PhoenixReplay.Recordings.Filter.page_opts/0`.
+  every match. See `t:PhoenixReplay.Recording.Filter.page_opts/0`.
   """
   @callback query(Filter.t(), Filter.page_opts(), keyword()) ::
               {[Summary.t()], non_neg_integer()}

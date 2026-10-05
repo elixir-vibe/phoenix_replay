@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recording.Keep do
+defmodule PhoenixReplay.Session.TailSampling do
   @moduledoc """
   Decides whether a session is saved, from the `:keep` configuration.
 

@@ -19,8 +19,8 @@ adapter = [
 # Session modules follow a recording until it is stored; its buffer is
 # infrastructure that capture writes to.
 orchestrator = [
-  "PhoenixReplay.Recordings",
-  "PhoenixReplay.Recordings.Retention",
+  "PhoenixReplay.Catalog",
+  "PhoenixReplay.Storage.Retention",
   "PhoenixReplay.Session.Finalizer",
   "PhoenixReplay.Session.Flusher",
   "PhoenixReplay.Session.Monitor",
@@ -30,8 +30,7 @@ orchestrator = [
 model = [
   "PhoenixReplay.Config",
   "PhoenixReplay.Recording",
-  "PhoenixReplay.Recording.*",
-  "PhoenixReplay.Recordings.Filter"
+  "PhoenixReplay.Recording.*"
 ]
 
 # Behaviours and their built-in implementations.
@@ -40,6 +39,7 @@ logic = [
   "PhoenixReplay.Collector*",
   "PhoenixReplay.Redactor*",
   "PhoenixReplay.Sanitizer*",
+  "PhoenixReplay.Session.TailSampling",
   "PhoenixReplay.Storage.Codec"
 ]
 

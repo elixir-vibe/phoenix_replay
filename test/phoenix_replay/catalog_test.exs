@@ -1,7 +1,8 @@
-defmodule PhoenixReplay.RecordingsTest do
+defmodule PhoenixReplay.CatalogTest do
   use ExUnit.Case, async: false
 
-  alias PhoenixReplay.{Config, Recordings, Storage}
+  alias PhoenixReplay.{Catalog, Config, Storage}
+  alias PhoenixReplay.Recording.Filter
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
 
@@ -21,7 +22,7 @@ defmodule PhoenixReplay.RecordingsTest do
     on_exit(fn -> Buffer.close("buffered") end)
 
     # Other tests' LiveViews may still be buffered; only this test's sessions matter.
-    listed = Enum.filter(Recordings.list(config), &(&1.id in ["buffered", "stored"]))
+    listed = Enum.filter(Catalog.list(config), &(&1.id in ["buffered", "stored"]))
     assert [%{id: "buffered", live?: true}, %{id: "stored", live?: false}] = listed
   end
 
@@ -30,19 +31,19 @@ defmodule PhoenixReplay.RecordingsTest do
       Storage.save(config.storage, Fixtures.counter_recording(id: "r#{i}", connected_at: i))
     end
 
-    filter = %Recordings.Filter{}
+    filter = %Filter{}
     ids = fn {summaries, total} -> {Enum.map(summaries, & &1.id), total} end
 
-    assert ids.(Recordings.query(config, filter, now: 10, offset: 1, limit: 2)) ==
+    assert ids.(Catalog.query(config, filter, now: 10, offset: 1, limit: 2)) ==
              {~w(r4 r3), 5}
 
     allow = &(&1.id != "r4")
 
-    assert ids.(Recordings.query(config, filter, now: 10, offset: 1, limit: 2, allow: allow)) ==
+    assert ids.(Catalog.query(config, filter, now: 10, offset: 1, limit: 2, allow: allow)) ==
              {~w(r3 r2), 4}
 
     assert %{views: ["PhoenixReplay.Test.Live.Counter"], event_names: ["inc"]} =
-             Recordings.facets(config, allow)
+             Catalog.facets(config, allow)
   end
 
   test "lists running sessions matching a filter", %{config: config} do
@@ -51,21 +52,21 @@ defmodule PhoenixReplay.RecordingsTest do
     on_exit(fn -> Buffer.close("running") end)
 
     assert [%{id: "running", live?: true}] =
-             Recordings.live(%Recordings.Filter{tab: "t9"}, System.system_time(:millisecond))
+             Catalog.live(%Filter{tab: "t9"}, System.system_time(:millisecond))
 
-    assert Recordings.live(%Recordings.Filter{tab: "other"}, 0) == []
+    assert Catalog.live(%Filter{tab: "other"}, 0) == []
   end
 
   test "fetches from the buffer first, then storage", %{config: config} do
     recording = Fixtures.counter_recording()
-    assert Recordings.fetch(config, recording.id) == {:error, :not_found}
+    assert Catalog.fetch(config, recording.id) == {:error, :not_found}
 
     Storage.save(config.storage, recording)
-    assert Recordings.fetch(config, recording.id) == {:ok, recording}
+    assert Catalog.fetch(config, recording.id) == {:ok, recording}
 
     Buffer.open(recording, self(), config)
     on_exit(fn -> Buffer.close(recording.id) end)
-    assert {:ok, %{events: []}} = Recordings.fetch(config, recording.id)
+    assert {:ok, %{events: []}} = Catalog.fetch(config, recording.id)
   end
 
   test "redacts buffered sessions with their own redactor", %{config: config} do
@@ -75,24 +76,24 @@ defmodule PhoenixReplay.RecordingsTest do
     on_exit(fn -> Buffer.close(recording.id) end)
     Buffer.put_url(recording.id, recording.url)
 
-    assert Recordings.live?(recording.id)
-    refute Recordings.live?("missing")
+    assert Catalog.live?(recording.id)
+    refute Catalog.live?("missing")
 
     assert %{url: "http://localhost/cards/[REDACTED]"} =
-             Enum.find(Recordings.list(config), &(&1.id == recording.id))
+             Enum.find(Catalog.list(config), &(&1.id == recording.id))
 
     assert {:ok, %{url: "http://localhost/cards/[REDACTED]"}} =
-             Recordings.fetch(config, recording.id)
+             Catalog.fetch(config, recording.id)
   end
 
   test "delete and clear notify subscribers", %{config: config} do
-    Recordings.subscribe()
+    Catalog.subscribe()
     Storage.save(config.storage, Fixtures.counter_recording(id: "a"))
 
-    assert :ok = Recordings.delete(config, "a")
+    assert :ok = Catalog.delete(config, "a")
     assert_receive :recordings_changed
-    assert :ok = Recordings.clear(config)
+    assert :ok = Catalog.clear(config)
     assert_receive :recordings_changed
-    assert Recordings.list(config) == []
+    assert Catalog.list(config) == []
   end
 end

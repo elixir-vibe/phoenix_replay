@@ -13,6 +13,7 @@
 
 ### Changed
 
+- Modules are renamed so no two differ only by a suffix or share a name across namespaces. `PhoenixReplay.Recordings` is now `PhoenixReplay.Catalog`, `PhoenixReplay.Recordings.Filter` is `PhoenixReplay.Recording.Filter`, which storage backends that implement `query/3` use, `PhoenixReplay.Recordings.Retention` is `PhoenixReplay.Storage.Retention`, and `PhoenixReplay.Recording.Keep` is `PhoenixReplay.Session.TailSampling`. Completing a running session's recording moved from `Recordings.complete/3` to `PhoenixReplay.Session.Finalizer.complete/3`. The `:retention` and `:keep` options are unchanged.
 - A recording's `client` is a `PhoenixReplay.Recording.Client` struct, and its landing a `PhoenixReplay.Recording.Client.Landing`. The URL of the LiveView that live-navigated to the session is `navigated_from`, formerly `referer`, so it no longer reads like the landing's HTTP `referrer`. Recordings stored by earlier versions are brought up to date when read.
 - Overriding `:flush`, `:pointer`, `:logs` or `:landing` in a live session merges the override into the global configuration, as the other options already did, instead of starting from the defaults. `nil` and `false` switch any of these options off; `true` switches one on with the global configuration or the defaults.
 - LiveView internals (`:__changed__`, `:uploads`, `:streams`, and a component's `:myself` and `:flash`) are left out of recorded assigns before the sanitizer runs, so a custom `PhoenixReplay.Sanitizer` no longer has to drop them.

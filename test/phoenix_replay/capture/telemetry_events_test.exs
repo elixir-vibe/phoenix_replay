@@ -1,14 +1,13 @@
-defmodule PhoenixReplay.Capture.CollectorsTest do
+defmodule PhoenixReplay.Capture.TelemetryEventsTest do
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias PhoenixReplay.{Config, Recordings}
-  alias PhoenixReplay.Capture.Collectors
+  alias PhoenixReplay.{Catalog, Config, Storage}
+  alias PhoenixReplay.Capture.TelemetryEvents
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Recording.Event
-  alias PhoenixReplay.Storage
   alias PhoenixReplay.Test.{Fixtures, Sessions}
   alias PhoenixReplay.Test.Live.TelemetryPage
 
@@ -30,7 +29,7 @@ defmodule PhoenixReplay.Capture.CollectorsTest do
         collect: [{TelemetryPage.event(), metadata: [:source, :password], limit: 2}, Raising]
       )
 
-    :ok = Collectors.attach(config, context.test)
+    :ok = TelemetryEvents.attach(config, context.test)
 
     failures = {context.test, :failures}
     test = self()
@@ -46,7 +45,7 @@ defmodule PhoenixReplay.Capture.CollectorsTest do
 
     on_exit(fn ->
       :telemetry.detach(failures)
-      Collectors.detach(context.test)
+      TelemetryEvents.detach(context.test)
       Storage.clear(Fixtures.storage())
     end)
 
@@ -101,7 +100,7 @@ defmodule PhoenixReplay.Capture.CollectorsTest do
 
     assert [%Event{data: %{metadata: %{source: "card-4242"}}}] = collected(id)
 
-    assert {:ok, %{events: events}} = Recordings.fetch(Config.load(), id)
+    assert {:ok, %{events: events}} = Catalog.fetch(Config.load(), id)
 
     assert %Event{data: %{metadata: %{source: "[REDACTED]"}}} =
              Enum.find(events, &(&1.type == :telemetry))

@@ -29,7 +29,7 @@ defmodule PhoenixReplay.Recorder do
 
   When the host app sends PhoenixReplay's client context, the recording
   also holds the browser's viewport, user agent, tab and the URL the user
-  came from; see `PhoenixReplay.Capture.Client`.
+  came from; see `PhoenixReplay.Capture.Browser`.
 
   On the connected mount of a recorded session, the recorder pushes a
   `"phx_replay:record"` event with what the browser should record:
@@ -50,7 +50,7 @@ defmodule PhoenixReplay.Recorder do
     ]
 
   alias PhoenixReplay.{Config, Recording}
-  alias PhoenixReplay.Capture.{Assigns, Client, Pointer, State}
+  alias PhoenixReplay.Capture.{Assigns, Browser, Pointer, State}
   alias PhoenixReplay.Session.{Buffer, Monitor}
 
   @private :phoenix_replay
@@ -116,7 +116,7 @@ defmodule PhoenixReplay.Recorder do
       session: sanitizer.sanitize_params(session),
       connected_at: System.system_time(:millisecond),
       client:
-        Client.build(get_connect_params(socket), get_connect_info(socket, :user_agent), kept)
+        Browser.build(get_connect_params(socket), get_connect_info(socket, :user_agent), kept)
     }
 
     :ok = Buffer.open(recording, self(), config)
@@ -170,7 +170,7 @@ defmodule PhoenixReplay.Recorder do
 
   defp handle_event(name, params, socket) do
     %{sanitizer: sanitizer} = socket.private[@private]
-    params = Client.observe(params)
+    params = Browser.observe(params)
     {:cont, record(socket, :event, %{name: name, params: sanitizer.sanitize_params(params)})}
   end
 

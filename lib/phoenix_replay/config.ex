@@ -87,7 +87,7 @@ defmodule PhoenixReplay.Config do
           (default `:first`)
     * `:max_memory` — bytes of buffered recordings above which new
       sessions are not recorded, or `nil` (the default) for no limit.
-    * `:retention` — keyword list controlling `PhoenixReplay.Recordings.Retention`:
+    * `:retention` — keyword list controlling `PhoenixReplay.Storage.Retention`:
       * `:max_age` — milliseconds after which recordings are deleted
       * `:max_count` — number of most recent recordings to keep
       * `:interval` — milliseconds between pruning runs (default `60_000`)

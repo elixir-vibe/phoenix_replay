@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Capture.Collectors do
+defmodule PhoenixReplay.Capture.TelemetryEvents do
   @moduledoc """
   Records telemetry events captured by the configured `PhoenixReplay.Collector`s.
 

@@ -10,7 +10,7 @@ defmodule PhoenixReplay.Recording.Timeline do
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Event, State}
+  alias PhoenixReplay.Recording.{Event, PointerTrack, State}
 
   @state State.assign()
 
@@ -51,6 +51,19 @@ defmodule PhoenixReplay.Recording.Timeline do
     assigns: %{@state => %{}},
     components: %{}
   ]
+
+  @doc """
+  Lays a recording out for playback, the same way for the player and its
+  frame, so an index means the same event in both: the pointer track is
+  taken out, to be drawn over the frame, and client state is spread into
+  an event per entry. See `PhoenixReplay.Recording.PointerTrack.split/1`
+  and `PhoenixReplay.Recording.State.spread/1`.
+  """
+  @spec for_playback(Recording.t()) :: {Recording.t(), PointerTrack.t()}
+  def for_playback(%Recording{} = recording) do
+    {recording, track} = PointerTrack.split(recording)
+    {State.spread(recording), track}
+  end
 
   @doc "A timeline of `recording`, before its first event."
   @spec new(Recording.t()) :: t()

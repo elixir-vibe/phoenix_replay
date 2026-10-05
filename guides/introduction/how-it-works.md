@@ -23,7 +23,7 @@ The table is owned by the application rather than a worker process, so in-progre
 
 `PhoenixReplay.Session.Monitor` monitors each recorded process. When it exits, the session is either discarded, when the user never interacted, or saved by `PhoenixReplay.Session.Finalizer` in a supervised task, with retries. The session leaves the buffer once the task finishes, and `PhoenixReplay.Telemetry` reports the outcome. When the monitor restarts, it re-attaches to every buffered session.
 
-`PhoenixReplay.Recordings.Retention` deletes stored recordings beyond the configured age or count.
+`PhoenixReplay.Storage.Retention` deletes stored recordings beyond the configured age or count.
 
 ## Replaying
 

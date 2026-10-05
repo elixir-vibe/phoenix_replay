@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recordings.Filter do
+defmodule PhoenixReplay.Recording.Filter do
   @moduledoc """
   Criteria for narrowing a list of `PhoenixReplay.Recording.Summary` structs.
 

@@ -274,13 +274,13 @@ phoenix_replay "/replay", as: :staff_replay
 ### In code
 
 ```elixir
-alias PhoenixReplay.Recordings
-alias PhoenixReplay.Recordings.Filter
+alias PhoenixReplay.Catalog
+alias PhoenixReplay.Recording.Filter
 
 config = PhoenixReplay.Config.load()
 filter = Filter.from_params(%{"event" => "pay", "within" => "24h"})
 
 config
-|> Recordings.list()
+|> Catalog.list()
 |> Filter.apply(filter, System.system_time(:millisecond))
 ```

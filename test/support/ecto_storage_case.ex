@@ -74,8 +74,7 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
       end
 
       describe "query/3" do
-        alias PhoenixReplay.Recording.Event
-        alias PhoenixReplay.Recordings.Filter
+        alias PhoenixReplay.Recording.{Event, Filter}
 
         setup %{opts: opts} do
           error = %Event{at: 9, type: :log, data: %{level: :error, message: "x", metadata: %{}}}

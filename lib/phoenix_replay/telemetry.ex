@@ -28,7 +28,8 @@ defmodule PhoenixReplay.Telemetry do
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Keep, Summary}
+  alias PhoenixReplay.Recording.Summary
+  alias PhoenixReplay.Session.TailSampling
 
   @doc "Emits `[:phoenix_replay, :recording, :persisted]`."
   @spec persisted(Recording.t()) :: :ok
@@ -51,7 +52,7 @@ defmodule PhoenixReplay.Telemetry do
   end
 
   @doc "Emits `[:phoenix_replay, :recording, :discarded]`."
-  @spec discarded(Recording.id(), Keep.reason()) :: :ok
+  @spec discarded(Recording.id(), TailSampling.reason()) :: :ok
   def discarded(id, reason) do
     :telemetry.execute([:phoenix_replay, :recording, :discarded], %{}, %{id: id, reason: reason})
   end

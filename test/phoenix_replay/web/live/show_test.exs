@@ -5,12 +5,11 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Config, Storage}
-  alias PhoenixReplay.Recording.Client
+  alias PhoenixReplay.Recording.{Client, Event}
   alias PhoenixReplay.Recording.Client.Landing
-  alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
-  alias PhoenixReplay.Web.Playback
+  alias PhoenixReplay.Web.Player.Channel
 
   @endpoint PhoenixReplay.Test.Endpoint
 
@@ -144,13 +143,13 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     {:ok, view, _html} = live(build_conn(), "/replay/live-1")
     channel = assigns(view).channel
-    Playback.subscribe(channel)
-    Playback.frame_ready(channel)
+    Channel.subscribe(channel)
+    Channel.frame_ready(channel)
 
     assert render_async(view) =~ "PhoenixReplay.Test.Live.Counter"
     assert assigns(view).recording.url == "http://localhost/cards/[REDACTED]"
-    assert_receive {Playback, {:load, %{url: "http://localhost/cards/[REDACTED]"}}}
-    assert_receive {Playback, {:seek, 1}}
+    assert_receive {Channel, {:load, %{url: "http://localhost/cards/[REDACTED]"}}}
+    assert_receive {Channel, {:seek, 1}}
   end
 
   test "navigates away from live sessions the viewer may not see" do
@@ -168,12 +167,12 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert channel != assigns(other).channel
     assert has_element?(view, ~s(iframe[src="/replay/show/frame?channel=#{channel}"]))
 
-    Playback.subscribe(channel)
+    Channel.subscribe(channel)
     render_hook(view, "seek", %{"index" => "3"})
-    assert_receive {Playback, {:seek, 3}}
+    assert_receive {Channel, {:seek, 3}}
 
-    Playback.frame_ready(channel)
-    assert_receive {Playback, {:seek, 3}}
+    Channel.frame_ready(channel)
+    assert_receive {Channel, {:seek, 3}}
   end
 
   test "plays on after the last event to the end of the pointer track" do

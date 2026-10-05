@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Capture.Client do
+defmodule PhoenixReplay.Capture.Browser do
   @moduledoc """
   Builds a recording's client context: the browser's viewport and tab from
   LiveView's connect params and event metadata, the user agent, and the

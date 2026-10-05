@@ -55,7 +55,7 @@ Filter by:
 - minimum number of events,
 - sessions with an error, such as an error log, a failed query or a crash.
 
-Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&event=pay&within=24h&errors=1`, so a filtered list can be shared or bookmarked. `?tab=` lists the sessions of one browser tab. On phones, the filters other than search are behind a **Filters** button that counts the active ones. `PhoenixReplay.Recordings.Filter` applies the same criteria in code.
+Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&event=pay&within=24h&errors=1`, so a filtered list can be shared or bookmarked. `?tab=` lists the sessions of one browser tab. On phones, the filters other than search are behind a **Filters** button that counts the active ones. `PhoenixReplay.Recording.Filter` applies the same criteria in code.
 
 ## Player
 

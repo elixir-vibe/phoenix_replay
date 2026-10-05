@@ -7,7 +7,7 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
   alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Storage
   alias PhoenixReplay.Test.{Fixtures, Sessions}
-  alias PhoenixReplay.Web.Playback
+  alias PhoenixReplay.Web.Player.Channel
 
   @endpoint PhoenixReplay.Test.Endpoint
 
@@ -22,7 +22,7 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
   end
 
   defp seek(channel, index) do
-    Playback.seek(channel, index)
+    Channel.seek(channel, index)
   end
 
   test "replays client state through replay_render/1, under change tracking" do
@@ -186,7 +186,7 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     seek("c9", 3)
     assert render(view) =~ "Redacting the session"
 
-    Playback.load("c9", recording)
+    Channel.load("c9", recording)
     assert render(view) =~ ~s(<span id="count">0</span>)
     seek("c9", 3)
     assert render(view) =~ ~s(<span id="count">1</span>)

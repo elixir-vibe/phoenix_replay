@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Recording.Pointer do
+defmodule PhoenixReplay.Recording.PointerTrack do
   @moduledoc """
   The pointer track of a recording: where the pointer moved, what it
   pressed and how the page scrolled, on the recording's timeline.

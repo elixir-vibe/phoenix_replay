@@ -1,4 +1,4 @@
-defmodule PhoenixReplay.Web.Playback do
+defmodule PhoenixReplay.Web.Player.Channel do
   @moduledoc """
   Messaging between a player and its replay frame.
 
@@ -9,27 +9,11 @@ defmodule PhoenixReplay.Web.Playback do
   session, which the frame does not read from the buffer.
   """
 
-  alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Pointer, State}
-
   @type channel :: String.t()
 
-  @doc """
-  Lays a recording out for playback, the same way for the player and its
-  frame, so an index means the same event in both: the pointer track is
-  taken out, to be drawn over the frame, and client state is spread into
-  an event per entry. See `PhoenixReplay.Recording.Pointer.split/1` and
-  `PhoenixReplay.Recording.State.spread/1`.
-  """
-  @spec prepare(Recording.t()) :: {Recording.t(), Pointer.t()}
-  def prepare(%Recording{} = recording) do
-    {recording, pointer} = Pointer.split(recording)
-    {State.spread(recording), pointer}
-  end
-
   @doc "Generates a new channel name."
-  @spec new_channel() :: channel()
-  def new_channel, do: Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
+  @spec new() :: channel()
+  def new, do: Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
 
   @doc "Subscribes the caller to `channel`."
   @spec subscribe(channel()) :: :ok | {:error, term()}

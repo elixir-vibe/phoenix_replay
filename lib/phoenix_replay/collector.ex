@@ -16,7 +16,7 @@ defmodule PhoenixReplay.Collector do
   A bare event name, or `{event_name, opts}`, is shorthand for
   `PhoenixReplay.Collector.Generic`.
 
-  `PhoenixReplay.Capture.Collectors` attaches every collector when the
+  `PhoenixReplay.Capture.TelemetryEvents` attaches every collector when the
   application starts and records what it captures in the session of the
   process that emitted the event, or of the process that started it
   through `Task` (its `$callers`). Events from processes that belong to no

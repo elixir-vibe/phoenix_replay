@@ -27,7 +27,7 @@ defmodule PhoenixReplay.Recording.Event do
       browser's viewport changed, as seen with the user's next interaction
     * `:pointer` — a batch of pointer moves, presses and scroll offsets,
       when `:pointer` is configured; see `PhoenixReplay.Capture.Pointer` and
-      `PhoenixReplay.Recording.Pointer`
+      `PhoenixReplay.Recording.PointerTrack`
     * `:state` — state reported by code in the browser, see
       `PhoenixReplay.Capture.State`. Stored as a batch, `%{span: integer,
       entries: [[dt, key, changes]]}`; `PhoenixReplay.Recording.State.spread/1`
