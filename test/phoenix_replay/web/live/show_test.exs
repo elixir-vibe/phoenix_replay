@@ -274,6 +274,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert %{index: 3, duration_ms: duration} = assigns(view)
     assert duration == last + 3_000
     assert has_element?(view, "#replay-pointer")
+    assert has_element?(view, ~s(#replay-pointer-switch[role="switch"][aria-checked="true"]))
 
     render_click(view, "toggle")
     assert %{at: ^duration, playing: nil} = advance(view)
@@ -386,6 +387,14 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     # Choosing an event, as the event list does, goes to its time.
     render_click(view, "seek", %{"index" => 1})
     assert %{index: 1, at: ^gap} = assigns(view)
+  end
+
+  test "covers the frame with a loader until its LiveView connects" do
+    {:ok, view, _html} = live(build_conn(), "/replay/show")
+    assert has_element?(view, ~s(#replay-loading[data-ready="false"]))
+
+    send(view.pid, {Channel, :frame_ready})
+    assert has_element?(view, ~s(#replay-loading[data-ready="true"]))
   end
 
   test "deletes the recording" do

@@ -13,6 +13,7 @@
 - A button in the dashboard's header switches between the light and dark themes, overriding the system's appearance; the browser remembers the choice.
 - SQL, collected metadata and the assigns in the player's **State** tab are highlighted with Lumis in a monospace font, in colours that follow the theme. Rows in the event list show the action in the interface's font and what it acted on in monospace, coloured the same way: event params, message tags, assign names, components, URLs, client state and collected SQL. Log messages stay prose. `PhoenixReplay.Collector.Captured` has a `:language` field, `:sql` for `PhoenixReplay.Collector.Ecto`, that turns highlighting on for a collector's summary.
 - In the **State** tab, only values their row cannot show whole are expandable.
+- The player shows the pointer overlay's toggle as a switch, and covers the replay with a loader until its frame has connected, instead of a blank box.
 - The **State** tab shows what the current event changed inside each assign, such as `tasks[id: 2].done: false → true`, matching list items by `id`, and an expanded assign marks its removed and added lines.
 - `PhoenixReplay.Storage` has an optional `child_spec/1` callback for a process the backend needs, which the application starts. File storage starts its summary index this way; a file storage used while its index is not running, such as one configured by hand next to another backend, reads summaries from disk.
 
@@ -28,7 +29,7 @@
 
 - Scrubbing to a moment between two events keeps that moment, instead of snapping back to the earlier event, and the thumb stays under the pointer while dragging.
 - Pausing the player keeps the time playback reached between two events, instead of jumping back to the last one, and resuming or changing speed plays on from there.
-- Switching the player from 100% back to Fit after scrolling the replay no longer leaves the page shifted out of view.
+- Switching the player from 100% back to Fit after scrolling the replay eases from the scrolled view into the fitted one, instead of leaving the page shifted out of view.
 - Collected details no longer break words mid-way, such as SQL table names.
 - A LiveComponent whose recording fails, such as with a raising sanitizer, is reported with `[:phoenix_replay, :collector, :exception]`, as collectors are, instead of logged.
 - A save that raised, such as an Ecto save while the database is down, is retried like one that returned an error, rather than dropping the recording.

@@ -358,7 +358,7 @@ defmodule PhoenixReplay.Web.Live.Show do
         <p class="mb-2">{redaction_label(@progress)}</p>
         <.progress label="Redaction" value={redaction_percent(@progress)} />
       </div>
-      <.replay_frame :if={!@load_error?} src={frame_src(assigns)} />
+      <.replay_frame :if={!@load_error?} src={frame_src(assigns)} ready={@frame_ready?} />
     </main>
     """
   end
@@ -385,6 +385,7 @@ defmodule PhoenixReplay.Web.Live.Show do
           mode={@frame_mode}
           below="replay-playback"
           pointer={@pointer}
+          ready={@frame_ready?}
         />
         <.playback
           id="replay-playback"

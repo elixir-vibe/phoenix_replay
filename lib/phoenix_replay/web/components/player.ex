@@ -149,6 +149,10 @@ defmodule PhoenixReplay.Web.Components.Player do
     default: nil,
     doc: "the recording's `PhoenixReplay.Recording.PointerTrack` track"
 
+  attr :ready, :boolean,
+    default: true,
+    doc: "whether the frame's LiveView connected; until then a loader covers it"
+
   @spec replay_frame(map()) :: Phoenix.LiveView.Rendered.t()
   def replay_frame(assigns) do
     assigns =
@@ -179,18 +183,24 @@ defmodule PhoenixReplay.Web.Components.Player do
           data-scale-label
           class="hidden font-mono tabular-nums sm:inline"
         ></span>
+        <%!-- A switch: the knob slides and fills when the pointer is shown. --%>
         <button
           :if={@pointer? and @viewport}
+          id="replay-pointer-switch"
           type="button"
-          aria-pressed="true"
+          role="switch"
+          aria-checked="true"
           phx-click={
             %JS{}
             |> JS.toggle_class("hidden", to: "#replay-pointer")
-            |> JS.toggle_attribute({"aria-pressed", "true", "false"})
+            |> JS.toggle_attribute({"aria-checked", "true", "false"})
           }
-          class="inline-flex h-7 items-center gap-1.5 rounded-md border border-line px-2.5 text-muted transition-colors hover:text-ink aria-pressed:bg-hover aria-pressed:text-ink pointer-coarse:h-11"
+          class="group inline-flex h-7 items-center gap-2 rounded-md px-1.5 text-muted transition-colors hover:text-ink aria-checked:text-ink pointer-coarse:h-11"
         >
           <.icon name="lucide:mouse-pointer-2" class="size-3.5" /> Pointer
+          <span class="relative inline-block h-4 w-7 rounded-full bg-line transition-colors group-aria-checked:bg-accent">
+            <span class="absolute top-0.5 left-0.5 size-3 rounded-full bg-surface shadow-sm transition-transform group-aria-checked:translate-x-3"></span>
+          </span>
         </button>
         <.segmented
           :if={@viewport}
@@ -202,6 +212,16 @@ defmodule PhoenixReplay.Web.Components.Player do
       </div>
       <div id="replay-viewport-box" class="relative bg-canvas">
         <iframe id="replay-frame" title="Replay" src={@src} class="block h-[600px] w-full border-0"></iframe>
+        <%!-- Covers the frame while its page loads and its LiveView connects. --%>
+        <div
+          id="replay-loading"
+          role="status"
+          data-ready={to_string(@ready)}
+          class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 bg-canvas text-sm text-muted transition-opacity duration-300 data-[ready=true]:opacity-0"
+        >
+          <.icon name="lucide:loader-circle" class="size-4 animate-spin" />
+          <span>Loading replay…</span>
+        </div>
         <%!-- The Pointer hook draws the pointer track over the frame; FrameViewport
              gives it the frame's size, scale and position. --%>
         <div
