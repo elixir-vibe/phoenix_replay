@@ -183,7 +183,17 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     view |> element("button", "1 error · jump to first") |> render_click()
 
     assert assigns(view).index == 4
-    assert has_element?(view, "#replay-events dd", "boom")
+    # Its details are in the pane, not under its row.
+    assert has_element?(view, ~s(#replay-details[data-index="4"] dd), "boom")
+    refute has_element?(view, "#replay-events dd")
+
+    # Pinned, they stay while the player moves on; unpinned, they follow it.
+    view |> element("#replay-details-pin") |> render_click()
+    assert has_element?(view, ~s(#replay-details-pin[aria-pressed="true"]))
+    render_click(view, "seek", %{"index" => "2"})
+    assert has_element?(view, ~s(#replay-details[data-index="4"]))
+    view |> element("#replay-details-pin") |> render_click()
+    assert has_element?(view, ~s(#replay-details[data-index="2"]), "inc")
 
     # The Errors chip narrows the list to errors, under their interaction.
     view |> element(~s(button[phx-click="errors_only"]), "Errors") |> render_click()

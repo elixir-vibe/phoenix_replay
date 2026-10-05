@@ -72,6 +72,8 @@ defmodule PhoenixReplay.Web.Live.Show do
         follow_scroll?: true,
         export: nil,
         exportable?: false,
+        # The event the details pane holds while playback goes on, if pinned.
+        pinned: nil,
         # The export dialog's params and error while it is open.
         export_dialog: nil,
         # A link to a moment opens the player there.
@@ -89,6 +91,14 @@ defmodule PhoenixReplay.Web.Live.Show do
         {:ok, socket}
     end
   end
+
+  defp details_event(%{timeline: %{events: events}, index: index, pinned: pinned})
+       when tuple_size(events) > 0 do
+    shown = pinned || index
+    {elem(events, shown), shown}
+  end
+
+  defp details_event(_assigns), do: nil
 
   defp start_export(socket, options) do
     case Export.start(socket.assigns.id, socket.assigns.context.config, options) do
@@ -237,6 +247,11 @@ defmodule PhoenixReplay.Web.Live.Show do
       :error -> {:noreply, socket}
     end
   end
+
+  def handle_event("pin_details", _params, %{assigns: %{pinned: nil}} = socket),
+    do: {:noreply, assign(socket, :pinned, socket.assigns.index)}
+
+  def handle_event("pin_details", _params, socket), do: {:noreply, assign(socket, :pinned, nil)}
 
   def handle_event("export_dialog", _params, %{assigns: %{exportable?: true}} = socket) do
     options = Options.new(socket.assigns.context.config.export)
@@ -546,6 +561,8 @@ defmodule PhoenixReplay.Web.Live.Show do
             hidden={@hidden}
             query={@query}
             errors_only={@errors_only}
+            details={details_event(assigns)}
+            pinned={@pinned != nil}
           />
           <.state
             :if={@tab == "state"}

@@ -26,7 +26,8 @@ defmodule PhoenixReplay.Recording.Event do
     * `:exit` — `%{reason: String.t()}`, the LiveView process exited
       abnormally
     * `:viewport` — `%{width: integer, height: integer, dpr: number}`, the
-      browser's viewport changed, as seen with the user's next interaction
+      browser's viewport changed: once a resize or rotation settled, or
+      with the user's next interaction when `replayRecorder` does not run
     * `:pointer` — a batch of pointer moves, presses and scroll offsets,
       when `:pointer` is configured; see `PhoenixReplay.Capture.Pointer` and
       `PhoenixReplay.Recording.PointerTrack`

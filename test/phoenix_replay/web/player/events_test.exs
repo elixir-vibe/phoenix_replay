@@ -135,7 +135,49 @@ defmodule PhoenixReplay.Web.Player.EventsTest do
            ]
 
     assert Events.details(event(2, :exit, %{reason: "boom"})) == [{"Reason", "boom"}]
-    assert Events.details(event(3, :mount, %{assigns: %{}})) == []
+  end
+
+  test "describes every kind of event for the details pane" do
+    # Values as their text, without the highlighting.
+    text = fn event ->
+      Enum.map(Events.details(event), fn
+        {name, value} when is_binary(value) ->
+          {name, value}
+
+        {name, safe} ->
+          html = Phoenix.HTML.safe_to_string(safe)
+          {name, html |> LazyHTML.from_fragment() |> LazyHTML.text()}
+      end)
+    end
+
+    assert text.(event(0, :mount, %{assigns: %{count: 0}})) == [{"Assigns", "%{count: 0}"}]
+
+    assert text.(event(0, :event, %{name: "save", params: %{"id" => "7"}, target: {Cart, 3}})) ==
+             [{"Event", "save"}, {"Component", "Cart#3"}, {"Params", ~s(%{"id" => "7"})}]
+
+    assert text.(event(0, :params, %{uri: "http://x/a?q=1", params: %{"q" => "1"}})) ==
+             [{"URL", "http://x/a?q=1"}, {"Params", ~s(%{"q" => "1"})}]
+
+    assert text.(event(0, :info, %{tag: :tick})) == [{"Message tag", ":tick"}]
+    assert [{"Message", _untagged}] = text.(event(0, :info, %{tag: nil}))
+    assert text.(event(0, :render, %{assigns: %{count: 1}})) == [{"Assigns", "%{count: 1}"}]
+
+    assert text.(event(0, :component, %{module: Cart, id: "c", assigns: %{n: 1}})) ==
+             [{"Component", "Cart#c"}, {"Assigns", "%{n: 1}"}]
+
+    assert text.(event(0, :component_destroyed, %{module: Cart, id: "c"})) ==
+             [{"Component", "Cart#c"}]
+
+    assert text.(event(0, :viewport, %{width: 844, height: 390, dpr: 3})) ==
+             [{"Size", "844 × 390"}, {"Orientation", "landscape"}, {"Pixel ratio", "3"}]
+
+    assert text.(event(0, :state, %{key: "search", changes: %{"query" => "milk"}})) ==
+             [{"Key", "search"}, {"Changes", ~s(%{"query" => "milk"})}]
+
+    inputs = PhoenixReplay.Recording.State.inputs_key()
+
+    assert [{"Form controls", _values}] =
+             text.(event(0, :state, %{key: inputs, changes: %{"#q" => %{"q" => "x"}}}))
   end
 
   test "highlights what a collector said is code, and only that" do

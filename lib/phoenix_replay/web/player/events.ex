@@ -117,10 +117,52 @@ defmodule PhoenixReplay.Web.Player.Events do
     do: event |> label() |> String.downcase() |> String.contains?(String.downcase(query))
 
   @doc """
-  Name–value pairs describing a collected event or an exit, shown when it
-  is selected. Other events describe themselves through the assigns.
+  Name–value pairs describing an event in full, for the details pane:
+  what was called with which params, the assigns a render or component
+  set, the query, log or crash, the client state or the viewport. Values
+  that are code or Elixir terms come highlighted.
   """
   @spec details(Event.t()) :: [{String.t(), String.t() | Phoenix.HTML.safe()}]
+  def details(%Event{type: :mount, data: %{assigns: assigns}}), do: [{"Assigns", term(assigns)}]
+
+  def details(%Event{type: :event, data: %{name: name, params: params} = data}) do
+    present([
+      {"Event", name},
+      {"Component", with({module, id} <- data[:target], do: component_label(module, id))},
+      {"Params", term(params)}
+    ])
+  end
+
+  def details(%Event{type: :params, data: %{uri: uri} = data}),
+    do: present([{"URL", uri}, {"Params", data |> Map.get(:params) |> term()}])
+
+  def details(%Event{type: :info, data: %{tag: nil}}),
+    do: [{"Message", "Not a tagged tuple; only a message's tag is kept"}]
+
+  def details(%Event{type: :info, data: %{tag: tag}}), do: [{"Message tag", term(tag)}]
+
+  def details(%Event{type: :render, data: %{assigns: assigns}}), do: [{"Assigns", term(assigns)}]
+
+  def details(%Event{type: :component, data: %{module: module, id: id, assigns: assigns}}),
+    do: [{"Component", component_label(module, id)}, {"Assigns", term(assigns)}]
+
+  def details(%Event{type: :component_destroyed, data: %{module: module, id: id}}),
+    do: [{"Component", component_label(module, id)}]
+
+  def details(%Event{type: :viewport, data: %{width: width, height: height} = viewport}) do
+    present([
+      {"Size", "#{width} × #{height}"},
+      {"Orientation", viewport |> Format.orientation() |> Atom.to_string()},
+      {"Pixel ratio", with(dpr when is_number(dpr) <- viewport[:dpr], do: "#{dpr}")}
+    ])
+  end
+
+  def details(%Event{type: :state, data: %{key: key, changes: changes}}) do
+    if key == State.inputs_key(),
+      do: [{"Form controls", term(changes)}],
+      else: [{"Key", key}, {"Changes", term(changes)}]
+  end
+
   def details(%Event{type: :telemetry, data: data} = event) do
     present([
       {"Event", Collector.name(data.event)},
@@ -308,6 +350,9 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   defp duration(nil), do: nil
   defp duration(ms), do: Format.milliseconds(ms)
+
+  defp term(nil), do: nil
+  defp term(value), do: Highlight.term(value, pretty: true, limit: 50, printable_limit: 1_000)
 
   defp metadata(metadata) when metadata == %{}, do: nil
   defp metadata(metadata), do: Highlight.term(metadata, pretty: true, limit: 50)

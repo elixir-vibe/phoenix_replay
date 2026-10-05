@@ -67,7 +67,7 @@ Below it, play at 1×, 2×, 5× or 10×, step to the previous or next event, and
 
 The panel beside it has three tabs:
 
-- **Events** groups events by interaction: a mount, a user event, a navigation or a message, with the renders, component updates, [queries, requests and logs](telemetry-and-logs.md) it caused under it. Filter them by text, or hide a kind with its chip. The selected query, log or crash opens its details under it.
+- **Events** groups events by interaction: a mount, a user event, a navigation or a message, with the renders, component updates, [queries, requests and logs](telemetry-and-logs.md) it caused under it. Filter them by text, or hide a kind with its chip. A pane under the list describes the current event in full: a user event's params, the assigns a render or component set, a navigation's URL, a query's SQL, duration and metadata, a log, a crash, client state or a viewport. Rows stay one line, so playback moves only the highlight. Pin the pane to keep an event's details while playback goes on, and drag the divider above it to resize it; the browser remembers the height.
 - **State** lists the assigns at that moment, marking the ones the selected event set. Open one to see its full value.
 - **Visit** shows the device, the other sessions of the same browser tab, the page the user came from, and how the visit started: its campaign, referrer, landing page and kept headers.
 
