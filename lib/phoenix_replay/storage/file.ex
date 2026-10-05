@@ -119,15 +119,33 @@ defmodule PhoenixReplay.Storage.File do
   defp own_pid, do: List.to_string(:os.getpid())
 
   # Another user's process answers kill with "not permitted": it runs.
+  # Without the tool to ask, as in some minimal images, the writer is taken
+  # as running: a part left behind waits, where one still being written
+  # would be lost.
   defp os_alive?(pid) do
     case :os.type() do
       {:win32, _name} ->
-        {out, _status} = System.cmd("tasklist", ["/FI", "PID eq #{pid}", "/NH"])
-        String.contains?(out, " #{pid} ")
+        with {:ok, out, _status} <- ask("tasklist", ["/FI", "PID eq #{pid}", "/NH"]),
+             do: String.contains?(out, " #{pid} ")
 
       {:unix, _name} ->
-        {out, status} = System.cmd("kill", ["-0", pid], stderr_to_stdout: true)
-        status == 0 or out =~ "not permitted"
+        with {:ok, out, status} <- ask("kill", ["-0", pid]),
+             do: status == 0 or out =~ "not permitted"
+    end
+  end
+
+  defp ask(command, args) do
+    case System.find_executable(command) do
+      nil ->
+        Logger.warning(
+          "PhoenixReplay: no #{command} to tell whether a recording's writer runs; leaving its chunks"
+        )
+
+        true
+
+      path ->
+        {out, status} = System.cmd(path, args, stderr_to_stdout: true)
+        {:ok, out, status}
     end
   end
 
