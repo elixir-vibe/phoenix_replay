@@ -21,7 +21,7 @@ defmodule PhoenixReplay.Web.Live.Index do
 
   alias PhoenixReplay.Catalog
   alias PhoenixReplay.Recording.Filter
-  alias PhoenixReplay.Web.{Context, Format, Layouts, Params}
+  alias PhoenixReplay.Web.{Context, Format, Highlight, Layouts, Params}
 
   @per_page 25
   @live_refresh_ms 2_000
@@ -30,6 +30,8 @@ defmodule PhoenixReplay.Web.Live.Index do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket), do: Catalog.subscribe()
+    # The player highlights code; the list warms the grammars for it.
+    :ok = Highlight.warm()
     context = Context.fetch(socket)
 
     {:ok,

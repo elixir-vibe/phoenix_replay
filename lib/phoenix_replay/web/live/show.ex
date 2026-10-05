@@ -32,7 +32,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   alias PhoenixReplay.Recording.{Filter, PointerTrack, Timeline}
   alias PhoenixReplay.{Catalog, Export}
   alias PhoenixReplay.Export.Options
-  alias PhoenixReplay.Web.{Context, Download, Layouts, Params}
+  alias PhoenixReplay.Web.{Context, Download, Highlight, Layouts, Params}
   alias PhoenixReplay.Web.Player.{Channel, Events}
 
   @speeds [1, 2, 5, 10]
@@ -42,6 +42,7 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
+    :ok = Highlight.warm()
     context = Context.fetch(socket)
     channel = Channel.new()
     if connected?(socket), do: Channel.subscribe(channel)

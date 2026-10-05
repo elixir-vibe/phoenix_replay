@@ -12,6 +12,24 @@ defmodule PhoenixReplay.Web.Highlight do
 
   @type language :: :elixir | :sql
 
+  # The grammars the player uses; Elixir injects `comment`.
+  @languages ~w(elixir sql comment)
+
+  @doc """
+  Compiles the grammars in the background, once per VM, so the first
+  replay does not wait for them. The dashboard calls it when it mounts;
+  an application that never opens the dashboard never compiles them.
+  """
+  @spec warm() :: :ok
+  def warm do
+    unless :persistent_term.get({__MODULE__, :warm}, false) do
+      :persistent_term.put({__MODULE__, :warm}, true)
+      _loading = Lumis.Languages.async_load(@languages)
+    end
+
+    :ok
+  end
+
   @doc "Highlights `source` written in `language`, for use inside `<code>` or `<pre>`."
   @spec code(String.t(), language()) :: Phoenix.HTML.safe()
   def code(source, language) when is_binary(source) do
