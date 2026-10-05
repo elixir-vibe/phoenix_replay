@@ -71,7 +71,7 @@ defmodule PhoenixReplay.Recording.Timeline do
 
     (from.index + 1)..min(index, tuple_size(events) - 1)//1
     |> Enum.reduce(from, &apply_event(&2, elem(events, &1)))
-    |> Map.put(:index, index)
+    |> then(&%{&1 | index: index})
   end
 
   @doc "The event after the current one, or `nil` after the last."

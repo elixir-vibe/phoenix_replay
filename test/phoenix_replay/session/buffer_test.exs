@@ -38,7 +38,9 @@ defmodule PhoenixReplay.Session.BufferTest do
     :ok = Buffer.open(recording, self(), Config.new(max_events: 1))
     on_exit(fn -> Buffer.close(recording.id) end)
 
-    assert {:ok, session, %Config{}} = Buffer.attribute([spawn(fn -> :ok end), self()])
+    assert {:ok, session, PhoenixReplay.Sanitizer.Default} =
+             Buffer.attribute([spawn(fn -> :ok end), self()])
+
     assert Buffer.record(self(), :info, %{tag: nil}) == :ok
     assert Buffer.record(self(), :info, %{tag: nil}) == :full
     assert Buffer.collect(session, :log, %{level: :info}, "log", 1) == :ok
@@ -83,6 +85,34 @@ defmodule PhoenixReplay.Session.BufferTest do
 
     assert %Summary{event_count: 3, event_names: ["save"], error_count: 1} =
              Enum.find(Buffer.summaries(), &(&1.id == id))
+
+    # Totals are kept as events are written, so flushing them all changes nothing.
+    :ok = Buffer.remove_flushed(id, Buffer.pending(id))
+    assert {:ok, %{events: []}} = Buffer.fetch(id)
+
+    assert %Summary{event_count: 3, event_names: ["save"], error_count: 1} =
+             Enum.find(Buffer.summaries(), &(&1.id == id))
+  end
+
+  test "keeps the latest offset and distinct names, and leaves nothing on close",
+       %{recording: %{id: id}} do
+    :ok = Buffer.record(self(), :event, %{name: "save", params: %{}})
+    Process.sleep(5)
+    :ok = Buffer.record(self(), :event, %{name: "add", params: %{}})
+    :ok = Buffer.record(self(), :event, %{name: "save", params: %{}})
+    :ok = Buffer.record(self(), :pointer, %{span: 0, moves: [], presses: [], scrolls: []})
+
+    {:ok, %{events: events}} = Buffer.fetch(id)
+    summary = Enum.find(Buffer.summaries(), &(&1.id == id))
+
+    assert summary.event_names == ["add", "save"]
+    assert summary.event_count == 3
+    assert summary.duration_ms == events |> Enum.map(& &1.at) |> Enum.max()
+    assert summary.duration_ms >= 5
+
+    :ok = Buffer.close(id)
+    assert :ets.match(Buffer, {{:event_name, id, :_}}) == []
+    assert :ets.match(Buffer, {{id, :_}, :_}) == []
   end
 
   test "keeps the draw made when the session opened" do
@@ -116,7 +146,7 @@ defmodule PhoenixReplay.Session.BufferTest do
   test "a collector writing as its session closes leaves nothing behind", %{
     recording: %{id: id}
   } do
-    {:ok, session, _config} = Buffer.attribute([self()])
+    {:ok, session, _sanitizer} = Buffer.attribute([self()])
     :ok = Buffer.close(id)
 
     assert :ok =

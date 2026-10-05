@@ -54,11 +54,11 @@ defmodule PhoenixReplay.Capture.Logs do
   @spec log(:logger.log_event(), :logger.handler_config()) :: :ok
   def log(%{level: level, meta: meta} = event, %{config: logs}) do
     case Buffer.attribute([self() | Collectors.callers()]) do
-      {:ok, session, config} ->
+      {:ok, session, sanitizer} ->
         data = %{
           level: level,
           message: message(event),
-          metadata: config.sanitizer.sanitize_params(Map.take(meta, logs.metadata))
+          metadata: sanitizer.sanitize_params(Map.take(meta, logs.metadata))
         }
 
         Buffer.collect(session, :log, data, "log", logs.limit)

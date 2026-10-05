@@ -58,8 +58,8 @@ defmodule PhoenixReplay.Capture.State do
   @doc "Records a batch sent by the browser for the session `pid` records."
   @spec capture(pid(), map(), Config.state()) :: :ok | :dropped | :error
   def capture(pid, params, state) do
-    with {:ok, session, config} <- Buffer.attribute([pid]),
-         {:ok, data} <- parse(params, state, config.sanitizer) do
+    with {:ok, session, sanitizer} <- Buffer.attribute([pid]),
+         {:ok, data} <- parse(params, state, sanitizer) do
       Buffer.collect(session, :state, data, "state", state.limit)
     else
       _invalid -> :error

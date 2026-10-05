@@ -78,7 +78,7 @@ defmodule PhoenixReplay.Recording.Summary do
       live?: Keyword.get(opts, :live?, false)
     }
 
-    Map.merge(summary, totals(recording.events))
+    struct!(summary, totals(recording.events))
   end
 
   @doc """
@@ -95,22 +95,34 @@ defmodule PhoenixReplay.Recording.Summary do
     %{totals | event_names: names |> Enum.uniq() |> Enum.sort()}
   end
 
+  @doc """
+  How one event adds to `totals/2`: `1` or `0` to the event count and to
+  the error count, and its `handle_event/3` name, if it has one.
+  `PhoenixReplay.Session.Buffer` keeps running totals with it as events
+  are written.
+  """
+  @spec counts(Event.t()) :: {0 | 1, 0 | 1, String.t() | nil}
+  def counts(%Event{} = event),
+    do: {one(event.type not in [:pointer, :state]), one(Event.error?(event)), event_name(event)}
+
   defp count(%Event{} = event, {totals, names}) do
+    {shown, error, name} = counts(event)
+
     totals = %{
       totals
-      | event_count: totals.event_count + one(event.type not in [:pointer, :state]),
-        error_count: totals.error_count + one(Event.error?(event)),
+      | event_count: totals.event_count + shown,
+        error_count: totals.error_count + error,
         duration_ms: max(totals.duration_ms, event.at)
     }
 
-    {totals, event_name(event, names)}
+    {totals, if(name, do: [name | names], else: names)}
   end
 
   defp one(true), do: 1
   defp one(false), do: 0
 
-  defp event_name(%Event{type: :event, data: %{name: name}}, names), do: [name | names]
-  defp event_name(_event, names), do: names
+  defp event_name(%Event{type: :event, data: %{name: name}}), do: name
+  defp event_name(_event), do: nil
 
   @doc """
   When the recording reached storage: `saved_at`, or `connected_at` for

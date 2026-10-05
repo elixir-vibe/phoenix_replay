@@ -22,22 +22,20 @@ defmodule PhoenixReplay.Telemetry do
 
     * `[:phoenix_replay, :collector, :exception]` — a
       `PhoenixReplay.Collector`, the log handler or LiveComponent recording
-      raised while handling an event, which was not recorded. Metadata: `%{collector: module, event:
-      [atom], kind: atom, reason: term, stacktrace: list}`.
+      raised while handling an event, which was not recorded. Metadata:
+      `%{collector: module, event: [atom], kind: atom, reason: term,
+      stacktrace: list}`.
   """
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Keep, Summary, Timeline}
+  alias PhoenixReplay.Recording.{Keep, Summary}
 
   @doc "Emits `[:phoenix_replay, :recording, :persisted]`."
   @spec persisted(Recording.t()) :: :ok
   def persisted(%Recording{} = recording) do
     :telemetry.execute(
       [:phoenix_replay, :recording, :persisted],
-      %{
-        event_count: Summary.totals(recording.events).event_count,
-        duration_ms: Timeline.duration_ms(recording)
-      },
+      measurements(recording),
       %{id: recording.id, view: recording.view}
     )
   end
@@ -47,10 +45,7 @@ defmodule PhoenixReplay.Telemetry do
   def recovered(%Recording{} = recording) do
     :telemetry.execute(
       [:phoenix_replay, :recording, :recovered],
-      %{
-        event_count: Summary.totals(recording.events).event_count,
-        duration_ms: Timeline.duration_ms(recording)
-      },
+      measurements(recording),
       %{id: recording.id, view: recording.view}
     )
   end
@@ -77,5 +72,9 @@ defmodule PhoenixReplay.Telemetry do
       reason: reason,
       stacktrace: stacktrace
     })
+  end
+
+  defp measurements(recording) do
+    recording.events |> Summary.totals() |> Map.take([:event_count, :duration_ms])
   end
 end

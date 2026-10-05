@@ -44,7 +44,7 @@ defmodule PhoenixReplay.Capture.Pointer do
   @doc "Records a batch sent by the browser for the session `pid` records."
   @spec capture(pid(), map(), Config.pointer()) :: :ok | :dropped | :error
   def capture(pid, params, pointer) do
-    with {:ok, session, _config} <- Buffer.attribute([pid]),
+    with {:ok, session, _sanitizer} <- Buffer.attribute([pid]),
          {:ok, data} <- parse(params, pointer.max_points) do
       Buffer.collect(session, :pointer, data, "pointer", pointer.limit)
     else

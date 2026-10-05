@@ -60,8 +60,8 @@ defmodule PhoenixReplay.Capture.AsyncResults do
   def snapshot(pid, module, id, cid) do
     with {:ok, components} <- Phoenix.LiveView.Debug.live_components(pid),
          %{assigns: assigns} <- Enum.find(components, &(&1.cid == cid)),
-         {:ok, _id, config} <- Buffer.session(pid) do
-      assigns = Assigns.component(assigns, config.sanitizer)
+         {:ok, _id, sanitizer} <- Buffer.session(pid) do
+      assigns = Assigns.component(assigns, sanitizer)
       Buffer.record(pid, :component, %{module: module, id: id, assigns: assigns})
       :ok
     else

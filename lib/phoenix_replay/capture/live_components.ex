@@ -76,8 +76,8 @@ defmodule PhoenixReplay.Capture.LiveComponents do
        )
        when is_map(params) do
     case Buffer.session(self()) do
-      {:ok, _id, config} ->
-        params = config.sanitizer.sanitize_params(Client.observe(params))
+      {:ok, _id, sanitizer} ->
+        params = sanitizer.sanitize_params(Client.observe(params))
         record(:event, %{name: name, params: params, target: {module, id}})
 
       :error ->
@@ -125,8 +125,8 @@ defmodule PhoenixReplay.Capture.LiveComponents do
 
   defp record_changes(module, %{assigns: %{id: id, __changed__: changed} = assigns})
        when map_size(changed) > 0 do
-    with {:ok, _id, config} <- Buffer.session(self()),
-         changes when map_size(changes) > 0 <- sanitized_changes(assigns, changed, config) do
+    with {:ok, _id, sanitizer} <- Buffer.session(self()),
+         changes when map_size(changes) > 0 <- sanitized_changes(assigns, changed, sanitizer) do
       record(:component, %{module: module, id: id, assigns: changes})
     else
       _nothing -> :ok
@@ -135,10 +135,10 @@ defmodule PhoenixReplay.Capture.LiveComponents do
 
   defp record_changes(_module, _socket), do: :ok
 
-  defp sanitized_changes(assigns, changed, config) do
+  defp sanitized_changes(assigns, changed, sanitizer) do
     assigns
     |> Map.take(Map.keys(changed))
-    |> Assigns.component(config.sanitizer)
+    |> Assigns.component(sanitizer)
   end
 
   defp record(type, data) do
