@@ -120,10 +120,11 @@ defmodule PhoenixReplay.Trace do
   event per report.
   """
   @spec events(Recording.t() | Recording.id()) :: [event()]
-  def events(recording) do
-    playback = playback(recording)
+  def events(recording), do: recording |> playback() |> listed()
 
-    playback.events
+  # The events of a recording laid out for playback.
+  defp listed(%Recording{events: events}) do
+    events
     |> Events.interactions()
     |> Enum.flat_map(fn {{_head, head_index} = head, rows} ->
       [event(head, nil) | Enum.map(rows, &event(&1, head_index))]
@@ -136,13 +137,14 @@ defmodule PhoenixReplay.Trace do
   """
   @spec state(Recording.t() | Recording.id(), non_neg_integer()) :: state()
   def state(recording, index) do
-    timeline = recording |> playback() |> Timeline.at(index)
+    playback = playback(recording)
+    timeline = Timeline.at(playback, index)
     {client_state, assigns} = Map.pop(timeline.assigns, State.assign(), %{})
 
     %{
       index: timeline.index,
       at: timeline.event.at,
-      event: event({timeline.event, timeline.index}, nil),
+      event: playback |> listed() |> Enum.at(timeline.index),
       url: timeline.url,
       viewport: timeline.viewport,
       assigns: assigns,

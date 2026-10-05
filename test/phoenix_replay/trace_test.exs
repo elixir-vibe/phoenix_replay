@@ -58,7 +58,7 @@ defmodule PhoenixReplay.TraceTest do
     assert %{
              index: 3,
              at: 1_001,
-             event: %{type: :render},
+             event: %{type: :render, caused_by: 2},
              url: "http://localhost/counter",
              assigns: %{count: 1},
              client_state: %{},
