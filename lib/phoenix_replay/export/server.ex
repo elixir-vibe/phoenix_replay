@@ -17,7 +17,7 @@ defmodule PhoenixReplay.Export.Server do
   require Logger
 
   alias PhoenixReplay.Config
-  alias PhoenixReplay.Export.{Job, Video}
+  alias PhoenixReplay.Export.{Job, Options, Video}
 
   @topic "phoenix_replay:export:"
 
@@ -26,8 +26,9 @@ defmodule PhoenixReplay.Export.Server do
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
   @doc "Queues an export of a recording, unless one is queued or running."
-  @spec start(PhoenixReplay.Recording.id(), Config.t()) :: {:ok, Job.t()}
-  def start(recording_id, config), do: GenServer.call(__MODULE__, {:start, recording_id, config})
+  @spec start(PhoenixReplay.Recording.id(), Config.t(), Options.t()) :: {:ok, Job.t()}
+  def start(recording_id, config, options),
+    do: GenServer.call(__MODULE__, {:start, recording_id, config, options})
 
   @doc "Cancels the job with `id`, if it is queued or running."
   @spec cancel(Job.id()) :: :ok
@@ -50,13 +51,13 @@ defmodule PhoenixReplay.Export.Server do
   def init(nil), do: {:ok, %{jobs: %{}, order: [], queue: :queue.new(), running: %{}}}
 
   @impl true
-  def handle_call({:start, recording_id, config}, _from, state) do
+  def handle_call({:start, recording_id, config, options}, _from, state) do
     case Enum.find(active(state), &(&1.recording_id == recording_id)) do
       %Job{} = job ->
         {:reply, {:ok, job}, state}
 
       nil ->
-        job = Job.new(recording_id)
+        job = Job.new(recording_id, options)
 
         state =
           %{

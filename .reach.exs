@@ -43,6 +43,7 @@ orchestrator = [
 model = [
   "PhoenixReplay.Config",
   "PhoenixReplay.Export.Job",
+  "PhoenixReplay.Export.Options",
   "PhoenixReplay.Export.Schedule",
   "PhoenixReplay.Recording",
   "PhoenixReplay.Recording.*"

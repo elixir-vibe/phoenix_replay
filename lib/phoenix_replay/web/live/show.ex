@@ -19,8 +19,9 @@ defmodule PhoenixReplay.Web.Live.Show do
   as it was, so selecting one shows its details next to the assigns.
 
   A saved recording can be exported as a video when `PhoenixReplay.Export`
-  is available. The export runs under `PhoenixReplay.Export.Server`, and
-  the player follows its progress and links the video when it is ready.
+  is available, with the options its dialog offers. The export runs under
+  `PhoenixReplay.Export.Server`, and the player follows its progress and
+  links the video when it is ready.
   """
 
   use Phoenix.LiveView
@@ -30,6 +31,7 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   alias PhoenixReplay.Recording.{Filter, PointerTrack, Timeline}
   alias PhoenixReplay.{Catalog, Export}
+  alias PhoenixReplay.Export.Options
   alias PhoenixReplay.Web.{Context, Download, Layouts, Params}
   alias PhoenixReplay.Web.Player.{Channel, Events}
 
@@ -70,6 +72,8 @@ defmodule PhoenixReplay.Web.Live.Show do
         follow_scroll?: true,
         export: nil,
         exportable?: false,
+        # The export dialog's params and error while it is open.
+        export_dialog: nil,
         # A link to a moment opens the player there.
         start_at: Params.integer(params["at"], nil)
       )
@@ -83,6 +87,13 @@ defmodule PhoenixReplay.Web.Live.Show do
 
       true ->
         {:ok, socket}
+    end
+  end
+
+  defp start_export(socket, options) do
+    case Export.start(socket.assigns.id, socket.assigns.context.config, options) do
+      {:ok, job} -> assign(socket, :export, job)
+      {:error, reason} -> put_flash(socket, :error, Export.describe(reason))
     end
   end
 
@@ -227,12 +238,53 @@ defmodule PhoenixReplay.Web.Live.Show do
     end
   end
 
-  def handle_event("export", _params, %{assigns: %{exportable?: true}} = socket) do
-    case Export.start(socket.assigns.id, socket.assigns.context.config) do
-      {:ok, job} -> {:noreply, assign(socket, :export, job)}
-      {:error, reason} -> {:noreply, put_flash(socket, :error, Export.describe(reason))}
+  def handle_event("export_dialog", _params, %{assigns: %{exportable?: true}} = socket) do
+    options = Options.new(socket.assigns.context.config.export)
+
+    params = %{
+      "from" => "",
+      "to" => "",
+      "skip_idle" => to_string(options.skip_idle),
+      "pointer" => "true",
+      "rotated" => to_string(socket.assigns.rotated?),
+      "size" => "recorded",
+      "fps" => to_string(options.fps),
+      "quality" => "balanced"
+    }
+
+    {:noreply, assign(socket, :export_dialog, %{params: params, error: nil})}
+  end
+
+  def handle_event(
+        "export_form",
+        %{"export" => params},
+        %{assigns: %{export_dialog: %{}}} = socket
+      ),
+      do: {:noreply, update(socket, :export_dialog, &%{&1 | params: params})}
+
+  # Fills From or To with the moment the player is at.
+  def handle_event("export_at", %{"field" => field}, %{assigns: %{export_dialog: %{}}} = socket)
+      when field in ~w(from to) do
+    seconds = :erlang.float_to_binary(socket.assigns.at / 1_000, decimals: 2)
+    {:noreply, update(socket, :export_dialog, &put_in(&1, [:params, field], seconds))}
+  end
+
+  def handle_event("close_export_dialog", _params, socket),
+    do: {:noreply, assign(socket, :export_dialog, nil)}
+
+  def handle_event("export", %{"export" => params}, %{assigns: %{exportable?: true}} = socket) do
+    case Options.parse(params, socket.assigns.context.config.export) do
+      {:ok, options} ->
+        {:noreply, socket |> assign(:export_dialog, nil) |> start_export(options)}
+
+      {:error, message} ->
+        {:noreply, assign(socket, :export_dialog, %{params: params, error: message})}
     end
   end
+
+  # Trying again after a failure uses the options that failed.
+  def handle_event("export", _params, %{assigns: %{exportable?: true}} = socket),
+    do: {:noreply, start_export(socket, socket.assigns.export && socket.assigns.export.options)}
 
   def handle_event("cancel_export", _params, %{assigns: %{export: %{id: id}}} = socket) do
     :ok = Export.cancel(id)
@@ -430,6 +482,13 @@ defmodule PhoenixReplay.Web.Live.Show do
       at={@at}
       link={Context.path(@context, [@recording.id]) <> "?at=#{@index}"}
       can_export={@exportable?}
+    />
+    <.export_dialog
+      :if={@export_dialog}
+      params={@export_dialog.params}
+      error={@export_dialog.error}
+      rotatable={@viewport != nil}
+      max_dpr={@context.config.export.max_dpr}
     />
     <.export_status
       :if={@export}

@@ -9,6 +9,9 @@ defmodule PhoenixReplay.Export.Stage do
   `window.phoenixReplayStage.show/1`, set up by the `ExportStage` hook,
   to size the frame, wait for the event to render and move the pointer to
   the moment before each screenshot.
+
+  `pointer=false` hides the pointer while the page still scrolls as
+  recorded; `rotated=true` turns both off, as the player does when rotated.
   """
 
   use Phoenix.LiveView
@@ -34,7 +37,9 @@ defmodule PhoenixReplay.Export.Stage do
        frame_src: Context.path(context, ["frame", token, id]) <> "?" <> query,
        viewport: recording.client.viewport || @default_viewport,
        track: track,
-       pointer?: PointerTrack.any?(track)
+       pointer?: PointerTrack.any?(track),
+       hidden?: params["pointer"] == "false",
+       rotated?: params["rotated"] == "true"
      ), layout: false}
   end
 
@@ -64,10 +69,11 @@ defmodule PhoenixReplay.Export.Stage do
           phx-update="ignore"
           data-frame-overlay
           data-follow-scroll
+          data-rotated={@rotated?}
           data-track={JSON.encode!(@track)}
           data-width={@viewport.width}
           data-height={@viewport.height}
-          style="position: absolute; inset: 0; pointer-events: none;"
+          style={"position: absolute; inset: 0; pointer-events: none; visibility: #{if @hidden?, do: "hidden", else: "visible"};"}
         >
         </div>
       </div>

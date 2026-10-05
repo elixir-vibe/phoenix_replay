@@ -129,9 +129,9 @@ defmodule PhoenixReplay.Web.Components.Player do
             <button
               id="replay-export"
               type="button"
-              phx-click={JS.push("export") |> close_menu("replay-menu")}
+              phx-click={JS.push("export_dialog") |> close_menu("replay-menu")}
             >
-              <.icon name="lucide:clapperboard" class="size-4" /> Export video
+              <.icon name="lucide:clapperboard" class="size-4" /> Export video…
             </button>
           </:item>
           <:item :if={@can_delete} tone="danger">
@@ -142,6 +142,191 @@ defmodule PhoenixReplay.Web.Components.Player do
         </.menu>
       </div>
     </header>
+    """
+  end
+
+  @doc """
+  The export dialog: the range of the recording, whether idle stretches
+  are shortened and the pointer drawn, the orientation, and the size,
+  frame rate and quality of the video. `params` are the form's values,
+  as `PhoenixReplay.Export.Options.parse/2` reads them.
+  """
+  attr :params, :map, required: true
+  attr :error, :string, default: nil
+  attr :rotatable, :boolean, default: true, doc: "whether the recording has a viewport to rotate"
+  attr :max_dpr, :integer, required: true
+
+  @spec export_dialog(map()) :: Phoenix.LiveView.Rendered.t()
+  def export_dialog(assigns) do
+    ~H"""
+    <div
+      id="replay-export-dialog"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+      phx-window-keydown="close_export_dialog"
+      phx-key="Escape"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="replay-export-title"
+        phx-click-away="close_export_dialog"
+        phx-mounted={JS.focus_first()}
+        class="w-full max-w-md rounded-xl border border-line bg-surface p-5 text-sm shadow-xl"
+      >
+        <h2 id="replay-export-title" class="text-base font-semibold">Export video</h2>
+        <p class="mt-1 text-muted">An MP4 of the replayed page, as the player shows it.</p>
+        <form
+          id="replay-export-form"
+          phx-change="export_form"
+          phx-submit="export"
+          class="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3"
+        >
+          <span class="text-muted">Range</span>
+          <div class="flex flex-wrap items-center gap-2">
+            <.time_field field="from" value={@params["from"]} placeholder="start" />
+            <span class="text-muted">to</span>
+            <.time_field field="to" value={@params["to"]} placeholder="end" />
+            <span class="text-xs text-muted">seconds</span>
+          </div>
+
+          <span class="text-muted">Show</span>
+          <div class="flex flex-col gap-1.5">
+            <.check_field field="skip_idle" params={@params}>Skip inactivity</.check_field>
+            <.check_field field="pointer" params={@params} disabled={@params["rotated"] == "true"}>
+              The pointer
+            </.check_field>
+            <.check_field :if={@rotatable} field="rotated" params={@params}>
+              Rotated to the other orientation
+            </.check_field>
+          </div>
+
+          <label for="replay-export-size" class="text-muted">Size</label>
+          <.select_field
+            id="replay-export-size"
+            field="size"
+            value={@params["size"]}
+            options={[
+              {"recorded", "As recorded, up to #{@max_dpr}×"},
+              {"1x", "1×"},
+              {"half", "Half"}
+            ]}
+          />
+
+          <label for="replay-export-fps" class="text-muted">Frame rate</label>
+          <.select_field
+            id="replay-export-fps"
+            field="fps"
+            value={@params["fps"]}
+            options={
+              Enum.map(PhoenixReplay.Export.Options.frame_rates(), &{to_string(&1), "#{&1} fps"})
+            }
+          />
+
+          <label for="replay-export-quality" class="text-muted">Quality</label>
+          <.select_field
+            id="replay-export-quality"
+            field="quality"
+            value={@params["quality"]}
+            options={[{"small", "Smaller file"}, {"balanced", "Balanced"}, {"best", "Best"}]}
+          />
+
+          <p :if={@error} id="replay-export-error" role="alert" class="col-span-2 text-error">
+            {@error}
+          </p>
+
+          <div class="col-span-2 mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              phx-click="close_export_dialog"
+              class="inline-flex h-9 items-center rounded-md border border-line px-3 hover:bg-hover"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="inline-flex h-9 items-center gap-1.5 rounded-md bg-ink px-3 font-medium text-on-ink hover:opacity-90"
+            >
+              <.icon name="lucide:clapperboard" class="size-4" /> Export
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    """
+  end
+
+  attr :field, :string, required: true
+  attr :value, :string, default: nil
+  attr :placeholder, :string, required: true
+
+  defp time_field(assigns) do
+    ~H"""
+    <span class="inline-flex items-center rounded-md border border-line bg-surface">
+      <input
+        id={"replay-export-#{@field}"}
+        type="number"
+        name={"export[#{@field}]"}
+        value={@value}
+        min="0"
+        step="0.01"
+        placeholder={@placeholder}
+        aria-label={if @field == "from", do: "From, in seconds", else: "To, in seconds"}
+        class="h-8 w-20 rounded-l-md bg-transparent px-2 font-mono tabular-nums outline-none"
+      />
+      <button
+        type="button"
+        phx-click="export_at"
+        phx-value-field={@field}
+        title="The moment the player is at"
+        aria-label={"Set #{@field} to the current moment"}
+        class="inline-flex h-8 items-center border-l border-line px-1.5 text-muted hover:text-ink"
+      >
+        <.icon name="lucide:map-pin" class="size-3.5" />
+      </button>
+    </span>
+    """
+  end
+
+  attr :field, :string, required: true
+  attr :params, :map, required: true
+  attr :disabled, :boolean, default: false
+  slot :inner_block, required: true
+
+  # An unchecked box sends nothing, so a hidden field sends "false" for it.
+  defp check_field(assigns) do
+    ~H"""
+    <label class={["inline-flex items-center gap-2", @disabled && "opacity-50"]}>
+      <input type="hidden" name={"export[#{@field}]"} value="false" />
+      <input
+        id={"replay-export-#{@field}"}
+        type="checkbox"
+        name={"export[#{@field}]"}
+        value="true"
+        checked={@params[@field] == "true" and not @disabled}
+        disabled={@disabled}
+        class="size-4 accent-[var(--color-accent)]"
+      />
+      {render_slot(@inner_block)}
+    </label>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :field, :string, required: true
+  attr :value, :string, default: nil
+  attr :options, :list, required: true
+
+  defp select_field(assigns) do
+    ~H"""
+    <select
+      id={@id}
+      name={"export[#{@field}]"}
+      class="h-8 rounded-md border border-line bg-surface px-2"
+    >
+      <option :for={{value, label} <- @options} value={value} selected={value == @value}>
+        {label}
+      </option>
+    </select>
     """
   end
 

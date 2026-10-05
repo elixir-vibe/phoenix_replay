@@ -11,7 +11,6 @@ defmodule PhoenixReplay.Export.Encoder do
 
   require Logger
 
-  alias PhoenixReplay.Config
   alias PhoenixReplay.Export.Schedule
 
   @typedoc "Each screenshot's path and the frames it lasts, in order."
@@ -21,7 +20,7 @@ defmodule PhoenixReplay.Export.Encoder do
   @type progress :: (float() -> any())
 
   @doc "Encodes `shots` into `path`, reporting progress."
-  @spec run(shots(), Schedule.t(), Path.t(), Config.export(), progress()) ::
+  @spec run(shots(), Schedule.t(), Path.t(), map(), progress()) ::
           :ok | {:error, term()}
   def run([{first, _frames} | _rest] = shots, schedule, path, export, progress) do
     list = Path.join(Path.dirname(first), "shots.ffconcat")
@@ -54,7 +53,7 @@ defmodule PhoenixReplay.Export.Encoder do
   defp args(list, path, duration_ms, fps, export) do
     ~w(-y -v error -nostats -progress pipe:1 -f concat -safe 0 -i) ++
       [list, "-t", seconds(duration_ms)] ++
-      ["-vf", "fps=#{fps},scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"] ++
+      ["-vf", "fps=#{fps},scale=#{even("iw", export)}:#{even("ih", export)},format=yuv420p"] ++
       ["-c:v", "libx264", "-preset", export.preset, "-crf", Integer.to_string(export.crf)] ++
       ["-movflags", "+faststart", path]
   end
@@ -94,6 +93,9 @@ defmodule PhoenixReplay.Export.Encoder do
 
     if Port.info(port), do: Port.close(port)
   end
+
+  # Scaled by the export's `:scale`, rounded down to even pixels.
+  defp even(side, export), do: "trunc(#{side}*#{Map.get(export, :scale, 1)}/2)*2"
 
   defp seconds(ms), do: :erlang.float_to_binary(ms / 1_000, decimals: 6)
 

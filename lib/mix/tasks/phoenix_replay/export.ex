@@ -4,7 +4,7 @@ defmodule Mix.Tasks.PhoenixReplay.Export do
   @moduledoc """
   #{@shortdoc}, for a bug report or a ticket.
 
-      mix phoenix_replay.export RECORDING_ID [--output replay.mp4]
+      mix phoenix_replay.export RECORDING_ID [--output replay.mp4] [options]
 
   It starts your application, exports the recording with
   `PhoenixReplay.Export` as the player's **Export video** does, shows the
@@ -14,13 +14,37 @@ defmodule Mix.Tasks.PhoenixReplay.Export do
   its own.
 
   Exporting needs the `:export` configuration; see `PhoenixReplay.Export`.
+
+  ## Options
+
+  The same as the player's export dialog, by default as configured; see
+  `PhoenixReplay.Export.Options`:
+
+    * `--from SECONDS`, `--to SECONDS` — the range of the recording
+    * `--no-skip-idle` — keep stretches without activity whole
+    * `--no-pointer` — leave the pointer out
+    * `--rotated` — show the other orientation than recorded
+    * `--size recorded|1x|half` — the video's size
+    * `--fps 15|30|60` — the frame rate
+    * `--quality small|balanced|best` — the trade between size and detail
   """
 
   use Mix.Task
 
   alias PhoenixReplay.{Config, Export}
+  alias PhoenixReplay.Export.Options
 
-  @switches [output: :string]
+  @switches [
+    output: :string,
+    from: :string,
+    to: :string,
+    skip_idle: :boolean,
+    pointer: :boolean,
+    rotated: :boolean,
+    size: :string,
+    fps: :string,
+    quality: :string
+  ]
   @aliases [o: :output]
 
   @impl true
@@ -40,8 +64,19 @@ defmodule Mix.Tasks.PhoenixReplay.Export do
     with {:error, reason} <- Export.available(config),
          do: Mix.raise("Cannot export videos: " <> Export.describe(reason))
 
+    params =
+      opts
+      |> Keyword.delete(:output)
+      |> Map.new(fn {key, value} -> {to_string(key), to_string(value)} end)
+
+    options =
+      case Options.parse(params, config.export) do
+        {:ok, options} -> options
+        {:error, message} -> Mix.raise(message)
+      end
+
     :ok = Export.subscribe(id)
-    {:ok, job} = Export.start(id, config)
+    {:ok, job} = Export.start(id, config, options)
     job = await(job)
 
     case job.status do

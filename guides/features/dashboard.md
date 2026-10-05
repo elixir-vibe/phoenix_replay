@@ -77,13 +77,15 @@ Each viewer drives a private frame, so several people can watch the same recordi
 
 ## Exporting videos
 
-**Export video** in the player's menu turns a saved recording into an MP4 of the replayed page and the pointer, for a bug report or a ticket. A bar under the header shows its progress and, when it is done, links the video. **Cancel** stops it: a queued export never starts, and a running one closes its browser and stops encoding, leaving no files behind. Several viewers asking for the same recording share one export, and the video is kept for an hour.
+**Export video…** in the player's menu turns a saved recording into an MP4 of the replayed page and the pointer, for a bug report or a ticket. Its dialog chooses the range, from the start or the current moment to the end or another one; whether stretches without activity are shortened; whether the pointer is drawn; the orientation; and the size, frame rate and quality of the video. The defaults follow the configuration. A bar under the header shows its progress and, when it is done, links the video. **Cancel** stops it: a queued export never starts, and a running one closes its browser and stops encoding, leaving no files behind. Several viewers asking for the same recording share one export, and the video is kept for an hour.
 
 The same export runs from the command line, with no server running:
 
 ```console
-mix phoenix_replay.export <recording-id> --output checkout-bug.mp4
+mix phoenix_replay.export <recording-id> --output checkout-bug.mp4 --from 12 --to 40 --fps 60
 ```
+
+Its flags are the dialog's options: `--from` and `--to` in seconds, `--no-skip-idle`, `--no-pointer`, `--rotated`, `--size recorded|1x|half`, `--fps 15|30|60` and `--quality small|balanced|best`.
 
 A recording holds no pixels, so an export replays it in a headless Chromium and films it, the way the player shows it: at the recorded viewport and pixel ratio, rotations included, with the cursor, touches, ripples and scrolling drawn over it. It films at 30 frames per second but screenshots only when the picture changes, and shortens stretches without activity to three seconds, so an export takes about as long as the activity it shows, not the whole session, and makes a small file. `ffmpeg` encodes it as H.264.
 

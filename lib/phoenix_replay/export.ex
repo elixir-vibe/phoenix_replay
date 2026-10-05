@@ -37,7 +37,7 @@ defmodule PhoenixReplay.Export do
   """
 
   alias PhoenixReplay.Config
-  alias PhoenixReplay.Export.{Job, Server}
+  alias PhoenixReplay.Export.{Job, Options, Server}
   alias PhoenixReplay.Recording
 
   @typedoc "Why exporting is not possible."
@@ -71,12 +71,15 @@ defmodule PhoenixReplay.Export do
   def describe(:no_ffmpeg), do: "install ffmpeg, or set its path in the :export config"
 
   @doc """
-  Exports a saved recording, or returns the export of it already queued
-  or running.
+  Exports a saved recording with `options`, by default those the
+  configuration sets, or returns the export of it already queued or
+  running. See `PhoenixReplay.Export.Options`.
   """
-  @spec start(Recording.id(), Config.t()) :: {:ok, Job.t()} | {:error, unavailable()}
-  def start(recording_id, config \\ Config.load()) do
-    with :ok <- available(config), do: Server.start(recording_id, config)
+  @spec start(Recording.id(), Config.t(), Options.t() | nil) ::
+          {:ok, Job.t()} | {:error, unavailable()}
+  def start(recording_id, config \\ Config.load(), options \\ nil) do
+    with :ok <- available(config),
+         do: Server.start(recording_id, config, options || Options.new(config.export))
   end
 
   @doc """

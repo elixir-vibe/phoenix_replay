@@ -8,6 +8,7 @@ defmodule PhoenixReplay.Export.Job do
   `progress` is a percentage.
   """
 
+  alias PhoenixReplay.Export.Options
   alias PhoenixReplay.Recording
 
   @type id :: String.t()
@@ -16,6 +17,7 @@ defmodule PhoenixReplay.Export.Job do
   @type t :: %__MODULE__{
           id: id(),
           recording_id: Recording.id(),
+          options: Options.t(),
           status: status(),
           progress: 0..100,
           path: Path.t() | nil,
@@ -23,15 +25,25 @@ defmodule PhoenixReplay.Export.Job do
           finished_at: integer() | nil
         }
 
-  @enforce_keys [:id, :recording_id]
-  defstruct [:id, :recording_id, :path, :error, :finished_at, status: :queued, progress: 0]
+  @enforce_keys [:id, :recording_id, :options]
+  defstruct [
+    :id,
+    :recording_id,
+    :options,
+    :path,
+    :error,
+    :finished_at,
+    status: :queued,
+    progress: 0
+  ]
 
-  @doc "A queued export of a recording."
-  @spec new(Recording.id()) :: t()
-  def new(recording_id),
+  @doc "A queued export of a recording, with the options it was asked for."
+  @spec new(Recording.id(), Options.t()) :: t()
+  def new(recording_id, %Options{} = options),
     do: %__MODULE__{
       id: Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false),
-      recording_id: recording_id
+      recording_id: recording_id,
+      options: options
     }
 
   @doc "Whether the export has finished, either way."

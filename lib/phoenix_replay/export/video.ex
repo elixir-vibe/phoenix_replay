@@ -11,14 +11,15 @@ defmodule PhoenixReplay.Export.Video do
   """
 
   alias PhoenixReplay.{Catalog, Config, Recording}
-  alias PhoenixReplay.Export.{Capture, Encoder, Job, Runtime, Schedule}
-  alias PhoenixReplay.Recording.Timeline
+  alias PhoenixReplay.Export.{Capture, Encoder, Job, Options, Runtime, Schedule}
+  alias PhoenixReplay.Recording.{PointerTrack, Timeline}
 
   @captured 0.9
 
   @doc "Renders the video of `job`'s recording, reporting progress from 0 to 1."
   @spec render(Job.t(), Config.t(), (float() -> any())) :: {:ok, Path.t()} | {:error, term()}
-  def render(%Job{id: id, recording_id: recording_id}, %Config{export: export} = config, progress) do
+  def render(%Job{id: id, recording_id: recording_id} = job, %Config{} = config, progress) do
+    export = Options.apply(job.options, config.export)
     dir = dir(export)
     shots = Path.join(dir, id)
     video = Path.join(dir, id <> ".mp4")
@@ -26,8 +27,8 @@ defmodule PhoenixReplay.Export.Video do
 
     try do
       with {:ok, recording} <- fetch(config, recording_id),
-           schedule = plan(recording, export),
-           {:ok, runtime} <- Runtime.ensure(export),
+           schedule = plan(recording, export, job.options),
+           {:ok, runtime} <- Runtime.ensure(config.export),
            {:ok, list} <-
              Capture.run(
                runtime,
@@ -35,6 +36,7 @@ defmodule PhoenixReplay.Export.Video do
                schedule,
                shots,
                export,
+               job.options,
                &progress.(&1 * @captured)
              ),
            :ok <-
@@ -67,7 +69,7 @@ defmodule PhoenixReplay.Export.Video do
   def describe_error(reason), do: "The export failed: #{inspect(reason)}"
 
   @doc "The directory videos are kept in."
-  @spec dir(Config.export()) :: Path.t()
+  @spec dir(map()) :: Path.t()
   def dir(%{dir: nil}), do: Path.join(System.tmp_dir!(), "phoenix_replay/exports")
   def dir(%{dir: dir}), do: dir
 
@@ -80,13 +82,24 @@ defmodule PhoenixReplay.Export.Video do
   defp saved({:ok, recording}), do: {:ok, recording}
   defp saved({:error, _reason}), do: {:error, :not_found}
 
-  defp plan(recording, export) do
+  # Rotated, the pointer and the scrolling fit only the recorded layout;
+  # without the pointer the page still scrolls as recorded.
+  defp plan(recording, export, %Options{} = options) do
     {playback, track} = Timeline.for_playback(recording)
 
-    Schedule.new(
-      playback,
-      track,
-      export |> Map.take([:fps, :idle, :max_dpr, :hold]) |> Keyword.new()
-    )
+    track =
+      cond do
+        options.rotated -> PointerTrack.empty()
+        options.pointer -> track
+        true -> %{track | moves: [], presses: []}
+      end
+
+    opts =
+      export
+      |> Map.take([:fps, :idle, :max_dpr, :hold])
+      |> Map.merge(Map.take(options, [:from, :to, :rotated]))
+      |> Keyword.new()
+
+    Schedule.new(playback, track, opts)
   end
 end

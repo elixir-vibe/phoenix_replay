@@ -97,10 +97,24 @@ defmodule PhoenixReplay.ExportTest do
     assert %Job{status: :failed, error: "The recording no longer exists."} = finished(job)
   end
 
+  defp probe(path) do
+    {probe, 0} =
+      System.cmd("ffprobe", [
+        "-i",
+        path
+        | ~w(-v error -show_entries stream=width,height,avg_frame_rate -show_entries format=duration -of default=noprint_wrappers=1)
+      ])
+
+    probe
+  end
+
   test "the player exports and links the video", %{recording: recording} do
     {:ok, view, _html} = live(build_conn(), "/replay/#{recording.id}")
 
     view |> element("#replay-export") |> render_click()
+    assert has_element?(view, "#replay-export-dialog [role=dialog]")
+    view |> element("#replay-export-form") |> render_submit(%{"export" => %{}})
+    refute has_element?(view, "#replay-export-dialog")
     assert has_element?(view, "#replay-export-status")
 
     finished(Export.latest(recording.id))
@@ -118,15 +132,55 @@ defmodule PhoenixReplay.ExportTest do
     assert get(build_conn(), prefix <> "/video/forged").status == 404
   end
 
+  test "exports with the options the dialog chose", %{recording: recording} do
+    {:ok, view, _html} = live(build_conn(), "/replay/#{recording.id}")
+    view |> element("#replay-export") |> render_click()
+
+    # A range the wrong way round is explained, and the dialog stays.
+    view
+    |> element("#replay-export-form")
+    |> render_submit(%{"export" => %{"from" => "1", "to" => "0.5"}})
+
+    assert has_element?(view, "#replay-export-error", "From must come before To.")
+
+    view
+    |> element("#replay-export-form")
+    |> render_submit(%{
+      "export" => %{"from" => "0.5", "to" => "", "size" => "half", "fps" => "15"}
+    })
+
+    assert %Job{options: %{fps: 15, size: :half, from: 500}} = Export.latest(recording.id)
+    assert %Job{status: :done, path: path} = finished(Export.latest(recording.id))
+
+    probe = probe(path)
+    assert probe =~ "width=640"
+    assert probe =~ "height=400"
+    assert probe =~ "avg_frame_rate=15/1"
+    # From 0.5 s to the click's render at 1001 ms, then the hold of 500 ms.
+    assert probe =~ "duration=1.0"
+  end
+
   test "mix phoenix_replay.export writes the video where asked", %{recording: recording} do
     output = Path.join(System.tmp_dir!(), "phoenix_replay_export_#{recording.id}.mp4")
     on_exit(fn -> File.rm(output) end)
 
     ExUnit.CaptureIO.capture_io(fn ->
-      Mix.Tasks.PhoenixReplay.Export.run([recording.id, "--output", output])
+      Mix.Tasks.PhoenixReplay.Export.run([
+        recording.id,
+        "--output",
+        output,
+        "--fps",
+        "15",
+        "--no-pointer"
+      ])
     end)
 
     assert <<_size::32, "ftyp", _rest::binary>> = File.read!(output)
+    assert probe(output) =~ "avg_frame_rate=15/1"
+
+    assert_raise Mix.Error, "The frame rate must be one of 15, 30, 60.", fn ->
+      Mix.Tasks.PhoenixReplay.Export.run([recording.id, "--fps", "24"])
+    end
   end
 
   defp attribute(html, name) do

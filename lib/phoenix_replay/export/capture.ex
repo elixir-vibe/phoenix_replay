@@ -10,7 +10,7 @@ if Code.ensure_loaded?(PlaywrightEx) do
     whatever happens.
     """
 
-    alias PhoenixReplay.Export.{Access, Encoder, Runtime, Schedule}
+    alias PhoenixReplay.Export.{Access, Encoder, Options, Runtime, Schedule}
     alias PhoenixReplay.Web.Player.Channel
     alias PlaywrightEx.{Browser, BrowserContext, Frame, Page}
 
@@ -33,10 +33,11 @@ if Code.ensure_loaded?(PlaywrightEx) do
             PhoenixReplay.Recording.id(),
             Schedule.t(),
             Path.t(),
-            PhoenixReplay.Config.export(),
+            map(),
+            Options.t(),
             (float() -> any())
           ) :: {:ok, Encoder.shots()} | {:error, term()}
-    def run(runtime, recording_id, schedule, dir, export, progress) do
+    def run(runtime, recording_id, schedule, dir, export, options, progress) do
       channel = Channel.new()
       :ok = Channel.subscribe(channel)
       opts = [connection: runtime.connection, timeout: export.timeout]
@@ -47,7 +48,7 @@ if Code.ensure_loaded?(PlaywrightEx) do
                {:ok, _response} <-
                  Frame.goto(
                    page.main_frame.guid,
-                   [url: stage_url(runtime, recording_id, channel)] ++ opts
+                   [url: stage_url(runtime, recording_id, channel, options)] ++ opts
                  ),
                :ok <- await_frame(channel, export.timeout),
                {:ok, true} <-
@@ -71,9 +72,10 @@ if Code.ensure_loaded?(PlaywrightEx) do
            do: BrowserContext.new_page(context.guid, opts)
     end
 
-    defp stage_url(runtime, recording_id, channel) do
+    defp stage_url(runtime, recording_id, channel, options) do
       token = Access.sign(recording_id)
-      "#{runtime.url}/_phoenix_replay/stage/#{token}?" <> URI.encode_query(channel: channel)
+      query = [channel: channel, pointer: options.pointer, rotated: options.rotated]
+      "#{runtime.url}/_phoenix_replay/stage/#{token}?" <> URI.encode_query(query)
     end
 
     # The frame announces itself on the channel once its LiveView connects.

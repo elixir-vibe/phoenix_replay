@@ -418,7 +418,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   test "follows an export of the recording and links its video", %{recording: recording} do
     {:ok, view, _html} = live(build_conn(), "/replay/show")
     refute has_element?(view, "#replay-export-status")
-    job = %PhoenixReplay.Export.Job{id: "j", recording_id: recording.id}
+    job = %PhoenixReplay.Export.Job{id: "j", recording_id: recording.id, options: nil}
 
     send(view.pid, {PhoenixReplay.Export, %{job | status: :running, progress: 42}})
     assert has_element?(view, ~s(#replay-export-status [role="progressbar"][aria-valuenow="42"]))
