@@ -79,6 +79,13 @@ defmodule PhoenixReplay.Export do
     with :ok <- available(config), do: Server.start(recording_id, config)
   end
 
+  @doc """
+  Cancels an export that is queued or running. A running one closes its
+  browser and stops encoding first, and ends `:cancelled`.
+  """
+  @spec cancel(Job.id()) :: :ok
+  defdelegate cancel(id), to: Server
+
   @doc "The export with `id`, if it is still kept."
   @spec get(Job.id()) :: Job.t() | nil
   defdelegate get(id), to: Server

@@ -51,6 +51,9 @@ defmodule Mix.Tasks.PhoenixReplay.Export do
 
       :failed ->
         Mix.raise("Could not export #{id}: #{job.error}")
+
+      :cancelled ->
+        Mix.raise("The export of #{id} was cancelled")
     end
   end
 

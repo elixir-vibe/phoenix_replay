@@ -3,14 +3,15 @@ defmodule PhoenixReplay.Export.Job do
   A video export: which recording, how far it got and where the video is.
 
   `status` moves from `:queued` to `:running`, then to `:done` with the
-  video at `path`, or to `:failed` with an `error` to show. `progress` is
-  a percentage.
+  video at `path`, or to `:failed` with an `error` to show. A cancelled
+  job is `:cancelled`, after `:cancelling` while a running one stops.
+  `progress` is a percentage.
   """
 
   alias PhoenixReplay.Recording
 
   @type id :: String.t()
-  @type status :: :queued | :running | :done | :failed
+  @type status :: :queued | :running | :cancelling | :done | :failed | :cancelled
 
   @type t :: %__MODULE__{
           id: id(),
@@ -35,5 +36,9 @@ defmodule PhoenixReplay.Export.Job do
 
   @doc "Whether the export has finished, either way."
   @spec finished?(t()) :: boolean()
-  def finished?(%__MODULE__{status: status}), do: status in [:done, :failed]
+  def finished?(%__MODULE__{status: status}), do: status in [:done, :failed, :cancelled]
+
+  @doc "Whether the export can still be cancelled."
+  @spec cancellable?(t()) :: boolean()
+  def cancellable?(%__MODULE__{status: status}), do: status in [:queued, :running]
 end

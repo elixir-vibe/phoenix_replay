@@ -5,7 +5,9 @@ defmodule PhoenixReplay.Export.Video do
 
   Capturing takes most of the time, so it reports up to 90% of the
   progress and encoding the rest. The screenshots are deleted whatever
-  happens.
+  happens, and the video too unless it was finished. Sent
+  `{PhoenixReplay.Export, :cancel}`, capturing and encoding stop and the
+  render ends with `{:error, :cancelled}`.
   """
 
   alias PhoenixReplay.{Catalog, Config, Recording}
@@ -44,6 +46,10 @@ defmodule PhoenixReplay.Export.Video do
                &progress.(@captured + &1 * (1 - @captured))
              ) do
         {:ok, video}
+      else
+        error ->
+          File.rm(video)
+          error
       end
     after
       File.rm_rf(shots)
@@ -55,6 +61,7 @@ defmodule PhoenixReplay.Export.Video do
   def describe_error(:not_found), do: "The recording no longer exists."
   def describe_error(:running), do: "The session is still running. Export it once it ends."
   def describe_error(:empty), do: "The recording has nothing to show."
+  def describe_error(:cancelled), do: "The export was cancelled."
   def describe_error({:browser, message}), do: "The browser failed: #{message}"
   def describe_error({:ffmpeg, status}), do: "ffmpeg failed with exit status #{status}."
   def describe_error(reason), do: "The export failed: #{inspect(reason)}"

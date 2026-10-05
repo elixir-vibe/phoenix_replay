@@ -80,6 +80,7 @@ if Code.ensure_loaded?(PlaywrightEx) do
     defp await_frame(channel, timeout) do
       receive do
         {Channel, :frame_ready} -> :ok
+        {PhoenixReplay.Export, :cancel} -> {:error, :cancelled}
       after
         timeout -> {:error, {:browser, "the replay frame did not connect for #{channel}"}}
       end
@@ -93,7 +94,7 @@ if Code.ensure_loaded?(PlaywrightEx) do
       |> Enum.reduce_while({:ok, [], nil}, fn {shot, number}, {:ok, shots, shown} ->
         if shot.index != shown, do: Channel.seek(channel, shot.index)
 
-        case screenshot(page, shot, opts) do
+        case if(cancelled?(), do: {:error, :cancelled}, else: screenshot(page, shot, opts)) do
           {:ok, png} ->
             path = Path.join(dir, "#{number}.png")
             File.write!(path, png)
@@ -110,6 +111,15 @@ if Code.ensure_loaded?(PlaywrightEx) do
       end
     end
 
+    # The server asks a running export to stop between screenshots.
+    defp cancelled? do
+      receive do
+        {PhoenixReplay.Export, :cancel} -> true
+      after
+        0 -> false
+      end
+    end
+
     defp screenshot(page, shot, opts) do
       arg = Map.take(shot, [:index, :at]) |> Map.merge(shot.viewport)
 
@@ -123,6 +133,7 @@ if Code.ensure_loaded?(PlaywrightEx) do
     end
 
     defp browser_error({:error, {:browser, _message}} = error), do: error
+    defp browser_error({:error, :cancelled} = error), do: error
     defp browser_error({:error, %{message: message}}), do: {:error, {:browser, message}}
 
     defp browser_error({:error, {%{message: message}, _details}}),

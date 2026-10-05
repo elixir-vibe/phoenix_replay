@@ -422,6 +422,15 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     send(view.pid, {PhoenixReplay.Export, %{job | status: :running, progress: 42}})
     assert has_element?(view, ~s(#replay-export-status [role="progressbar"][aria-valuenow="42"]))
+    # Cancelling asks the server; its answer arrives as the job's next state.
+    view |> element("#replay-export-cancel") |> render_click()
+
+    send(view.pid, {PhoenixReplay.Export, %{job | status: :cancelling}})
+    assert has_element?(view, "#replay-export-status", "Cancelling the export")
+    refute has_element?(view, "#replay-export-cancel")
+
+    send(view.pid, {PhoenixReplay.Export, %{job | status: :cancelled}})
+    assert has_element?(view, "#replay-export-status", "Export cancelled")
 
     send(
       view.pid,

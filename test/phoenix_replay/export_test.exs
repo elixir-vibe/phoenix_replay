@@ -6,7 +6,7 @@ defmodule PhoenixReplay.ExportTest do
   import Phoenix.LiveViewTest
 
   alias PhoenixReplay.{Export, Storage}
-  alias PhoenixReplay.Export.Job
+  alias PhoenixReplay.Export.{Job, Video}
   alias PhoenixReplay.Test.Fixtures
 
   @endpoint PhoenixReplay.Test.Endpoint
@@ -54,6 +54,41 @@ defmodule PhoenixReplay.ExportTest do
     # From the first render at 5 ms to the click's render at 1001 ms, then
     # the hold of 500 ms.
     assert probe =~ "duration=1.4"
+  end
+
+  test "cancels a running export, leaving no files behind" do
+    recording = Fixtures.counter_recording(clicks: 10)
+    :ok = Storage.save(Fixtures.storage(), recording)
+    on_exit(fn -> Storage.delete(Fixtures.storage(), recording.id) end)
+    :ok = Export.subscribe(recording.id)
+    {:ok, %Job{id: id} = job} = Export.start(recording.id)
+
+    # Once it has screenshots to throw away.
+    assert_receive {Export, %Job{id: ^id, status: :running, progress: progress}}
+                   when progress > 0,
+                   30_000
+
+    :ok = Export.cancel(id)
+    assert %Job{status: :cancelled, path: nil} = finished(job)
+
+    dir = Video.dir(PhoenixReplay.Config.load().export)
+    refute File.exists?(Path.join(dir, id))
+    refute File.exists?(Path.join(dir, id <> ".mp4"))
+  end
+
+  test "cancels a queued export without running it", %{recording: recording} do
+    other = Fixtures.counter_recording()
+    :ok = Storage.save(Fixtures.storage(), other)
+    on_exit(fn -> Storage.delete(Fixtures.storage(), other.id) end)
+    :ok = Export.subscribe(other.id)
+
+    {:ok, running} = Export.start(recording.id)
+    {:ok, %Job{status: :queued} = queued} = Export.start(other.id)
+    :ok = Export.cancel(queued.id)
+
+    assert %Job{status: :cancelled} = finished(queued)
+    assert %Job{status: :done} = finished(running)
+    assert Export.get(queued.id).status == :cancelled
   end
 
   test "fails a recording that is not saved" do

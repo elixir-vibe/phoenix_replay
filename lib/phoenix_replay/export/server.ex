@@ -6,6 +6,10 @@ defmodule PhoenixReplay.Export.Server do
   It keeps every job until its video is `:ttl` old, broadcasts each change
   to a job on the recording's topic, and deletes expired videos. A job
   whose task crashes fails, and the next one starts.
+
+  Cancelling a queued job takes it out of the queue. A running one is sent
+  `{PhoenixReplay.Export, :cancel}` rather than killed, so it closes its
+  browser and stops ffmpeg itself, and ends with `{:error, :cancelled}`.
   """
 
   use GenServer
@@ -24,6 +28,10 @@ defmodule PhoenixReplay.Export.Server do
   @doc "Queues an export of a recording, unless one is queued or running."
   @spec start(PhoenixReplay.Recording.id(), Config.t()) :: {:ok, Job.t()}
   def start(recording_id, config), do: GenServer.call(__MODULE__, {:start, recording_id, config})
+
+  @doc "Cancels the job with `id`, if it is queued or running."
+  @spec cancel(Job.id()) :: :ok
+  def cancel(id), do: GenServer.call(__MODULE__, {:cancel, id})
 
   @doc "The job with `id`."
   @spec get(Job.id()) :: Job.t() | nil
@@ -63,6 +71,27 @@ defmodule PhoenixReplay.Export.Server do
     end
   end
 
+  def handle_call({:cancel, id}, _from, state) do
+    state =
+      case state.jobs[id] do
+        %Job{status: :queued} = job ->
+          {[{^id, config}], queue} =
+            state.queue |> :queue.to_list() |> Enum.split_with(&match?({^id, _config}, &1))
+
+          finish(%{state | queue: :queue.from_list(queue)}, %{job | status: :cancelled}, config)
+
+        %Job{status: :running} = job ->
+          {_ref, {_id, _config, pid}} = Enum.find(state.running, &match?({_ref, {^id, _, _}}, &1))
+          send(pid, {PhoenixReplay.Export, :cancel})
+          put(state, %{job | status: :cancelling})
+
+        _finished ->
+          state
+      end
+
+    {:reply, :ok, state}
+  end
+
   def handle_call({:get, id}, _from, state), do: {:reply, state.jobs[id], state}
 
   def handle_call({:latest, recording_id}, _from, state) do
@@ -90,12 +119,15 @@ defmodule PhoenixReplay.Export.Server do
   @impl true
   def handle_info({ref, result}, %{running: running} = state) when is_map_key(running, ref) do
     Process.demonitor(ref, [:flush])
-    {{id, config}, running} = Map.pop(running, ref)
+    {{id, config, _pid}, running} = Map.pop(running, ref)
 
     finished =
       case result do
         {:ok, path} ->
           %{state.jobs[id] | status: :done, progress: 100, path: path}
+
+        {:error, :cancelled} ->
+          %{state.jobs[id] | status: :cancelled}
 
         {:error, reason} ->
           %{state.jobs[id] | status: :failed, error: Video.describe_error(reason)}
@@ -106,7 +138,7 @@ defmodule PhoenixReplay.Export.Server do
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, %{running: running} = state)
       when is_map_key(running, ref) do
-    {{id, config}, running} = Map.pop(running, ref)
+    {{id, config, _pid}, running} = Map.pop(running, ref)
     Logger.error("PhoenixReplay: video export #{id} crashed: #{Exception.format_exit(reason)}")
     failed = %{state.jobs[id] | status: :failed, error: "The export crashed."}
     {:noreply, %{state | running: running} |> finish(failed, config) |> run_next(config)}
@@ -152,7 +184,7 @@ defmodule PhoenixReplay.Export.Server do
         Video.render(job, config, progress)
       end)
 
-    %{state | running: Map.put(state.running, task.ref, {job.id, config})}
+    %{state | running: Map.put(state.running, task.ref, {job.id, config, task.pid})}
     |> put(%{job | status: :running})
   end
 

@@ -135,6 +135,18 @@
     },
     {
       "hidden": false,
+      "name": "lucide:circle-slash",
+      "left": 0,
+      "width": 24,
+      "body": "<g fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m9 15l6-6\"/></g>",
+      "height": 24,
+      "top": 0,
+      "rotate": 0,
+      "h_flip": false,
+      "v_flip": false
+    },
+    {
+      "hidden": false,
       "name": "lucide:clapperboard",
       "left": 0,
       "width": 24,

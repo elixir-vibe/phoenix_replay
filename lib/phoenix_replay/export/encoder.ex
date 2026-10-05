@@ -73,6 +73,10 @@ defmodule PhoenixReplay.Export.Encoder do
       {^port, {:exit_status, 0}} ->
         :ok
 
+      {PhoenixReplay.Export, :cancel} ->
+        stop(port)
+        {:error, :cancelled}
+
       {^port, {:exit_status, status}} ->
         Logger.error([
           "PhoenixReplay: ffmpeg failed:\n" | Enum.intersperse(Enum.reverse(output), "\n")
@@ -80,6 +84,15 @@ defmodule PhoenixReplay.Export.Encoder do
 
         {:error, {:ffmpeg, status}}
     end
+  end
+
+  # Closing the port leaves ffmpeg running until it next writes, so it is
+  # stopped first.
+  defp stop(port) do
+    with {:os_pid, os_pid} <- Port.info(port, :os_pid),
+         do: System.cmd("kill", [Integer.to_string(os_pid)], stderr_to_stdout: true)
+
+    if Port.info(port), do: Port.close(port)
   end
 
   defp seconds(ms), do: :erlang.float_to_binary(ms / 1_000, decimals: 6)

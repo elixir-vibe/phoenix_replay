@@ -147,7 +147,8 @@ defmodule PhoenixReplay.Web.Components.Player do
 
   @doc """
   The state of a video export under the player's header: waiting, its
-  progress, a link to the video once it is ready, or why it failed.
+  progress, a link to the video once it is ready, or why it failed. A
+  queued or running export can be cancelled.
   """
   attr :job, PhoenixReplay.Export.Job, required: true
   attr :download, :any, default: nil, doc: "the video's URL once it is ready"
@@ -194,6 +195,12 @@ defmodule PhoenixReplay.Web.Components.Player do
           >
             <.icon name="lucide:download" class="size-3.5" /> Download MP4
           </a>
+        <% :cancelling -> %>
+          <.icon name="lucide:loader-circle" class="size-4 animate-spin text-muted" />
+          <span class="text-muted">Cancelling the export…</span>
+        <% :cancelled -> %>
+          <.icon name="lucide:circle-slash" class="size-4 text-muted" />
+          <span class="text-muted">Export cancelled</span>
         <% :failed -> %>
           <.icon name="lucide:circle-alert" class="size-4 text-error" />
           <span class="text-error">{@job.error}</span>
@@ -206,6 +213,15 @@ defmodule PhoenixReplay.Web.Components.Player do
           </button>
       <% end %>
       <span class="flex-1"></span>
+      <button
+        :if={PhoenixReplay.Export.Job.cancellable?(@job)}
+        id="replay-export-cancel"
+        type="button"
+        phx-click="cancel_export"
+        class="inline-flex h-7 items-center rounded-md border border-line bg-surface px-2.5 text-xs font-medium hover:bg-hover"
+      >
+        Cancel
+      </button>
       <button
         :if={PhoenixReplay.Export.Job.finished?(@job)}
         type="button"

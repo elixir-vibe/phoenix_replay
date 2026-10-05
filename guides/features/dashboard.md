@@ -77,7 +77,7 @@ Each viewer drives a private frame, so several people can watch the same recordi
 
 ## Exporting videos
 
-**Export video** in the player's menu turns a saved recording into an MP4 of the replayed page and the pointer, for a bug report or a ticket. A bar under the header shows its progress and, when it is done, links the video. Several viewers asking for the same recording share one export, and the video is kept for an hour.
+**Export video** in the player's menu turns a saved recording into an MP4 of the replayed page and the pointer, for a bug report or a ticket. A bar under the header shows its progress and, when it is done, links the video. **Cancel** stops it: a queued export never starts, and a running one closes its browser and stops encoding, leaving no files behind. Several viewers asking for the same recording share one export, and the video is kept for an hour.
 
 The same export runs from the command line, with no server running:
 

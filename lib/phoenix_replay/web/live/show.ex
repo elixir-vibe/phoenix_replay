@@ -234,6 +234,13 @@ defmodule PhoenixReplay.Web.Live.Show do
     end
   end
 
+  def handle_event("cancel_export", _params, %{assigns: %{export: %{id: id}}} = socket) do
+    :ok = Export.cancel(id)
+    {:noreply, socket}
+  end
+
+  def handle_event("cancel_export", _params, socket), do: {:noreply, socket}
+
   def handle_event("dismiss_export", _params, socket),
     do: {:noreply, assign(socket, :export, nil)}
 
