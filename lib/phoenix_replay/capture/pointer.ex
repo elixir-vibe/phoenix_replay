@@ -4,8 +4,9 @@ defmodule PhoenixReplay.Capture.Pointer do
   `:pointer` is configured.
 
   `PhoenixReplay.Recorder` tells the browser to record, and with which
-  `:pointer` settings, on the connected mount. The client module's
-  `replayPointer/1` then samples positions and scroll offsets and sends
+  `:pointer` settings, on the connected mount, with its
+  `"phx_replay:record"` event. The client module's
+  `replayRecorder/1` then samples positions and scroll offsets and sends
   them in batches as an `"phx_replay:pointer"` event, which the recorder
   hands here and halts, so the view never sees it. A batch is:
 

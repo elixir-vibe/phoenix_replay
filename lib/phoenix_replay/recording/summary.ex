@@ -83,7 +83,7 @@ defmodule PhoenixReplay.Recording.Summary do
 
   @doc """
   Counts `events` into `totals`, which start at zero: every event but
-  pointer batches, which are not shown as events; the events for which
+  pointer batches and client state, which are not shown as events; the events for which
   `PhoenixReplay.Recording.Event.error?/1` holds; the distinct
   `handle_event/3` names, sorted; and the time of the last event.
 
@@ -98,7 +98,7 @@ defmodule PhoenixReplay.Recording.Summary do
   defp count(%Event{} = event, {totals, names}) do
     totals = %{
       totals
-      | event_count: totals.event_count + one(event.type != :pointer),
+      | event_count: totals.event_count + one(event.type not in [:pointer, :state]),
         error_count: totals.error_count + one(Event.error?(event)),
         duration_ms: max(totals.duration_ms, event.at)
     }

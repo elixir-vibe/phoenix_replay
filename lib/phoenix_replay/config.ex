@@ -42,7 +42,7 @@ defmodule PhoenixReplay.Config do
         anyway (default `5_000`)
     * `:pointer` — records the pointer, touches and scrolling, for the
       player to show over the replay, when the client module's
-      `replayPointer/1` runs in the browser. `true` uses the defaults; a
+      `replayRecorder/1` runs in the browser. `true` uses the defaults; a
       keyword list sets any of them; `false` (the default) records none:
       * `:sample` — milliseconds between recorded pointer positions
         (default `50`)
@@ -55,6 +55,21 @@ defmodule PhoenixReplay.Config do
         (default `500`)
       * `:limit` — batches recorded per session (default `3_600`, an hour
         of movement at the default `:flush`)
+    * `:state` — records state that lives only in the browser, which other
+      libraries report with a `phx_replay:state` window event, when
+      `replayRecorder/1` runs in the browser; see
+      `PhoenixReplay.Capture.State`. On by default; `false` records none,
+      and a keyword list sets any of:
+      * `:flush` — milliseconds between the batches the browser sends
+        (default `1_000`)
+      * `:max_entries` — entries a batch may hold; a fuller batch is sent
+        early, and the server drops the rest (default `200`)
+      * `:max_key` — bytes a key may have (default `64`)
+      * `:max_entry_bytes` — the JSON size an entry's changes may have;
+        larger ones are dropped (default `8_192`)
+      * `:max_bytes` — the JSON size a batch may have; a fuller batch is
+        sent early, and the server drops the rest (default `65_536`)
+      * `:limit` — batches recorded per session (default `3_600`)
     * `:context` — request context `PhoenixReplay.Plug` keeps for a visit
       and recordings carry in `client`:
       * `:headers` — request header names to capture, refreshed on each
@@ -83,8 +98,8 @@ defmodule PhoenixReplay.Config do
 
   ## Switching options off and overriding them
 
-  `:flush`, `:logs`, `:pointer`, `:redact`, `:max_memory` and the context's
-  `:landing` can be switched off with `nil` or `false`. `true` turns one on
+  `:flush`, `:logs`, `:pointer`, `:state`, `:redact`, `:max_memory` and
+  the context's `:landing` can be switched off with `nil` or `false`. `true` turns one on
   with its defaults, and a keyword list sets some of its settings onto
   whatever is already set, as `:keep`, `:retention` and `:persist` do. So a
   live session's `{PhoenixReplay.Recorder, flush: [events: 50]}` keeps the
@@ -115,6 +130,14 @@ defmodule PhoenixReplay.Config do
   @flush %{events: 200, interval: 5_000}
   @logs %{level: :info, metadata: [], limit: 1_000}
   @pointer %{sample: 50, scroll: 100, flush: 1_000, max_points: 500, limit: 3_600}
+  @state %{
+    flush: 1_000,
+    max_entries: 200,
+    max_key: 64,
+    max_entry_bytes: 8_192,
+    max_bytes: 65_536,
+    limit: 3_600
+  }
   @landing %{params: [], referrer: true, attribution: :first}
   @off [nil, false]
 
@@ -150,6 +173,15 @@ defmodule PhoenixReplay.Config do
           limit: pos_integer()
         }
 
+  @type state :: %{
+          flush: pos_integer(),
+          max_entries: pos_integer(),
+          max_key: pos_integer(),
+          max_entry_bytes: pos_integer(),
+          max_bytes: pos_integer(),
+          limit: pos_integer()
+        }
+
   @type landing :: %{
           params: [String.t()],
           referrer: boolean() | :full,
@@ -175,6 +207,7 @@ defmodule PhoenixReplay.Config do
           max_memory: pos_integer() | nil,
           flush: flush() | nil,
           pointer: pointer() | nil,
+          state: state() | nil,
           context: context(),
           retention: retention(),
           persist: persist()
@@ -191,6 +224,7 @@ defmodule PhoenixReplay.Config do
             max_memory: nil,
             flush: %{events: 200, interval: 5_000},
             pointer: nil,
+            state: @state,
             context: %{headers: [], landing: nil},
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
@@ -296,6 +330,9 @@ defmodule PhoenixReplay.Config do
 
   defp put({:pointer, value}, config),
     do: %{config | pointer: switch(:pointer, value, config.pointer, @pointer, &positive?/2)}
+
+  defp put({:state, value}, config),
+    do: %{config | state: switch(:state, value, config.state, @state, &positive?/2)}
 
   defp put({:flush, value}, config),
     do: %{config | flush: switch(:flush, value, config.flush, @flush, &positive?/2)}
