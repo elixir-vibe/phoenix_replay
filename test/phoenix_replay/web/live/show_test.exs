@@ -361,6 +361,33 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert stopped >= at
   end
 
+  test "seeks to the time the scrubber was let go at, between events" do
+    gap = :timer.hours(1)
+    recording = Fixtures.counter_recording(id: "scrubbed", clicks: 2)
+
+    events =
+      recording.events
+      |> Enum.with_index()
+      |> Enum.map(fn {event, i} -> %{event | at: i * gap} end)
+
+    Storage.save(Fixtures.storage(), %{recording | events: events})
+    {:ok, view, _html} = live(build_conn(), "/replay/scrubbed")
+
+    # Halfway into the gap after event 2, not snapped back to it.
+    render_click(view, "seek", %{"index" => 2, "at" => 2 * gap + div(gap, 2)})
+    assert %{index: 2, at: at} = assigns(view)
+    assert at == 2 * gap + div(gap, 2)
+
+    # A time outside the event's gap is held to it.
+    render_click(view, "seek", %{"index" => 2, "at" => 10 * gap})
+    assert %{at: at} = assigns(view)
+    assert at == 3 * gap
+
+    # Choosing an event, as the event list does, goes to its time.
+    render_click(view, "seek", %{"index" => 1})
+    assert %{index: 1, at: ^gap} = assigns(view)
+  end
+
   test "deletes the recording" do
     {:ok, view, _html} = live(build_conn(), "/replay/show")
     assert {:error, {:live_redirect, %{to: "/replay"}}} = render_click(view, "delete")

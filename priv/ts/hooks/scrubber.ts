@@ -45,7 +45,10 @@ export class Scrubber extends ViewHook {
     if (this.dragging) this.seek(event)
   }
 
+  // Where the pointer is let go is where playback stands, even between events.
   private readonly onPointerUp = (event: PointerEvent): void => {
+    if (!this.dragging) return
+    this.seek(event, true)
     this.dragging = false
     this.el.releasePointerCapture(event.pointerId)
   }
@@ -57,20 +60,26 @@ export class Scrubber extends ViewHook {
     this.push(action)
   }
 
-  private seek(event: PointerEvent): void {
+  // The frame follows the event under the pointer while dragging; letting
+  // go also sends the time, so the thumb stays where it was dropped.
+  private seek(event: PointerEvent, release = false): void {
     const rect = this.el.getBoundingClientRect()
     const ms = clamp((event.clientX - rect.left) / rect.width, 0, 1) * this.number('duration')
     const index = indexAt(this.offsets, ms)
     this.stop()
     this.place(ms)
 
-    if (index !== this.sentIndex) {
+    if (release) {
+      this.push('seek', { index, at: Math.round(ms) })
+    } else if (index !== this.sentIndex) {
       this.sentIndex = index
       this.push('seek', { index })
     }
   }
 
   private animate(): void {
+    // While dragging the thumb follows the pointer, not the server.
+    if (this.dragging) return
     this.stop()
     const at = this.number('at')
     this.place(at)

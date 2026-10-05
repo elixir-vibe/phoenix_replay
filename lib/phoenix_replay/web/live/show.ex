@@ -143,8 +143,11 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   @impl true
-  def handle_event("seek", %{"index" => index}, socket) do
-    {:noreply, socket |> pause() |> seek(Params.integer(index, socket.assigns.index))}
+  # The scrubber also sends the time it was let go at, which may fall
+  # between the event and the next one.
+  def handle_event("seek", %{"index" => index} = params, socket) do
+    socket = socket |> pause() |> seek(Params.integer(index, socket.assigns.index))
+    {:noreply, at_time(socket, params["at"])}
   end
 
   def handle_event("previous", _params, socket) do
@@ -457,4 +460,9 @@ defmodule PhoenixReplay.Web.Live.Show do
   defp shown_assigns(assigns), do: assigns
 
   defp now, do: System.monotonic_time(:millisecond)
+
+  defp at_time(socket, nil), do: socket
+
+  defp at_time(%{assigns: %{at: at, next_at: next_at}} = socket, requested),
+    do: assign(socket, :at, requested |> Params.integer(at) |> max(at) |> min(next_at))
 end

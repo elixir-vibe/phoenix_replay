@@ -49,9 +49,24 @@ test('seeks to the event under the pointer once per event while dragging', () =>
 
   expect(pushed).toEqual([
     ['seek', { index: 2 }],
-    ['seek', { index: 1 }]
+    ['seek', { index: 1 }],
+    ['seek', { index: 1, at: 200 }]
   ])
   expect(thumb(el)).toBe('20%')
+})
+
+test('keeps the thumb under the pointer while the server answers a drag', () => {
+  const el = scrubber({ at: 0 })
+  const { hook } = mountHook(Scrubber, el)
+
+  pointer('pointerdown', el, 0.3)
+  // The server moved to the event before the pointer, at 100 ms.
+  el.dataset.at = '100'
+  hook.updated?.()
+  expect(thumb(el)).toBe('30%')
+
+  pointer('pointerup', el, 0.3)
+  expect(thumb(el)).toBe('30%')
 })
 
 test('maps keys to player events', () => {

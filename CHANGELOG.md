@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- Scrubbing to a moment between two events keeps that moment, instead of snapping back to the earlier event, and the thumb stays under the pointer while dragging.
 - Pausing the player keeps the time playback reached between two events, instead of jumping back to the last one, and resuming or changing speed plays on from there.
 - Switching the player from 100% back to Fit after scrolling the replay no longer leaves the page shifted out of view.
 - Collected details no longer break words mid-way, such as SQL table names.
