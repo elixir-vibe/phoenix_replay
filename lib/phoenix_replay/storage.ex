@@ -62,7 +62,11 @@ defmodule PhoenixReplay.Storage do
   """
   @callback fetch_partial(Recording.id(), keyword()) :: {:ok, Recording.t()} | {:error, term()}
 
-  @doc "Lists the ids of sessions with appended chunks this node did not finish."
+  @doc """
+  Lists the ids of sessions with appended chunks this node did not finish,
+  leaving out those of another instance still running, such as a Mix task
+  started next to the server.
+  """
   @callback partials(keyword()) :: [Recording.id()]
 
   @doc """

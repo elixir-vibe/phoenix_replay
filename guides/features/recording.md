@@ -139,8 +139,9 @@ Text typed into inputs and textareas, checkboxes and radios, and options chosen 
 
 Some controls are never read in the browser at all, so their values never leave it:
 
-- password and hidden inputs, file inputs and buttons,
-- fields marked as card fields with `autocomplete="cc-…"`,
+- password inputs, including one a "show password" toggle turned into text,
+- hidden inputs, file inputs and buttons,
+- fields whose `autocomplete` names a card (`cc-…`), a password (`current-password`, `new-password`) or a one-time code (`one-time-code`),
 - anything inside an element with a `data-phx-replay-ignore` attribute:
 
 ```heex

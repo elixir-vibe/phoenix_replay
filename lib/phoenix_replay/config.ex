@@ -61,7 +61,7 @@ defmodule PhoenixReplay.Config do
       `PhoenixReplay.Capture.State`. On by default; `false` records none,
       and a keyword list sets any of:
       * `:inputs` — whether form controls are recorded (default `true`).
-        Passwords, hidden inputs and card fields are never read; see
+        Passwords, hidden inputs, card fields and one-time codes are never read; see
         "Client state" in the recording guide
       * `:debounce` — milliseconds a form control must stay unchanged
         before its value is recorded, so typing a sentence is one entry

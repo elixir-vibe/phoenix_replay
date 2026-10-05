@@ -58,8 +58,11 @@ test('never reads passwords, hidden inputs, card fields or ignored controls', as
   page(`
     <form id="f">
       <input id="pass" type="password" name="password">
+      <input id="shown" type="password" name="pw">
       <input id="secret" type="hidden" name="token" value="t">
       <input id="card" name="number" autocomplete="cc-number">
+      <input id="code" name="code" autocomplete="one-time-code">
+      <input id="new" name="choose" autocomplete="username new-password">
       <div data-phx-replay-ignore><input id="private" name="note"></div>
       <input name="loose">
       <input id="kept" name="kept">
@@ -69,8 +72,17 @@ test('never reads passwords, hidden inputs, card fields or ignored controls', as
   const reports = listen()
   recorder = new InputRecorder(window, 10)
 
-  for (const selector of ['#pass', '#card', '#private', '[name="loose"]', '[name="formless"]'])
-    type(selector, 'x')
+  // A "show password" toggle makes the field text; it stays unread, also
+  // when the field appeared after recording started.
+  document.querySelector('#shown')?.setAttribute('type', 'text')
+  document
+    .querySelector('#f')
+    ?.insertAdjacentHTML('beforeend', '<input id="late" type="password" name="pin">')
+  document.querySelector('#late')?.setAttribute('type', 'text')
+  await wait(0)
+
+  const unread = ['#pass', '#shown', '#late', '#card', '#code', '#new', '#private']
+  for (const selector of [...unread, '[name="loose"]', '[name="formless"]']) type(selector, 'x')
   type('#kept', 'yes')
   await wait(40)
 

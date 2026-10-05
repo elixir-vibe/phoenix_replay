@@ -3,8 +3,11 @@ defmodule PhoenixReplay.Sanitizer.Default do
   Default `PhoenixReplay.Sanitizer`.
 
     * Replaces the value of any key whose name contains `password`, `token`,
-      `secret`, `api_key`, `private_key` or `credential` with `"[FILTERED]"`.
-      Keys are kept so recorded templates still find them.
+      `secret`, `api_key`, `private_key`, `credential`, `card_number`,
+      `credit_card` or `one_time`, or has `cvv`, `cvc`, `csc`, `ssn`, `pin`
+      or `otp` as a word of its own, such as `card_cvv` or `pinCode` but
+      not `shipping`, with `"[FILTERED]"`. Keys are kept so recorded
+      templates still find them.
     * Recurses into maps, lists, tuples and structs, and compacts
       `Ecto.Changeset` and `Phoenix.HTML.Form` runtime metadata.
 
@@ -16,7 +19,10 @@ defmodule PhoenixReplay.Sanitizer.Default do
   @behaviour PhoenixReplay.Sanitizer
 
   @filtered "[FILTERED]"
-  @sensitive ~w(password token secret api_key apikey private_key credential)
+  @sensitive ~w(password token secret api_key apikey private_key credential card_number
+                cardnumber credit_card creditcard one_time)
+  # Short names that would match inside other words, so only whole words.
+  @sensitive_words ~w(cvv cvc csc ssn pin otp)
   @opaque_structs [
     Date,
     DateTime,
@@ -84,8 +90,15 @@ defmodule PhoenixReplay.Sanitizer.Default do
   defp sensitive?(key) when is_atom(key), do: key |> Atom.to_string() |> sensitive?()
 
   defp sensitive?(key) when is_binary(key) do
+    words =
+      key
+      |> String.split(~r/[^[:alnum:]]+|(?<=[[:lower:]])(?=[[:upper:]])/u)
+      |> Enum.map(&String.downcase/1)
+
     key = String.downcase(key)
-    Enum.any?(@sensitive, &String.contains?(key, &1))
+
+    Enum.any?(@sensitive, &String.contains?(key, &1)) or
+      Enum.any?(words, &(&1 in @sensitive_words))
   end
 
   defp sensitive?(_key), do: false

@@ -25,6 +25,37 @@ defmodule PhoenixReplay.Sanitizer.DefaultTest do
            }
   end
 
+  test "filters payment, identity and one-time code fields, by whole word where short" do
+    params = %{
+      "card_number" => "4242",
+      "creditCardNumber" => "4242",
+      "card_cvv" => "123",
+      "cvc" => "123",
+      "ssn" => "078",
+      "pinCode" => "1234",
+      "otp" => "999999",
+      "one_time_code" => "999999",
+      # Words that only contain the short names are kept.
+      "shipping" => "fast",
+      "footprint" => "small",
+      "spinner" => "on"
+    }
+
+    assert %{
+             "card_number" => "[FILTERED]",
+             "creditCardNumber" => "[FILTERED]",
+             "card_cvv" => "[FILTERED]",
+             "cvc" => "[FILTERED]",
+             "ssn" => "[FILTERED]",
+             "pinCode" => "[FILTERED]",
+             "otp" => "[FILTERED]",
+             "one_time_code" => "[FILTERED]",
+             "shipping" => "fast",
+             "footprint" => "small",
+             "spinner" => "on"
+           } = Default.sanitize_params(params)
+  end
+
   test "recurses into structs, lists and tuples" do
     account = %Account{name: "n", api_key: "k", profile: %{secret_answer: "s"}}
 

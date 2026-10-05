@@ -21,7 +21,7 @@ Everything recorded passes through a `PhoenixReplay.Sanitizer` before it is stor
 
 `PhoenixReplay.Sanitizer.Default`:
 
-- replaces the values of keys containing `password`, `token`, `secret`, `api_key`, `apikey`, `private_key` or `credential`, in any case, with `"[FILTERED]"`; keys are kept so templates still render,
+- replaces the values of keys containing `password`, `token`, `secret`, `api_key`, `apikey`, `private_key`, `credential`, `card_number`, `credit_card` or `one_time`, in any case, or with `cvv`, `cvc`, `csc`, `ssn`, `pin` or `otp` as a word of their own (`card_cvv`, `pinCode`, but not `shipping`), with `"[FILTERED]"`; keys are kept so templates still render,
 - recurses into maps, lists, tuples and structs, including Ecto schemas,
 - compacts `Ecto.Changeset` and `Phoenix.HTML.Form` runtime metadata,
 - drops LiveView internals that cannot be replayed.
@@ -82,11 +82,32 @@ Sessions still running are redacted when the dashboard opens them, so they show 
 
 Ecto query parameters and URL query strings are left out of collected events unless you enable them.
 
+## Form controls and client state
+
+When the client module's `replayRecorder` runs, what users type and choose in form controls is recorded by default, with or without `phx-change`, and so is state your code reports with `replayState`. Both pass through `sanitize_params/1` under the control's name or the reported key, like event params.
+
+These are never read in the browser at all, so they never leave it:
+
+- password inputs, including one a "show password" toggle turned into text,
+- fields whose `autocomplete` names a card (`cc-number`, `cc-csc`…), a password (`current-password`, `new-password`) or a one-time code (`one-time-code`),
+- hidden and file inputs, and buttons,
+- anything inside an element with `data-phx-replay-ignore`.
+
+Mark anything else private with that attribute, such as a free-text field that may hold health or financial details:
+
+```heex
+<div data-phx-replay-ignore>
+  <.input field={@form[:notes]} type="textarea" />
+</div>
+```
+
+Turn form controls off with `state: [inputs: false]`, or all client state with `state: false`.
+
 ## What is never recorded
 
 - `handle_info/2` message contents; only the message tag is kept,
 - the contents of streams and uploads,
-- anything that happens only in the browser.
+- the controls listed above, and what happens in the browser that neither a form control nor `replayState` reports.
 
 ## Retention
 

@@ -11,9 +11,11 @@
  *
  *     replayState("phx_replay:inputs", { "#search": { query: "shoes" } })
  *
- * Never read at all: passwords, hidden and file inputs, buttons, fields
- * marked `autocomplete="cc-…"`, and anything inside an element with a
- * `data-phx-replay-ignore` attribute.
+ * Never read at all: passwords, including one a "show password" toggle
+ * turned into text, hidden and file inputs, buttons, fields whose
+ * `autocomplete` names a card (`cc-…`), a password or a one-time code,
+ * and anything inside an element with a `data-phx-replay-ignore`
+ * attribute.
  */
 
 import { replayState } from './state'
@@ -33,6 +35,10 @@ export type InputValues = Record<string, Record<string, InputValue>>
 type Control = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
 
 const SKIPPED_TYPES = new Set(['password', 'hidden', 'file', 'submit', 'button', 'reset', 'image'])
+const SECRET_AUTOCOMPLETE = new Set(['current-password', 'new-password', 'one-time-code'])
+
+// Inputs that were passwords: a "show password" toggle makes them text.
+const passwords = new WeakSet<Element>()
 
 const isControl = (el: unknown): el is Control =>
   el instanceof HTMLInputElement ||
@@ -40,10 +46,21 @@ const isControl = (el: unknown): el is Control =>
   el instanceof HTMLSelectElement
 
 /** Whether a control may be read at all. */
-export const capturable = (el: Control): boolean =>
-  !(el instanceof HTMLInputElement && SKIPPED_TYPES.has(el.type)) &&
-  !(el.getAttribute('autocomplete') ?? '').startsWith('cc-') &&
-  el.closest(`[${IGNORE_ATTRIBUTE}]`) === null
+export const capturable = (el: Control): boolean => {
+  if (el instanceof HTMLInputElement && el.type === 'password') passwords.add(el)
+
+  return (
+    !passwords.has(el) &&
+    !(el instanceof HTMLInputElement && SKIPPED_TYPES.has(el.type)) &&
+    !secretAutocomplete(el) &&
+    el.closest(`[${IGNORE_ATTRIBUTE}]`) === null
+  )
+}
+
+const secretAutocomplete = (el: Control): boolean =>
+  (el.getAttribute('autocomplete') ?? '')
+    .split(/\s+/)
+    .some((token) => token.startsWith('cc-') || SECRET_AUTOCOMPLETE.has(token))
 
 const isCheckable = (el: Control): el is HTMLInputElement =>
   el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')
@@ -91,6 +108,11 @@ export class InputRecorder {
   // `change` after the typing was reported, adds no second entry.
   private readonly reported = new Map<string, string>()
   private readonly onInput = (event: Event): void => this.changed(event.target)
+  // Remembers a password whose type changes before anything is typed in it.
+  private readonly typeChanges = new MutationObserver((mutations) => {
+    for (const { target, oldValue } of mutations)
+      if (oldValue === 'password') passwords.add(target as Element)
+  })
 
   /** Reports the controls the user already changed, then each change after a pause. */
   constructor(
@@ -103,6 +125,11 @@ export class InputRecorder {
       if (isControl(el) && capturable(el) && changed(el)) this.report(el)
     }
 
+    this.typeChanges.observe(document, {
+      attributeFilter: ['type'],
+      attributeOldValue: true,
+      subtree: true
+    })
     document.addEventListener('input', this.onInput, { capture: true, passive: true })
     document.addEventListener('change', this.onInput, { capture: true, passive: true })
   }
@@ -115,6 +142,7 @@ export class InputRecorder {
     }
 
     this.pending.clear()
+    this.typeChanges.disconnect()
     this.target.document.removeEventListener('input', this.onInput, { capture: true })
     this.target.document.removeEventListener('change', this.onInput, { capture: true })
   }
