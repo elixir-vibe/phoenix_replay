@@ -188,7 +188,8 @@ defmodule PhoenixReplay.ExportTest do
       fps: 30
     }
 
-    export = %{PhoenixReplay.Config.load().export | ffmpeg: stuck, timeout: 200}
+    # Long enough for the script to start and write its pid on a busy machine.
+    export = %{PhoenixReplay.Config.load().export | ffmpeg: stuck, timeout: 1_000}
 
     assert {:error, {:ffmpeg, :timeout}} =
              PhoenixReplay.Export.Encoder.run(

@@ -105,8 +105,13 @@ defmodule PhoenixReplay.Export.Encoder do
       after
         min(timeout, @stop_wait) ->
           kill(os_pid)
-          # Killed, it may have closed the port already.
-          if Port.info(port), do: Port.close(port)
+
+          # Killed, it exits and its port closes; checking first would race.
+          receive do
+            {^port, {:exit_status, _status}} -> :ok
+          after
+            @stop_wait -> Port.close(port)
+          end
       end
     end
   end
