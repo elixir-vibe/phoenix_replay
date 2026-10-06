@@ -11,6 +11,10 @@ defmodule PhoenixReplay.Web.Live.Index do
   Saved recordings are listed as of a moment, `until`, taken when the list
   opens or its filter changes, so pages stay put while sessions end. Newer
   ones are counted in a banner that brings the list up to date.
+
+  Filters beyond the search, the time window and errors are added and
+  changed in a value picker, which offers the values recordings have
+  with how many have each; see `PhoenixReplay.Web.FilterFields`.
   """
 
   use Phoenix.LiveView
@@ -21,9 +25,11 @@ defmodule PhoenixReplay.Web.Live.Index do
 
   alias PhoenixReplay.Catalog
   alias PhoenixReplay.Recording.Filter
-  alias PhoenixReplay.Web.{Context, Format, Highlight, Layouts, Params}
+  alias PhoenixReplay.Web.{Context, FilterFields, Format, Highlight, Layouts, Params}
 
   @per_page 25
+  # How many values the value picker offers, the most common first.
+  @values 50
   @live_refresh_ms 2_000
   @reload_window_ms 1_000
 
@@ -44,7 +50,10 @@ defmodule PhoenixReplay.Web.Live.Index do
        until: nil,
        refresh_timer: nil,
        reload_window: nil,
-       reload?: false
+       reload?: false,
+       editing: nil,
+       values: [],
+       typed: ""
      )}
   end
 
@@ -60,6 +69,7 @@ defmodule PhoenixReplay.Web.Live.Index do
     {:noreply,
      socket
      |> assign(page: max(Params.integer(params["page"], 1), 1), filter: filter, until: until)
+     |> close_filter()
      |> load()}
   end
 
@@ -86,10 +96,36 @@ defmodule PhoenixReplay.Web.Live.Index do
     end
   end
 
+  # The search and the time window; chips keep the other criteria.
   def handle_event("filter", params, socket) do
-    path = index_path(socket.assigns.context, Filter.from_params(params), 1)
+    filter =
+      socket.assigns.filter
+      |> Filter.to_params()
+      |> Map.drop(~w(q within))
+      |> Map.merge(Map.take(params, ~w(q within)))
+      |> Filter.from_params()
+
+    path = index_path(socket.assigns.context, filter, 1)
     {:noreply, push_patch(socket, to: path, replace: true)}
   end
+
+  def handle_event("edit_filter", %{"field" => name}, socket) do
+    case FilterFields.parse(name) do
+      {:ok, field} -> {:noreply, edit_filter(socket, field)}
+      :error -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("type_value", %{"value" => typed}, socket),
+    do: {:noreply, assign(socket, :typed, typed)}
+
+  def handle_event("apply_filter", %{"value" => value}, %{assigns: %{editing: %{}}} = socket) do
+    %{context: context, filter: filter, editing: field} = socket.assigns
+    path = index_path(context, FilterFields.put(filter, field, value), 1)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  def handle_event("close_filter", _params, socket), do: {:noreply, close_filter(socket)}
 
   def handle_event("show_new", _params, socket) do
     %{context: context, filter: filter} = socket.assigns
@@ -117,6 +153,26 @@ defmodule PhoenixReplay.Web.Live.Index do
     end
   end
 
+  # Opens the value picker for `field`, with the values recordings
+  # matching the other criteria have.
+  defp edit_filter(socket, field) do
+    %{context: %{config: config}, filter: filter} = socket.assigns
+
+    values =
+      if field.control == :choice,
+        do:
+          Catalog.values(config, field.key, filter,
+            now: System.system_time(:millisecond),
+            limit: @values,
+            allow: allow(socket)
+          ),
+        else: []
+
+    assign(socket, editing: field, values: values, typed: "")
+  end
+
+  defp close_filter(socket), do: assign(socket, editing: nil, values: [], typed: "")
+
   defp reload(socket) do
     window = Process.send_after(self(), :reload_window, @reload_window_ms)
     socket |> assign(reload_window: window, reload?: false) |> load()
@@ -137,7 +193,6 @@ defmodule PhoenixReplay.Web.Live.Index do
       page: page,
       stored: %{saved: saved, total: total, all: all, errors: count.(%Filter{errors: true})},
       newer: newer(socket, now, allow),
-      facets: Catalog.facets(config, allow),
       can_clear?: all > 0 and Context.allowed?(socket, :clear, nil)
     )
   end
@@ -273,9 +328,10 @@ defmodule PhoenixReplay.Web.Live.Index do
       <.filter_bar
         :if={@any?}
         filter={@filter}
-        views={@facets.views}
-        event_names={@facets.event_names}
         path={&index_path(@context, &1, 1)}
+        editing={@editing}
+        values={@values}
+        typed={@typed}
       />
 
       <.empty_state :if={@any? and @total == 0} title="No recordings match these filters.">

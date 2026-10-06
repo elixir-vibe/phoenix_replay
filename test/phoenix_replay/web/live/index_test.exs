@@ -61,9 +61,6 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     }
 
     Storage.save(Fixtures.storage(), %{recording | client: client})
-    {:ok, view, _html} = live(build_conn(), "/replay?errors=1&view=X")
-    assert has_element?(view, "#recording-filter-toggle", "2")
-
     {:ok, view, _html} = live(build_conn(), "/replay")
     row = view |> element("#recording-phone") |> render()
     assert row =~ "Mobile Safari 18 on iOS"
@@ -126,24 +123,54 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     assert has_element?(view, "#recordings-new button", "2 new recordings · Show")
   end
 
-  test "offers quick filters on phones" do
+  test "shows filters as chips, adds them from a menu and offers values with counts" do
     save("one")
-    {:ok, view, _html} = live(build_conn(), "/replay?errors=1")
+    save("two")
+    {:ok, view, _html} = live(build_conn(), "/replay?errors=1&view=Other&tab=t1")
 
-    assert has_element?(view, ~s(nav[aria-label="Quick filters"] a[href="/replay"]), "All")
-
-    # With errors is on, so its chip turns it off.
+    # Set fields are chips that change or remove them; unset ones are in the menu.
     assert has_element?(
              view,
-             ~s(nav[aria-label="Quick filters"] a[aria-current="true"][href="/replay"]),
-             "With errors"
+             ~s(#recording-filter-errors[aria-pressed="true"][href="/replay?tab=t1&view=Other"])
            )
+
+    assert has_element?(view, ~s([data-filter="view"]), "View is")
 
     assert has_element?(
              view,
-             ~s(nav[aria-label="Quick filters"] a[href="/replay?errors=1&within=24h"]),
-             "Last 24 h"
+             ~s([data-filter="view"] a[aria-label="Remove the View filter"][href="/replay?errors=1&tab=t1"])
            )
+
+    assert has_element?(view, ~s([data-filter="tab"]), "This browser tab")
+    assert has_element?(view, "#recording-filter-add-items button", "Event")
+    refute has_element?(view, "#recording-filter-add-items button", "View")
+
+    # The picker counts values among recordings matching the other criteria.
+    {:ok, view, _html} = live(build_conn(), "/replay?view=Other")
+    view |> element(~s([data-filter="view"] button)) |> render_click()
+    assert has_element?(view, ~s(#recording-filter-value input[placeholder="Other"]))
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-value a[href="/replay?view=PhoenixReplay.Test.Live.Counter"]),
+             "2"
+           )
+
+    # Typing narrows the values; Enter filters by what was typed.
+    view |> element("#recording-filter-value-form") |> render_change(%{"value" => "nothing"})
+    refute has_element?(view, "#recording-filter-value a")
+    view |> element("#recording-filter-value-form") |> render_submit(%{"value" => "Counter"})
+    assert_patch(view, "/replay?view=Counter")
+    refute has_element?(view, "#recording-filter-value")
+
+    # A number is typed in.
+    render_click(view, "edit_filter", %{"field" => "min_events"})
+    view |> element("#recording-filter-value-form") |> render_submit(%{"value" => "3"})
+    assert_patch(view, "/replay?min_events=3&view=Counter")
+
+    render_click(view, "edit_filter", %{"field" => "event"})
+    render_click(view, "close_filter", %{})
+    refute has_element?(view, "#recording-filter-value")
   end
 
   test "shows the first page for page 0, and for a page past the end once emptied" do
@@ -196,12 +223,14 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     save("beta")
     {:ok, view, _html} = live(build_conn(), "/replay")
 
-    view |> element("#recording-filter") |> render_change(%{"q" => "beta", "event" => "inc"})
+    {:ok, view, _html} = live(build_conn(), "/replay?event=inc")
+    # The search keeps the chips' criteria.
+    view |> element("#recording-search") |> render_change(%{"q" => "beta"})
     assert_patch(view, "/replay?event=inc&q=beta")
     assert has_element?(view, "#recording-beta")
     refute has_element?(view, "#recording-alpha")
 
-    view |> element("#recording-filter") |> render_change(%{"q" => "nothing"})
+    view |> element("#recording-search") |> render_change(%{"q" => "nothing"})
     assert render(view) =~ "No recordings match these filters."
     view |> element("a", "Clear filters") |> render_click()
     assert has_element?(view, "#recording-alpha")

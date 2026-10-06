@@ -52,18 +52,30 @@ defmodule PhoenixReplay.Catalog do
   end
 
   @doc """
-  The views and event names of recordings, for suggesting filter values.
-  `allow` limits them to the summaries the reader may see.
+  The values of a filter's `field` among buffered and stored recordings
+  matching the rest of `filter`, with how many recordings have each, the
+  most common first, for suggesting filter values. Takes `:now`, `:limit`
+  and `:allow` as `query/3` does.
   """
-  @spec facets(Config.t(), (Summary.t() -> boolean()) | nil) :: Storage.facets()
-  def facets(%Config{storage: storage}, nil) do
-    live = Storage.facets_of(Buffer.summaries())
-    stored = Storage.facets(storage)
-    Map.merge(live, stored, fn _key, a, b -> Enum.sort(Enum.uniq(a ++ b)) end)
-  end
+  @spec values(Config.t(), Filter.field(), Filter.t(), keyword()) ::
+          [{String.t(), pos_integer()}]
+  def values(%Config{storage: storage} = config, field, %Filter{} = filter, opts) do
+    {now, limit} = {Keyword.fetch!(opts, :now), Keyword.fetch!(opts, :limit)}
 
-  def facets(%Config{} = config, allow),
-    do: config |> list() |> Enum.filter(allow) |> Storage.facets_of()
+    case Keyword.pop(opts, :allow) do
+      {nil, page_opts} ->
+        live = Buffer.summaries() |> Filter.count_values(field, filter, now, limit)
+        stored = Storage.values(storage, field, filter, page_opts)
+
+        live
+        |> Map.new()
+        |> Map.merge(Map.new(stored), fn _value, a, b -> a + b end)
+        |> Filter.top(limit)
+
+      {allow, _page_opts} ->
+        config |> list() |> Enum.filter(allow) |> Filter.count_values(field, filter, now, limit)
+    end
+  end
 
   @doc """
   Fetches a recording from the buffer or storage.

@@ -155,11 +155,19 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
           assert query.(%{"event" => "nothing"}) == {[], 0}
         end
 
-        test "suggests views and event names", %{opts: opts} do
-          assert EctoStorage.facets(opts) == %{
-                   views: ["Other", "PhoenixReplay.Test.Live.Counter"],
-                   event_names: ["inc"]
-                 }
+        test "counts the values of views and event names", %{opts: opts} do
+          values = &EctoStorage.values(&1, Filter.from_params(&2), [now: 10, limit: 10], opts)
+
+          assert values.(:view, %{}) == [{"PhoenixReplay.Test.Live.Counter", 3}, {"Other", 1}]
+          # A field's own criterion leaves its other values on offer.
+          assert values.(:view, %{"view" => "Other"}) == values.(:view, %{})
+          assert values.(:view, %{"errors" => "1"}) == [{"Other", 1}]
+
+          assert values.(:view, %{"event" => "inc", "tab" => "t1"}) == [
+                   {"PhoenixReplay.Test.Live.Counter", 2}
+                 ]
+
+          assert values.(:event, %{"tab" => "t1"}) == [{"inc", 2}]
         end
       end
     end

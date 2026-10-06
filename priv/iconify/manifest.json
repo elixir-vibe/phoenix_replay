@@ -387,6 +387,18 @@
     },
     {
       "hidden": false,
+      "name": "lucide:plus",
+      "left": 0,
+      "width": 24,
+      "body": "<path fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M5 12h14m-7-7v14\"/>",
+      "height": 24,
+      "top": 0,
+      "rotate": 0,
+      "h_flip": false,
+      "v_flip": false
+    },
+    {
+      "hidden": false,
       "name": "lucide:puzzle",
       "left": 0,
       "width": 24,

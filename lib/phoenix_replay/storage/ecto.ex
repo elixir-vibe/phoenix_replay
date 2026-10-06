@@ -163,25 +163,33 @@ if Code.ensure_loaded?(Ecto.Query) do
     defp criterion(:until, ms), do: dynamic([r], coalesce(r.saved_at, r.connected_at) <= ^ms)
     defp criterion(:since, ms), do: dynamic([r], coalesce(r.saved_at, r.connected_at) > ^ms)
 
-    # Event names of the most recent recordings only: they are stored encoded.
-    @facet_rows 500
+    # Event names are stored encoded, so they are counted among this many
+    # of the most recent recordings matching the rest of the filter.
+    @value_rows 500
 
     @impl true
-    def facets(opts) do
-      views = repo(opts).all(from(r in @table, distinct: true, order_by: r.view, select: r.view))
+    def values(:view, %Filter{event: nil, query: nil} = filter, page_opts, opts) do
+      %{filter | view: nil}
+      |> matching(page_opts)
+      |> group_by([r], r.view)
+      |> order_by([r], desc: count(r.id), asc: r.view)
+      |> limit(^Keyword.fetch!(page_opts, :limit))
+      |> select([r], {r.view, count(r.id)})
+      |> repo(opts).all()
+    end
 
-      names =
-        from(r in @table,
-          order_by: [desc: r.connected_at],
-          limit: @facet_rows,
-          select: r.event_names
-        )
-        |> repo(opts).all()
-        |> Enum.flat_map(fn encoded -> elem(Codec.decode(encoded, :list), 1) end)
-        |> Enum.uniq()
-        |> Enum.sort()
-
-      %{views: views, event_names: names}
+    # Text search and the event filter read event names too, which SQL
+    # cannot; the other criteria narrow the rows first.
+    def values(field, %Filter{} = filter, page_opts, opts) do
+      %{filter | event: nil, query: nil}
+      |> Map.put(field, nil)
+      |> matching(page_opts)
+      |> order_by(desc: :connected_at, desc: :id)
+      |> limit(@value_rows)
+      |> select([r], map(r, ^[:event_names | @summary_fields]))
+      |> repo(opts).all()
+      |> Enum.map(&to_summary/1)
+      |> Filter.count_values(field, filter, page_opts[:now], page_opts[:limit])
     end
 
     @impl true

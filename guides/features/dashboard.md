@@ -46,16 +46,15 @@ The list shows sessions still running under **Live now**, then saved recordings 
 
 Saved recordings are listed as of when you opened the list or last changed its filters, so rows stay put while sessions end. Recordings saved since then are counted in a **"3 new recordings · Show"** banner; showing them brings the list up to date. The list pages with numbered links, reading one page at a time from storage.
 
-Filter by:
+The filter bar always has a search, by URL, recording id or event name, the start time within the last hour, day or week, and **With errors**, for sessions with an error log, a failed query or a crash. **+ Filter** adds the others:
 
-- text in the URL or recording id,
-- view module,
-- an event the session triggered, with suggestions from recorded event names,
-- start time within the last hour, day or week,
-- minimum number of events,
-- sessions with an error, such as an error log, a failed query or a crash.
+- **View**, the LiveView module,
+- **Event**, an event the session triggered or a [mark](telemetry-and-logs.md#marking-moments) it reached,
+- **Min events**, a minimum number of events.
 
-Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&event=pay&within=24h&errors=1`, so a filtered list can be shared or bookmarked. `?tab=` lists the sessions of one browser tab. On phones, the filters other than search are behind a **Filters** button that counts the active ones. `PhoenixReplay.Recording.Filter` applies the same criteria in code.
+Choosing one opens a picker listing the values recordings have, with how many have each, counting only the recordings that match your other filters. Type to narrow the list, or press Enter to filter by what you typed. A filter in use is a chip, such as **View is MyAppWeb.CheckoutLive**: click it to change the value, or × to remove it.
+
+Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&event=pay&within=24h&errors=1`, so a filtered list can be shared or bookmarked. `?tab=` lists the sessions of one browser tab, shown as a **This browser tab** chip. `PhoenixReplay.Recording.Filter` applies the same criteria in code.
 
 ## Player
 

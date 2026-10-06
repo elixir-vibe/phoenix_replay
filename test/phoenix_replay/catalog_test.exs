@@ -42,8 +42,13 @@ defmodule PhoenixReplay.CatalogTest do
     assert ids.(Catalog.query(config, filter, now: 10, offset: 1, limit: 2, allow: allow)) ==
              {~w(r3 r2), 4}
 
-    assert %{views: ["PhoenixReplay.Test.Live.Counter"], event_names: ["inc"]} =
-             Catalog.facets(config, allow)
+    values = &Catalog.values(config, &1, filter, now: 10, limit: 10, allow: allow)
+    assert values.(:view) == [{"PhoenixReplay.Test.Live.Counter", 4}]
+    assert values.(:event) == [{"inc", 4}]
+
+    assert Catalog.values(config, :view, filter, now: 10, limit: 10) == [
+             {"PhoenixReplay.Test.Live.Counter", 5}
+           ]
   end
 
   test "lists running sessions matching a filter", %{config: config} do

@@ -11,11 +11,11 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   use Phoenix.Component
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.Core, only: [badge: 1]
+  import PhoenixReplay.Web.Components.Core, only: [badge: 1, close_menu: 2, kbd: 1, menu: 1]
 
   alias Phoenix.LiveView.JS
   alias PhoenixReplay.Recording.{Filter, Summary}
-  alias PhoenixReplay.Web.Format
+  alias PhoenixReplay.Web.{FilterFields, Format}
 
   # Columns on wider screens: mark, session, started, duration, events,
   # status, action. Phones show the mark, the session and the status.
@@ -146,13 +146,20 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   end
 
   @doc """
-  Narrows the list. Changes are sent as `filter` with the fields of
-  `PhoenixReplay.Recording.Filter.from_params/1`.
+  Narrows the list. The search and the time window are sent as `filter`
+  with `q` and `within`; the errors toggle, chips and values are links to
+  the list filtered.
+
+  The other fields of `PhoenixReplay.Web.FilterFields` show as chips
+  once set, and **+ Filter** adds one: it sends `edit_filter` with the
+  `field`, as a chip does to change its value, and the list opens the
+  value picker for `editing`, `filter_value/1`.
   """
   attr :filter, Filter, required: true
-  attr :views, :list, required: true
-  attr :event_names, :list, required: true
   attr :path, :any, required: true, doc: "a function from a filter to the list's URL"
+  attr :editing, :map, default: nil, doc: "the field whose value is being chosen"
+  attr :values, :list, default: [], doc: "the `editing` field's values, with counts"
+  attr :typed, :string, default: "", doc: "what was typed in the value picker"
 
   @spec filter_bar(map()) :: Phoenix.LiveView.Rendered.t()
   def filter_bar(assigns) do
@@ -160,73 +167,38 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
       assign(assigns,
         field:
           "flex h-10 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 focus-within:outline-2 focus-within:outline-accent pointer-coarse:h-11",
-        select: "cursor-pointer bg-transparent font-medium outline-none",
-        active: Enum.count(Map.delete(Filter.to_params(assigns.filter), "q"))
+        set: FilterFields.set(assigns.filter),
+        unset: FilterFields.unset(assigns.filter),
+        errors_toggled: %Filter{assigns.filter | errors: not assigns.filter.errors},
+        without_tab: %Filter{assigns.filter | tab: nil}
       )
 
     ~H"""
-    <form
-      id="recording-filter"
-      role="search"
-      phx-change="filter"
-      phx-submit="filter"
-      class="mb-6 flex flex-wrap items-center gap-2 text-sm"
-    >
-      <label class={[@field, "min-w-0 flex-[1_1_14rem]"]}>
-        <.icon name="lucide:search" class="size-4 shrink-0 text-muted" />
-        <span class="sr-only">Search by URL, session id or event</span>
-        <input
-          type="search"
-          name="q"
-          value={@filter.query}
-          placeholder="Search URL, session id or event"
-          phx-debounce="300"
-          data-shortcut="/"
-          class="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-faint"
-        />
-        <kbd class="hidden rounded border border-line px-1.5 font-mono text-[11px] text-muted sm:inline">
-          /
-        </kbd>
-      </label>
-      <button
-        id="recording-filter-toggle"
-        type="button"
-        aria-controls="recording-filter-more"
-        aria-expanded="false"
-        phx-click={
-          %JS{}
-          |> JS.toggle_attribute({"data-open", "true"}, to: "#recording-filter-more")
-          |> JS.toggle_attribute({"aria-expanded", "true", "false"})
-        }
-        class={[@field, "font-medium sm:hidden"]}
+    <div id="recording-filter" class="relative mb-6 flex flex-wrap items-center gap-2 text-sm">
+      <form
+        id="recording-search"
+        role="search"
+        phx-change="filter"
+        phx-submit="filter"
+        class="contents"
       >
-        <.icon name="lucide:sliders-horizontal" class="size-4" /> Filters
-        <span :if={@active > 0} class="rounded-full bg-ink px-1.5 text-xs text-on-ink">{@active}</span>
-      </button>
-      <nav aria-label="Quick filters" class="flex w-full gap-1.5 sm:hidden">
-        <.quick_filter
-          :for={{label, target, active?} <- quick_filters(@filter)}
-          path={@path.(target)}
-          current={active?}
-        >
-          {label}
-        </.quick_filter>
-      </nav>
-      <%!-- Phones show these behind the button; wider screens lay them out in the bar. --%>
-      <div
-        id="recording-filter-more"
-        class="hidden w-full flex-wrap gap-2 data-open:flex sm:contents sm:data-open:contents"
-      >
-        <label class={@field}>
-          <span class="text-muted">View</span>
-          <select name="view" class={[@select, "max-w-44 truncate"]}>
-            <option value="">All</option>
-            <option :for={view <- @views} value={view} selected={view == @filter.view}>{view}</option>
-          </select>
+        <label class={[@field, "min-w-0 flex-[1_1_14rem]"]}>
+          <.icon name="lucide:search" class="size-4 shrink-0 text-muted" />
+          <span class="sr-only">Search by URL, session id or event</span>
+          <input
+            type="search"
+            name="q"
+            value={@filter.query}
+            placeholder="Search URL, session id or event"
+            phx-debounce="300"
+            data-shortcut="/"
+            class="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-faint"
+          />
+          <.kbd keys={["/"]} class="hidden sm:inline-flex" />
         </label>
         <label class={@field}>
           <span class="text-muted">Started</span>
-          <select name="within" class={@select}>
+          <select name="within" class="cursor-pointer bg-transparent font-medium outline-none">
             <option value="">Any time</option>
             <option
               :for={window <- Filter.windows()}
@@ -237,74 +209,178 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
             </option>
           </select>
         </label>
-        <label class={@field}>
-          <span class="text-muted">Event</span>
-          <input
-            type="text"
-            name="event"
-            value={@filter.event}
-            list="recording-filter-events"
-            placeholder="Any"
-            phx-debounce="300"
-            class="w-24 bg-transparent font-medium outline-none placeholder:text-ink"
-          />
-          <datalist id="recording-filter-events">
-            <option :for={name <- @event_names} value={name} />
-          </datalist>
-        </label>
-        <label class={@field}>
-          <span class="text-muted">Min events</span>
-          <input
-            type="number"
-            name="min_events"
-            min="1"
-            value={@filter.min_events}
-            placeholder="Any"
-            phx-debounce="300"
-            class="w-14 bg-transparent font-medium outline-none placeholder:text-ink"
-          />
-        </label>
-        <label class={[
+      </form>
+      <.link
+        id="recording-filter-errors"
+        patch={@path.(@errors_toggled)}
+        aria-pressed={to_string(@filter.errors)}
+        class={[
           @field,
-          "cursor-pointer font-medium has-checked:border-error has-checked:bg-error-soft has-checked:text-error"
-        ]}>
-          <input type="checkbox" name="errors" value="1" checked={@filter.errors} class="sr-only" />
-          <.icon name="lucide:triangle-alert" class="size-4" /> With errors
-        </label>
-      </div>
-    </form>
+          "font-medium",
+          @filter.errors && "border-error bg-error-soft text-error",
+          !@filter.errors && "hover:bg-hover"
+        ]}
+      >
+        <.icon name="lucide:triangle-alert" class="size-4" /> With errors
+      </.link>
+      <span :for={{field, value} <- @set} data-filter={field.key} class={chip_class()}>
+        <button
+          type="button"
+          phx-click="edit_filter"
+          phx-value-field={field.key}
+          aria-label={"Change the #{field.label} filter, #{value}"}
+          class="flex min-w-0 items-center gap-1 rounded-l-full py-1 pr-1 pl-3 hover:bg-hover"
+        >
+          <span class="text-muted">{field.label} is</span>
+          <span class="max-w-56 truncate font-medium">{value}</span>
+        </button>
+        <.remove_filter path={@path.(FilterFields.without(@filter, field))} label={field.label} />
+      </span>
+      <span :if={@filter.tab} data-filter="tab" class={chip_class()}>
+        <span class="py-1 pl-3 font-medium">This browser tab</span>
+        <.remove_filter path={@path.(@without_tab)} label="browser tab" />
+      </span>
+      <.menu
+        :if={@unset != []}
+        id="recording-filter-add"
+        label="Add a filter"
+        trigger_class="inline-flex h-10 items-center gap-1.5 rounded-lg border border-dashed border-line px-3 font-medium text-muted transition-colors hover:bg-hover hover:text-ink aria-expanded:text-ink pointer-coarse:h-11"
+      >
+        <:trigger><.icon name="lucide:plus" class="size-4" /> Filter</:trigger>
+        <:item :for={field <- @unset}>
+          <button
+            type="button"
+            phx-click={
+              JS.push("edit_filter", value: %{field: field.key}) |> close_menu("recording-filter-add")
+            }
+          >
+            {field.label}
+          </button>
+        </:item>
+      </.menu>
+      <.filter_value
+        :if={@editing}
+        field={@editing}
+        filter={@filter}
+        values={@values}
+        typed={@typed}
+        path={@path}
+      />
+    </div>
     """
   end
 
-  # One tap on a phone: everything, sessions with errors, the last day.
-  # Each is the filter it leads to and whether it is in effect.
-  defp quick_filters(%Filter{} = filter) do
-    last_day? = filter.within == "24h"
-
-    [
-      {"All", %Filter{}, Filter.empty?(filter)},
-      {"With errors", %Filter{filter | errors: not filter.errors}, filter.errors},
-      {"Last 24 h", %Filter{filter | within: if(last_day?, do: nil, else: "24h")}, last_day?}
-    ]
-  end
+  defp chip_class,
+    do:
+      "inline-flex h-10 max-w-full items-center rounded-full border border-line bg-surface pointer-coarse:h-11"
 
   attr :path, :string, required: true
-  attr :current, :boolean, required: true
-  slot :inner_block, required: true
+  attr :label, :string, required: true
 
-  defp quick_filter(assigns) do
+  defp remove_filter(assigns) do
     ~H"""
     <.link
       patch={@path}
-      aria-current={@current && "true"}
-      class={[
-        "inline-flex h-9 items-center rounded-full border px-3 text-[13px] whitespace-nowrap",
-        @current && "border-ink bg-ink text-on-ink",
-        !@current && "border-line bg-surface text-ink"
-      ]}
+      aria-label={"Remove the #{@label} filter"}
+      class="flex h-full items-center rounded-r-full pr-2.5 pl-1 text-muted hover:bg-hover hover:text-ink"
     >
-      {render_slot(@inner_block)}
+      <.icon name="lucide:x" class="size-3.5" />
     </.link>
+    """
+  end
+
+  @doc """
+  Asks for the value of a filter field, under the filter bar. A choice
+  lists the values recordings have, the most common first, narrowed by
+  what is typed, which `type_value` sends as `value`, with the one set
+  now marked; each value links to the list filtered by it. Enter, or **Apply** for a number, sends
+  `apply_filter` with the `value` typed. Escape or a click outside sends
+  `close_filter`.
+  """
+  attr :field, :map, required: true
+  attr :filter, Filter, required: true
+  attr :values, :list, required: true
+  attr :typed, :string, required: true
+  attr :path, :any, required: true
+
+  @spec filter_value(map()) :: Phoenix.LiveView.Rendered.t()
+  def filter_value(assigns) do
+    typed = String.downcase(String.trim(assigns.typed))
+
+    current = Map.fetch!(assigns.filter, assigns.field.key)
+
+    assigns =
+      assign(assigns,
+        current: current && to_string(current),
+        shown:
+          Enum.filter(assigns.values, fn {value, _count} ->
+            String.contains?(String.downcase(value), typed)
+          end)
+      )
+
+    ~H"""
+    <div
+      id="recording-filter-value"
+      role="dialog"
+      aria-label={"Filter by #{@field.label}"}
+      phx-click-away="close_filter"
+      phx-window-keydown="close_filter"
+      phx-key="Escape"
+      class="absolute top-full right-0 left-0 z-30 mt-1 rounded-lg sm:left-auto sm:w-96 border border-line bg-surface p-1.5 shadow-lg"
+    >
+      <form
+        id="recording-filter-value-form"
+        phx-change="type_value"
+        phx-submit="apply_filter"
+        class="flex gap-1.5"
+      >
+        <label class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-line bg-canvas px-2.5 focus-within:outline-2 focus-within:outline-accent">
+          <span class="shrink-0 text-muted">{@field.label} is</span>
+          <input
+            type={if @field.control == :number, do: "number", else: "text"}
+            name="value"
+            min={@field.control == :number && "1"}
+            value={@typed}
+            placeholder={@current || if(@field.control == :number, do: "1", else: "Any value")}
+            autocomplete="off"
+            phx-debounce={@field.control == :choice && "150"}
+            phx-mounted={JS.focus()}
+            class="h-full min-w-0 flex-1 bg-transparent font-medium outline-none"
+          />
+        </label>
+        <button
+          :if={@field.control == :number}
+          type="submit"
+          class="h-9 rounded-md bg-ink px-3 font-medium text-on-ink hover:bg-ink/85"
+        >
+          Apply
+        </button>
+      </form>
+      <ul
+        :if={@field.control == :choice and @shown != []}
+        aria-label={"#{@field.label} values"}
+        class="mt-1 max-h-72 overflow-y-auto"
+      >
+        <li :for={{value, count} <- @shown}>
+          <.link
+            patch={@path.(FilterFields.put(@filter, @field, value))}
+            aria-current={value == @current && "true"}
+            class="group flex items-center gap-2 rounded-md px-2.5 py-1.5 hover:bg-hover focus-visible:bg-hover"
+          >
+            <.icon
+              name="lucide:check"
+              class="size-3.5 shrink-0 opacity-0 group-aria-[current=true]:opacity-100"
+            />
+            <span class="min-w-0 flex-1 truncate">{value}</span>
+            <span class="text-muted tabular-nums">{count}</span>
+          </.link>
+        </li>
+      </ul>
+      <p :if={@field.control == :choice and @shown == []} class="px-2.5 py-2 text-muted">
+        No recordings here have one{if @typed != "", do: " like that"}.
+        <span :if={@typed != ""}>Press Enter to filter by it anyway.</span>
+      </p>
+    </div>
     """
   end
 

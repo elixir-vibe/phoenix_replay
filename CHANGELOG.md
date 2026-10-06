@@ -26,6 +26,8 @@ Pointer, touch and form recording, client state, and a richer player.
 
 ### Changed
 
+- The recording list's filters are chips: the search, the time window and **With errors** stay in the bar, and **+ Filter** adds View, Event or Min events from a picker that lists the values recordings have, with how many have each. Click a chip to change it, or × to remove it. The phones' **Filters** button and quick filters are gone, since the bar now fits.
+- `PhoenixReplay.Storage`'s optional `facets/1` is replaced by `values/4`, which counts a filter field's values among the recordings matching the rest of a filter. `PhoenixReplay.Storage.Ecto` counts views in SQL. A custom backend that implemented `facets/1` can drop it; without `values/4`, values are counted from `list/1`.
 - Resizes and rotations are recorded as soon as they settle, rather than with the user's next click or key press, while `replayRecorder` runs.
 - Modules are renamed: `PhoenixReplay.Recordings` is now `PhoenixReplay.Catalog`, `PhoenixReplay.Recordings.Filter` is `PhoenixReplay.Recording.Filter`, `PhoenixReplay.Recordings.Retention` is `PhoenixReplay.Storage.Retention`, `PhoenixReplay.Recording.Keep` is `PhoenixReplay.Session.TailSampling`, and `Recordings.complete/3` is `PhoenixReplay.Session.Finalizer.complete/3`. The `:retention` and `:keep` options are unchanged.
 - A recording's `client` is a `PhoenixReplay.Recording.Client` struct, and its `referer` is now `navigated_from`, so it no longer reads like the landing's HTTP referrer. Older recordings are upgraded when read.

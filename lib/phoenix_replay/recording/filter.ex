@@ -68,6 +68,45 @@ defmodule PhoenixReplay.Recording.Filter do
     |> Map.new()
   end
 
+  @typedoc """
+  A criterion whose values can be listed and counted, for suggesting them:
+  see `values_of/2`.
+  """
+  @type field :: :view | :event
+
+  @fields [:view, :event]
+
+  @doc "The criteria whose values can be listed; see `t:field/0`."
+  @spec fields() :: [field()]
+  def fields, do: @fields
+
+  @doc "The values a summary has for `field`, such as its view or its event names."
+  @spec values_of(Summary.t(), field()) :: [String.t()]
+  def values_of(%Summary{view: view}, :view), do: [view]
+  def values_of(%Summary{event_names: names}, :event), do: names
+
+  @doc """
+  Counts the values of `field` among the `summaries` matching `filter`,
+  ignoring the filter's own criterion on `field`, so the other values
+  stay on offer: the most common first, at most `limit`. `now` is in Unix
+  milliseconds, for `"within"`.
+  """
+  @spec count_values([Summary.t()], field(), t(), integer(), pos_integer()) ::
+          [{String.t(), pos_integer()}]
+  def count_values(summaries, field, %__MODULE__{} = filter, now, limit) do
+    summaries
+    |> select(Map.put(filter, field, nil), now)
+    |> Enum.flat_map(&values_of(&1, field))
+    |> Enum.frequencies()
+    |> top(limit)
+  end
+
+  @doc "The most common of counted values, then by value, at most `limit`."
+  @spec top(%{String.t() => pos_integer()} | [{String.t(), pos_integer()}], pos_integer()) ::
+          [{String.t(), pos_integer()}]
+  def top(counts, limit),
+    do: counts |> Enum.sort_by(fn {value, count} -> {-count, value} end) |> Enum.take(limit)
+
   @doc "Returns true when no criteria are set."
   @spec empty?(t()) :: boolean()
   def empty?(%__MODULE__{} = filter), do: to_params(filter) == %{}
