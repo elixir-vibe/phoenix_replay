@@ -4,7 +4,7 @@
 
 Session recording and replay for Phoenix LiveView. PhoenixReplay records what your LiveViews and LiveComponents did — events, navigation and assigns — and replays a session by re-rendering your own templates with the recorded assigns. No browser recording script, no DOM snapshots.
 
-![PhoenixReplay replaying a form session](https://raw.githubusercontent.com/elixir-vibe/phoenix_replay/master/screenshot.jpg)
+![PhoenixReplay replaying a phone session: a swipe scrolling the replayed page, the mark a tap reached, its queries, and errors on the timeline](https://raw.githubusercontent.com/elixir-vibe/phoenix_replay/master/screenshot.jpg)
 
 ```bash
 mix igniter.install phoenix_replay
@@ -112,6 +112,8 @@ phoenix_replay "/replay",
   on_mount: [{MyAppWeb.UserAuth, :ensure_admin}],
   authorize: MyApp.ReplayAuthorization
 ```
+
+![The recording list: sessions of the last day by device, browser and where they came from, with the marks they reached and their errors](https://raw.githubusercontent.com/elixir-vibe/phoenix_replay/master/screenshot-recordings.jpg)
 
 The dashboard ships its own assets and loads your app's own Phoenix and LiveView clients, so it needs nothing from your asset pipeline. See the [Dashboard guide](https://hexdocs.pm/phoenix_replay/dashboard.html).
 
