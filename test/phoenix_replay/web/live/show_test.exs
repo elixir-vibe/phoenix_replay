@@ -261,10 +261,10 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
         data: %{
           event: [:shop, :step],
           summary: summary,
-          measurements: %{},
+          measurements: %{duration: 250, amount: 4900},
           metadata: %{},
           error: nil,
-          mark: true
+          mark: "Step"
         }
       }
     end
@@ -280,9 +280,20 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert html =~ "Marks"
     assert has_element?(view, ~s(button[phx-click="toggle_kind"][phx-value-kind="marks"]))
 
+    # The header lists them, each a jump to its moment.
+    assert has_element?(view, "#replay-marks-button", "2 marks")
+    assert has_element?(view, "#replay-marks-items button", "Step")
+    assert has_element?(view, "#replay-marks-items button", "0:01")
+
+    # Rows name the mark, and slow events stand out.
+    assert has_element?(view, "#replay-events button span.text-kind-mark", "Step")
+    assert has_element?(view, ~s(#replay-events [title="Slower than 100 ms"]), "250 ms")
+
     render_hook(view, "mark", %{"direction" => "next"})
     assert assigns(view).index == 3
     assert has_element?(view, "#replay-details", "carted")
+    # Measurements other than the duration are shown too.
+    assert has_element?(view, "#replay-details dd", "amount: 4900")
     render_hook(view, "mark", %{"direction" => "next"})
     assert assigns(view).index == 5
     render_hook(view, "mark", %{"direction" => "previous"})

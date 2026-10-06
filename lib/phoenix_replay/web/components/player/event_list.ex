@@ -86,6 +86,7 @@ defmodule PhoenixReplay.Web.Components.Player.EventList do
     doc: "the `{event, index}` the pane describes: the current event or the pinned one"
 
   attr :pinned, :boolean, default: false
+  attr :slow_ms, :integer, default: 100, doc: "how long a collected event takes to count as slow"
 
   @spec event_list(map()) :: Phoenix.LiveView.Rendered.t()
   def event_list(assigns) do
@@ -146,9 +147,11 @@ defmodule PhoenixReplay.Web.Components.Player.EventList do
           No events match.
         </li>
         <li :for={{head, rows} <- @groups}>
-          <.event_row event={head} current={@index} head />
+          <.event_row event={head} current={@index} slow_ms={@slow_ms} head />
           <ol :if={rows != []} class="pb-1">
-            <li :for={row <- rows}><.event_row event={row} current={@index} /></li>
+            <li :for={row <- rows}>
+              <.event_row event={row} current={@index} slow_ms={@slow_ms} />
+            </li>
           </ol>
         </li>
       </ol>
@@ -219,6 +222,7 @@ defmodule PhoenixReplay.Web.Components.Player.EventList do
 
   attr :event, :any, required: true, doc: "an `{event, index}` pair"
   attr :current, :integer, required: true
+  attr :slow_ms, :integer, required: true
   attr :head, :boolean, default: false
 
   defp event_row(%{event: {event, index}} = assigns) do
@@ -226,7 +230,9 @@ defmodule PhoenixReplay.Web.Components.Player.EventList do
       assign(assigns,
         ev: event,
         index: index,
-        parts: Events.parts(event)
+        parts: Events.parts(event),
+        mark: Event.mark_name(event),
+        slow?: Events.slow?(event, assigns.slow_ms)
       )
 
     ~H"""
@@ -246,7 +252,13 @@ defmodule PhoenixReplay.Web.Components.Player.EventList do
       ]}
     >
       <.event_icon type={icon_type(@ev)} class="size-3.5 shrink-0 opacity-70" />
-      <span class="min-w-0 flex-1 truncate" title={Event.label(@ev)}>
+      <span class="min-w-0 flex-1 truncate" title={Events.marker_title(@ev)}>
+        <span
+          :if={@mark}
+          class="mr-1 rounded-full bg-kind-mark/15 px-1.5 py-px text-[11px] font-medium text-kind-mark"
+        >
+          {@mark}
+        </span>
         <%= for {kind, content} <- @parts do %>
           <span :if={kind == :text}>{content}</span>
           <code :if={kind == :code} class="font-mono text-xs">{content}</code>
@@ -254,7 +266,12 @@ defmodule PhoenixReplay.Web.Components.Player.EventList do
       </span>
       <span
         :if={duration = Event.duration(@ev)}
-        class="shrink-0 font-mono text-[11px] tabular-nums text-muted"
+        title={@slow? && "Slower than #{Format.milliseconds(@slow_ms)}"}
+        class={[
+          "shrink-0 font-mono text-[11px] tabular-nums",
+          @slow? && "font-medium text-slow",
+          !@slow? && "text-muted"
+        ]}
       >
         {Format.milliseconds(duration)}
       </span>

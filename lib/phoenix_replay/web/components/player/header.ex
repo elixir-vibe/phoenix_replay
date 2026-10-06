@@ -31,6 +31,11 @@ defmodule PhoenixReplay.Web.Components.Player.Header do
   attr :duration_ms, :integer, required: true
   attr :error_count, :integer, required: true
   attr :first_error, :integer, default: nil, doc: "the index of the first error"
+
+  attr :marks, :list,
+    default: [],
+    doc: "the moments the session reached, from `PhoenixReplay.Web.Player.Events.marks/1`"
+
   attr :dropped, :integer, default: 0
   attr :at, :integer, required: true
   attr :link, :string, required: true, doc: "the URL of the current moment"
@@ -83,6 +88,28 @@ defmodule PhoenixReplay.Web.Components.Player.Header do
           {Format.count(@error_count, "error")} · jump to first
           <.kbd keys={hd(Shortcuts.keys(:next_error))} class="ml-0.5" />
         </button>
+        <.menu
+          :if={@marks != []}
+          id="replay-marks"
+          label="Marks"
+          trigger_class="inline-flex h-7 items-center gap-1.5 rounded-full bg-kind-mark/15 px-2.5 text-xs font-medium text-kind-mark transition-colors hover:bg-kind-mark/25 pointer-coarse:h-9"
+        >
+          <:trigger>
+            <.icon name="lucide:flag" class="size-3.5" />
+            {Format.count(length(@marks), "mark")}
+            <.kbd keys={hd(Shortcuts.keys(:next_mark))} class="ml-0.5" />
+          </:trigger>
+          <:item :for={mark <- @marks}>
+            <button
+              type="button"
+              phx-click={JS.push("seek", value: %{index: mark.index}) |> close_menu("replay-marks")}
+            >
+              <.icon name="lucide:flag" class="size-4 text-kind-mark" />
+              <span class="min-w-0 flex-1 truncate">{mark.name}</span>
+              <span class="font-mono text-xs text-muted tabular-nums">{Format.clock(mark.at)}</span>
+            </button>
+          </:item>
+        </.menu>
         <span class="flex-1"></span>
         <.button size="md" data-copy={@link} class="group">
           <.icon name="lucide:link" class="size-4" />

@@ -260,12 +260,23 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
     >
       <span class="flex justify-center">{render_slot(@mark)}</span>
       <div class="min-w-0">
-        <.link
-          navigate={@path}
-          class="block truncate font-medium after:absolute after:inset-0 focus-visible:outline-none after:focus-visible:outline-2 after:focus-visible:-outline-offset-2 after:focus-visible:outline-accent"
-        >
-          {@recording.view}
-        </.link>
+        <div class="flex min-w-0 items-center gap-2">
+          <.link
+            navigate={@path}
+            class="truncate font-medium after:absolute after:inset-0 focus-visible:outline-none after:focus-visible:outline-2 after:focus-visible:-outline-offset-2 after:focus-visible:outline-accent"
+          >
+            {@recording.view}
+          </.link>
+          <.link
+            :for={{name, count} <- Enum.sort(@recording.marks)}
+            patch={@filter_path.(:mark, name)}
+            title={"Reached #{name}" <> if(count > 1, do: " #{count} times", else: "")}
+            class="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-full bg-kind-mark/15 px-2 py-px text-xs font-medium text-kind-mark hover:bg-kind-mark/25"
+          >
+            <.icon name="lucide:flag" class="size-3" />
+            {name}<span :if={count > 1} class="opacity-70">×{count}</span>
+          </.link>
+        </div>
         <p class="mt-0.5 truncate font-mono text-xs text-muted">
           <span class="sm:hidden">{render_slot(@meta)}</span>
           <span class="hidden sm:inline">

@@ -18,6 +18,10 @@ defmodule PhoenixReplay.Web.Player.Events do
   # in their own colour.
   @error_marker "size-2.5 bg-error ring-3 ring-error-soft"
   @mark_marker "size-2.5 bg-kind-mark ring-3 ring-kind-mark/25"
+  @slow_marker "size-2 bg-slow ring-2 ring-slow/25"
+
+  # What counts as slow without `keep: [slower_than: ms]`, in milliseconds.
+  @slow_ms 100
 
   @doc "The kind an event is filtered as."
   @spec kind(Event.t()) :: kind()
@@ -165,6 +169,7 @@ defmodule PhoenixReplay.Web.Player.Events do
       {"Event", Collector.name(data.event)},
       {"Summary", summary(data)},
       {"Duration", event |> Event.duration() |> duration()},
+      {"Measurements", data.measurements |> Map.delete(:duration) |> measurements()},
       {"Error", data.error},
       {"Metadata", metadata(data.metadata)}
     ])
@@ -205,14 +210,62 @@ defmodule PhoenixReplay.Web.Player.Events do
   def dropped_count(%Recording{dropped: dropped}),
     do: Enum.sum_by(dropped, fn {_name, count} -> count end)
 
-  @doc "Classes for an event's timeline marker. Errors and marks are larger."
-  @spec marker_class(Event.t()) :: String.t()
-  def marker_class(%Event{} = event) do
+  @doc """
+  How long, in milliseconds, a collected event takes before the player
+  calls it slow: `keep: [slower_than: ms]`, which also saves its session,
+  or else #{@slow_ms}.
+  """
+  @spec slow_ms(PhoenixReplay.Config.keep()) :: pos_integer()
+  def slow_ms(%{slower_than: slower_than}), do: slower_than || @slow_ms
+
+  @doc "Whether an event took at least `slow_ms` milliseconds."
+  @spec slow?(Event.t(), pos_integer()) :: boolean()
+  def slow?(%Event{} = event, slow_ms) do
+    case Event.duration(event) do
+      nil -> false
+      duration -> duration >= slow_ms
+    end
+  end
+
+  @doc """
+  Classes for an event's timeline marker. Errors, marks and events slower
+  than `slow_ms` are larger, in their own colours.
+  """
+  @spec marker_class(Event.t(), pos_integer()) :: String.t()
+  def marker_class(%Event{} = event, slow_ms \\ @slow_ms) do
     cond do
       Event.error?(event) -> @error_marker
       Event.mark?(event) -> @mark_marker
+      slow?(event, slow_ms) -> @slow_marker
       true -> type_marker_class(event.type)
     end
+  end
+
+  @doc "What a timeline marker says on hover: a mark's name, then the event."
+  @spec marker_title(Event.t()) :: String.t()
+  def marker_title(%Event{} = event) do
+    case Event.mark_name(event) do
+      nil -> Event.label(event)
+      name -> "#{name} · #{Event.label(event)}"
+    end
+  end
+
+  @doc """
+  The moments a recording reached, in order: each mark's index, name and
+  offset in milliseconds.
+  """
+  @spec marks(Recording.t()) :: [
+          %{index: non_neg_integer(), name: String.t(), at: non_neg_integer()}
+        ]
+  def marks(%Recording{events: events}) do
+    events
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {event, index} ->
+      case Event.mark_name(event) do
+        nil -> []
+        name -> [%{index: index, name: name, at: event.at}]
+      end
+    end)
   end
 
   @typedoc "A piece of an event's row: words in the interface's font, or code in monospace."
@@ -290,6 +343,23 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   defp term(nil), do: nil
   defp term(value), do: Highlight.term(value, pretty: true, limit: 50, printable_limit: 1_000)
+
+  # Times as times, other measurements as they are.
+  defp measurements(measurements) when measurements == %{}, do: nil
+
+  defp measurements(measurements) do
+    measurements
+    |> Enum.sort()
+    |> Enum.map_join("\n", fn {key, value} -> "#{key}: #{measurement(key, value)}" end)
+  end
+
+  defp measurement(key, value) when is_number(value) do
+    if key |> Atom.to_string() |> String.ends_with?("_time"),
+      do: Format.milliseconds(value),
+      else: to_string(value)
+  end
+
+  defp measurement(_key, value), do: inspect(value)
 
   defp metadata(metadata) when metadata == %{}, do: nil
   defp metadata(metadata), do: Highlight.term(metadata, pretty: true, limit: 50)

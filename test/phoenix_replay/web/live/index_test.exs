@@ -6,6 +6,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
   alias PhoenixReplay.{Catalog, Config, Storage}
   alias PhoenixReplay.Recording.Client.Landing
+  alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
 
@@ -243,6 +244,25 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
     render_click(view, "close_filter", %{})
     refute has_element?(view, "#recording-filter-time-picker")
+  end
+
+  test "flags the marks each session reached, each a link to the sessions that did" do
+    recording = Fixtures.counter_recording(id: "marked")
+
+    mark = %Event{
+      at: 9,
+      type: :telemetry,
+      data: %{event: [:shop, :paid], measurements: %{}, metadata: %{}, mark: "Paid"}
+    }
+
+    Storage.save(Fixtures.storage(), %{recording | events: recording.events ++ [mark, mark]})
+    {:ok, view, _html} = live(build_conn(), "/replay")
+
+    assert has_element?(
+             view,
+             ~s(#recording-marked a[href="/replay?mark=Paid"][title="Reached Paid 2 times"]),
+             "×2"
+           )
   end
 
   test "charts sessions over time, each bar narrowing the list to its stretch" do

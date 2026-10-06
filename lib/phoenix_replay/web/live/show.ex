@@ -162,6 +162,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       kinds: Events.kinds(recording),
       kind_counts: Events.kind_counts(recording),
       first_error: Events.first_error_index(recording),
+      marks: Events.marks(recording),
       dropped: Events.dropped_count(recording),
       journey: journey(socket, recording)
     )
@@ -541,6 +542,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       duration_ms={@duration_ms}
       error_count={@error_count}
       first_error={@first_error}
+      marks={@marks}
       dropped={@dropped}
       at={@at}
       link={Context.path(@context, [@recording.id]) <> "?at=#{@index}&t=#{@at}"}
@@ -587,6 +589,7 @@ defmodule PhoenixReplay.Web.Live.Show do
           playing={@playing != nil}
           speed={@speed}
           speeds={@speeds}
+          slow_ms={Events.slow_ms(@context.config.keep)}
         />
       </main>
       <aside
@@ -613,6 +616,7 @@ defmodule PhoenixReplay.Web.Live.Show do
             errors_only={@errors_only}
             details={details_event(assigns)}
             pinned={@pinned != nil}
+            slow_ms={Events.slow_ms(@context.config.keep)}
           />
           <.state
             :if={@tab == "state"}

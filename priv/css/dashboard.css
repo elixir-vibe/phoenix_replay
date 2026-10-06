@@ -72,6 +72,8 @@
   --color-kind-query: #0f8b7e;
   --color-kind-log: #6b7280;
   --color-kind-mark: #db2777;
+  /* Collected events slower than the threshold. */
+  --color-slow: #b45309;
 
   /* Highlighted code; see PhoenixReplay.Web.Highlight. */
   --color-code-keyword: #8250df;
@@ -108,6 +110,7 @@
       --color-kind-query: #2dd4bf;
       --color-kind-log: #9ca3af;
       --color-kind-mark: #f472b6;
+      --color-slow: #fbbf24;
       --color-code-keyword: #c4a5ff;
       --color-code-string: #7ee2b0;
       --color-code-atom: #f0a868;

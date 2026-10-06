@@ -18,7 +18,6 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
   import PhoenixReplay.Web.Components.Keys, only: [kbd: 1]
 
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Web.Format
   alias PhoenixReplay.Web.Player.{Events, Shortcuts}
 
@@ -36,6 +35,7 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
   attr :playing, :boolean, required: true
   attr :speed, :integer, required: true
   attr :speeds, :list, required: true
+  attr :slow_ms, :integer, default: 100, doc: "how long a collected event takes to count as slow"
 
   @spec playback(map()) :: Phoenix.LiveView.Rendered.t()
   def playback(assigns) do
@@ -132,10 +132,10 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
               :for={{event, _index} <- events}
               class={[
                 "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full",
-                Events.marker_class(event)
+                Events.marker_class(event, @slow_ms)
               ]}
               style={"left: #{position(event.at, @duration_ms)}%"}
-              title={Event.label(event)}
+              title={Events.marker_title(event)}
             ></span>
           </div>
           <span
