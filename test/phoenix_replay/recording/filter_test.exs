@@ -86,8 +86,16 @@ defmodule PhoenixReplay.Recording.FilterTest do
       summary("c", connected_at: 2_100)
     ]
 
-    assert Filter.histogram(summaries, %Filter{}, 1_000, @now) == [{1_000, 2, 1}, {2_000, 1, 0}]
-    assert Filter.histogram(summaries, %Filter{errors: true}, 1_000, @now) == [{1_000, 1, 1}]
+    assert Filter.histogram(summaries, %Filter{}, 1_000, now: @now) == [
+             {1_000, 2, 1},
+             {2_000, 1, 0}
+           ]
+
+    assert Filter.histogram(summaries, %Filter{errors: true}, 1_000, now: @now) == [{1_000, 1, 1}]
+
+    # Stretches begin at the viewer's hours: here 600 ms ahead of UTC.
+    assert Filter.histogram(summaries, %Filter{}, 1_000, now: @now, utc_offset: 600) ==
+             [{400, 1, 0}, {1_400, 2, 1}]
 
     assert Filter.time_range(%Filter{within: "1h"}, @now) == {@now - 3_600_000, @now}
     assert Filter.time_range(%Filter{from: 5, to: 9}, @now) == {5, 9}

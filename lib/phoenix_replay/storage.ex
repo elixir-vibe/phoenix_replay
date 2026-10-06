@@ -93,7 +93,7 @@ defmodule PhoenixReplay.Storage do
   Counts the recordings matching `filter` by when they started, in
   stretches of a number of milliseconds; see
   `PhoenixReplay.Recording.Filter.histogram/4`, which this must agree
-  with. `page_opts` has `:now`.
+  with. `page_opts` has `:now` and `:utc_offset`.
   """
   @callback histogram(Filter.t(), pos_integer(), Filter.page_opts(), keyword()) ::
               [Filter.bucket()]
@@ -150,7 +150,7 @@ defmodule PhoenixReplay.Storage do
   def histogram({module, opts} = storage, %Filter{} = filter, size, page_opts) do
     if exports?(module, :histogram, 4),
       do: module.histogram(filter, size, page_opts, opts),
-      else: storage |> list() |> Filter.histogram(filter, size, page_opts[:now])
+      else: storage |> list() |> Filter.histogram(filter, size, page_opts)
   end
 
   @doc "Deletes a recording by id."

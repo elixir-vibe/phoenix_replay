@@ -182,13 +182,16 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
           patch={bar.path}
           aria-label={"#{Format.count(bar.sessions, "session")}, #{bar.errors} with errors"}
           data-tip
-          class="group/tip flex h-full min-w-0 flex-1 flex-col justify-end rounded-sm"
+          class="group/tip flex h-full min-w-0 flex-1 flex-col justify-end rounded-sm hover:bg-hover/50 focus-visible:bg-hover/50"
         >
+          <%!-- An empty stretch is a baseline; any session at all shows. --%>
+          <span :if={bar.sessions == 0} class="h-px w-full bg-line group-hover/tip:bg-muted"></span>
           <span
-            class="flex w-full flex-col justify-end overflow-hidden rounded-sm bg-track"
-            style={"height: max(2px, #{bar.height}%)"}
+            :if={bar.sessions > 0}
+            class="flex w-full flex-col justify-end overflow-hidden rounded-sm"
+            style={"height: max(4px, #{bar.height}%)"}
           >
-            <span :if={bar.sessions > 0} class="w-full flex-1 bg-faint/60 group-hover/tip:bg-muted"></span>
+            <span class="w-full flex-1 bg-faint/60 group-hover/tip:bg-muted"></span>
             <span :if={bar.errors > 0} class="w-full bg-error" style={"height: #{bar.error_share}%"}></span>
           </span>
           <span

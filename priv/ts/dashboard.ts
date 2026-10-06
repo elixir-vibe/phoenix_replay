@@ -23,7 +23,9 @@ const meta = (name: string): string | undefined =>
   document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`)?.content
 
 const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Socket, {
-  params: { _csrf_token: meta('csrf-token') },
+  // How far the viewer's time zone is ahead of UTC, in minutes, so charts
+  // break at its midnights and hours.
+  params: { _csrf_token: meta('csrf-token'), utc_offset: -new Date().getTimezoneOffset() },
   hooks: {
     DetailsResizer,
     EventList,

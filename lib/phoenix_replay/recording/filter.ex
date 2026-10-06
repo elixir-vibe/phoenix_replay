@@ -197,23 +197,33 @@ defmodule PhoenixReplay.Recording.Filter do
 
   @doc """
   Counts the `summaries` matching `filter` by when they started, in
-  stretches of `size` milliseconds from the Unix epoch, earliest first;
-  see `t:bucket/0`.
+  stretches of `size` milliseconds, earliest first; see `t:bucket/0`.
+  Stretches begin at midnights and hours of the viewer's time zone,
+  `:utc_offset` milliseconds ahead of UTC (default `0`); `:now` is for
+  `"within"`.
   """
-  @spec histogram([Summary.t()], t(), pos_integer(), integer()) :: [bucket()]
-  def histogram(summaries, %__MODULE__{} = filter, size, now) do
+  @spec histogram([Summary.t()], t(), pos_integer(), page_opts()) :: [bucket()]
+  def histogram(summaries, %__MODULE__{} = filter, size, opts) do
+    utc_offset = Keyword.get(opts, :utc_offset, 0)
+
     summaries
-    |> select(filter, now)
-    |> Enum.group_by(&bucket(&1.connected_at, size))
+    |> select(filter, Keyword.fetch!(opts, :now))
+    |> Enum.group_by(&bucket(&1.connected_at, size, utc_offset))
     |> Enum.map(fn {start, started} ->
       {start, length(started), Enum.count(started, &(&1.error_count > 0))}
     end)
     |> Enum.sort()
   end
 
-  @doc "The start of the stretch of `size` milliseconds that `at` falls in."
-  @spec bucket(integer(), pos_integer()) :: integer()
-  def bucket(at, size), do: at - rem(at, size)
+  @doc """
+  The start of the stretch of `size` milliseconds that `at` falls in, in
+  a time zone `utc_offset` milliseconds ahead of UTC.
+  """
+  @spec bucket(integer(), pos_integer(), integer()) :: integer()
+  def bucket(at, size, utc_offset \\ 0) do
+    local = at + utc_offset
+    local - rem(local, size) - utc_offset
+  end
 
   @doc "Returns true when no criteria are set."
   @spec empty?(t()) :: boolean()
@@ -233,13 +243,16 @@ defmodule PhoenixReplay.Recording.Filter do
       put while sessions end; see `PhoenixReplay.Recording.Summary.stored_at/1`
     * `:since` — only recordings saved after this time
     * `:offset` and `:limit` — the slice to return
+    * `:utc_offset` — for counts by start time, how far the viewer's time
+      zone is ahead of UTC, in milliseconds; see `histogram/4`
   """
   @type page_opts :: [
           now: integer(),
           until: integer() | nil,
           since: integer() | nil,
           offset: non_neg_integer(),
-          limit: non_neg_integer()
+          limit: non_neg_integer(),
+          utc_offset: integer()
         ]
 
   @doc """

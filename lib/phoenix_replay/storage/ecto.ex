@@ -259,12 +259,25 @@ if Code.ensure_loaded?(Ecto.Query) do
 
     @impl true
     def histogram(%Filter{event: nil, query: nil} = filter, size, page_opts, opts) do
+      utc_offset = Keyword.get(page_opts, :utc_offset, 0)
+
       filter
       |> matching(page_opts)
       |> group_by(selected_as(:bucket))
       |> order_by(selected_as(:bucket))
       |> select([r], {
-        selected_as(fragment("? - (? % ?)", r.connected_at, r.connected_at, ^size), :bucket),
+        selected_as(
+          fragment(
+            "(? + ?) - ((? + ?) % ?) - ?",
+            r.connected_at,
+            ^utc_offset,
+            r.connected_at,
+            ^utc_offset,
+            ^size,
+            ^utc_offset
+          ),
+          :bucket
+        ),
         count(r.id),
         sum(fragment("CASE WHEN ? > 0 THEN 1 ELSE 0 END", r.error_count))
       })
@@ -276,11 +289,7 @@ if Code.ensure_loaded?(Ecto.Query) do
       %{filter | event: nil, query: nil}
       |> matching(page_opts)
       |> summaries(opts)
-      |> Filter.histogram(
-        %Filter{query: filter.query, event: filter.event},
-        size,
-        page_opts[:now]
-      )
+      |> Filter.histogram(%Filter{query: filter.query, event: filter.event}, size, page_opts)
     end
 
     @impl true

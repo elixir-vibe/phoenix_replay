@@ -54,7 +54,8 @@ defmodule PhoenixReplay.Web.Live.Index do
        reload?: false,
        editing: nil,
        values: [],
-       typed: ""
+       typed: "",
+       utc_offset: utc_offset(socket)
      )}
   end
 
@@ -204,7 +205,12 @@ defmodule PhoenixReplay.Web.Live.Index do
       page: page,
       stored: %{saved: saved, total: total, all: all, errors: count.(%Filter{errors: true})},
       newer: newer(socket, now, allow),
-      activity: Catalog.activity(config, socket.assigns.filter, now: now, allow: allow),
+      activity:
+        Catalog.activity(config, socket.assigns.filter,
+          now: now,
+          allow: allow,
+          utc_offset: socket.assigns.utc_offset
+        ),
       sampling: Format.sampling(config.sample_rate, config.keep),
       can_clear?: all > 0 and Context.allowed?(socket, :clear, nil)
     )
@@ -291,6 +297,15 @@ defmodule PhoenixReplay.Web.Live.Index do
       if live? and connected?(socket), do: Process.send_after(self(), :refresh, @live_refresh_ms)
 
     assign(socket, :refresh_timer, timer)
+  end
+
+  # How far the viewer's time zone is ahead of UTC, in milliseconds, as
+  # the browser said when it connected; UTC before then.
+  defp utc_offset(socket) do
+    case connected?(socket) && get_connect_params(socket)["utc_offset"] do
+      minutes when is_integer(minutes) and abs(minutes) <= 14 * 60 -> :timer.minutes(minutes)
+      _unknown -> 0
+    end
   end
 
   # The list narrowed to sessions started from `from` to `to`.

@@ -193,6 +193,11 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
           histogram = &EctoStorage.histogram(Filter.from_params(&1), 2, [now: 10], opts)
 
           assert histogram.(%{}) == [{0, 1, 0}, {2, 2, 1}, {4, 1, 0}]
+
+          # In a time zone 1 ms ahead of UTC, stretches start a millisecond earlier.
+          assert EctoStorage.histogram(%Filter{}, 2, [now: 10, utc_offset: 1], opts) ==
+                   [{1, 2, 0}, {3, 2, 1}]
+
           assert histogram.(%{"tab" => "t1"}) == [{2, 1, 0}, {4, 1, 0}]
           # Event names are read in Elixir, with the rest narrowed in SQL.
           assert histogram.(%{"event" => "inc", "errors" => "1"}) == [{2, 1, 1}]

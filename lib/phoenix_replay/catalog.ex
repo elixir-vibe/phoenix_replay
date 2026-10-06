@@ -99,7 +99,9 @@ defmodule PhoenixReplay.Catalog do
   Counts the buffered and stored sessions matching `filter` by when they
   started, over the stretch of time it covers; see
   `PhoenixReplay.Recording.Filter.time_range/2`. Takes `:now` and
-  `:allow` as `query/3` does.
+  `:allow` as `query/3` does, and `:utc_offset`, how far the viewer's
+  time zone is ahead of UTC in milliseconds, so stretches begin at its
+  midnights and hours.
   """
   @spec activity(Config.t(), Filter.t(), keyword()) :: activity()
   def activity(%Config{storage: storage} = config, %Filter{} = filter, opts) do
@@ -110,16 +112,18 @@ defmodule PhoenixReplay.Catalog do
       Enum.find(@bucket_sizes, @longest_bucket, &(div(to - from, &1) < @max_buckets))
 
     ranged = %{filter | within: nil, from: from, to: to}
+    utc_offset = Keyword.get(opts, :utc_offset, 0)
+    histogram_opts = [now: now, utc_offset: utc_offset]
 
     counts =
       case Keyword.get(opts, :allow) do
         nil ->
           Buffer.summaries()
-          |> Filter.histogram(ranged, size, now)
-          |> Enum.concat(Storage.histogram(storage, ranged, size, now: now))
+          |> Filter.histogram(ranged, size, histogram_opts)
+          |> Enum.concat(Storage.histogram(storage, ranged, size, histogram_opts))
 
         allow ->
-          config |> list() |> Enum.filter(allow) |> Filter.histogram(ranged, size, now)
+          config |> list() |> Enum.filter(allow) |> Filter.histogram(ranged, size, histogram_opts)
       end
 
     by_start =
@@ -128,7 +132,8 @@ defmodule PhoenixReplay.Catalog do
       end)
 
     buckets =
-      for start <- Filter.bucket(from, size)..Filter.bucket(to, size)//size do
+      for start <-
+            Filter.bucket(from, size, utc_offset)..Filter.bucket(to, size, utc_offset)//size do
         {sessions, errors} = Map.get(by_start, start, {0, 0})
         {start, sessions, errors}
       end
