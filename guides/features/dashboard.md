@@ -75,7 +75,7 @@ When the session recorded the pointer, it is drawn over the replay: the cursor, 
 
 ### Keyboard shortcuts
 
-The player takes these keys anywhere on its page, except while you type in a field or hold Control, Command or Alt. `?`, or the keyboard button by the speeds, lists them; each control's tooltip shows its own.
+The player takes these keys anywhere on its page, except while a dialog is open, while you type in a field, or while you hold Control, Command or Alt. `?`, or the keyboard button by the speeds, lists them; each control's tooltip shows its own.
 
 | Keys | Action |
 | --- | --- |

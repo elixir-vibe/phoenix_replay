@@ -13,25 +13,25 @@ defmodule PhoenixReplay.Web.Player.Shortcuts do
   @typedoc "One key combination, such as `[\"Shift\", \"ArrowRight\"]`."
   @type combination :: [String.t()]
 
-  @type group :: :playback | :view | :navigation
+  @type group :: :playback | :moving | :view | :general
 
   @type t :: %{id: atom(), keys: [combination()], label: String.t(), group: group()}
 
   @shortcuts [
     %{id: :toggle, keys: [["Space"], ["K"]], label: "Play or pause", group: :playback},
-    %{id: :previous, keys: [["ArrowLeft"]], label: "Previous event", group: :playback},
-    %{id: :next, keys: [["ArrowRight"]], label: "Next event", group: :playback},
-    %{id: :back, keys: [["Shift", "ArrowLeft"]], label: "Back 5 seconds", group: :playback},
+    %{id: :previous, keys: [["ArrowLeft"]], label: "Previous event", group: :moving},
+    %{id: :next, keys: [["ArrowRight"]], label: "Next event", group: :moving},
+    %{id: :back, keys: [["Shift", "ArrowLeft"]], label: "Back 5 seconds", group: :moving},
     %{
       id: :forward,
       keys: [["Shift", "ArrowRight"]],
       label: "Forward 5 seconds",
-      group: :playback
+      group: :moving
     },
-    %{id: :start, keys: [["Home"]], label: "To the start", group: :playback},
-    %{id: :end, keys: [["End"]], label: "To the end", group: :playback},
-    %{id: :next_error, keys: [["E"]], label: "Next error", group: :playback},
-    %{id: :previous_error, keys: [["Shift", "E"]], label: "Previous error", group: :playback},
+    %{id: :start, keys: [["Home"]], label: "To the start", group: :moving},
+    %{id: :end, keys: [["End"]], label: "To the end", group: :moving},
+    %{id: :next_error, keys: [["E"]], label: "Next error", group: :moving},
+    %{id: :previous_error, keys: [["Shift", "E"]], label: "Previous error", group: :moving},
     %{id: :speed_1, keys: [["1"]], label: "Speed 1×", group: :playback},
     %{id: :speed_2, keys: [["2"]], label: "Speed 2×", group: :playback},
     %{id: :speed_5, keys: [["3"]], label: "Speed 5×", group: :playback},
@@ -39,11 +39,13 @@ defmodule PhoenixReplay.Web.Player.Shortcuts do
     %{id: :fit, keys: [["F"]], label: "Fit to window or actual size", group: :view},
     %{id: :rotate, keys: [["R"]], label: "Rotate", group: :view},
     %{id: :pointer, keys: [["P"]], label: "Show or hide the pointer", group: :view},
-    %{id: :search, keys: [["/"]], label: "Search events", group: :navigation},
-    %{id: :help, keys: [["?"]], label: "Keyboard shortcuts", group: :navigation}
+    %{id: :search, keys: [["/"]], label: "Search events", group: :general},
+    %{id: :help, keys: [["?"]], label: "Keyboard shortcuts", group: :general}
   ]
 
-  @groups [playback: "Playback", view: "View", navigation: "Navigation"]
+  # Listed in this order, the sheet's two columns come out even: playback
+  # and the view on the left, moving around and the rest on the right.
+  @groups [playback: "Playback", view: "View", moving: "Moving around", general: "General"]
 
   @doc "Every shortcut, in the order the sheet lists them."
   @spec all() :: [t()]

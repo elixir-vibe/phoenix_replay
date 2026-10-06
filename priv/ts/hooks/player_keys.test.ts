@@ -64,7 +64,7 @@ test('pushes the shortcut and keeps the page from scrolling', () => {
   expect(pushed).toHaveLength(3)
 })
 
-test('leaves keys alone while typing, with modifiers, and already handled', () => {
+test('leaves keys alone in a dialog, while typing, with modifiers, and already handled', () => {
   const { pushed } = mount()
   const input = html('<input type="search">')
   document.body.append(input)
@@ -73,6 +73,11 @@ test('leaves keys alone while typing, with modifiers, and already handled', () =
   document.body.dispatchEvent(key({ key: 'k', metaKey: true }))
   document.body.dispatchEvent(key({ key: 'k', ctrlKey: true }))
   document.body.dispatchEvent(key({ key: 'k', altKey: true }))
+
+  const dialog = html('<div role="dialog" aria-modal="true"></div>')
+  document.body.append(dialog)
+  document.body.dispatchEvent(key({ key: 'k' }))
+  dialog.remove()
 
   const handled = key({ key: 'ArrowRight' })
   handled.preventDefault()

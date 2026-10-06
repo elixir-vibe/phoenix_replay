@@ -38,6 +38,9 @@ const REPEATABLE = new Set(['previous', 'next', 'back', 'forward'])
 /** Where keys are typed, never taken. */
 const EDITABLE = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])'
 
+/** An open dialog, which has the keyboard to itself. */
+const MODAL = '[aria-modal="true"]'
+
 /** Controls the space bar presses itself. */
 const PRESSABLE =
   'button, a[href], summary, [role="button"], [role="switch"], [role="tab"], [role^="menuitem"]'
@@ -64,8 +67,8 @@ export const shortcutFor = (shortcuts: Shortcut[], event: KeyboardEvent): Shortc
  * Acts on the player's keyboard shortcuts anywhere on the page, from the
  * list in `data-shortcuts` (see `PhoenixReplay.Web.Player.Shortcuts`).
  *
- * Keys are left alone while typing in a field, with Control, Command or
- * Alt held, when something already handled them, such as the timeline's
+ * Keys are left alone while a dialog is open, while typing in a field,
+ * with Control, Command or Alt held, when something already handled them, such as the timeline's
  * own arrows, and for the space bar on a control that presses with it.
  * `/` is the search's own shortcut; see `dom/shortcut`.
  */
@@ -84,6 +87,7 @@ export class PlayerKeys extends ViewHook {
 
   private handle(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return
+    if (document.querySelector(MODAL)) return
 
     const target = event.target instanceof Element ? event.target : null
     if (target?.closest(EDITABLE)) return

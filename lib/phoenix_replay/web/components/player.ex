@@ -532,48 +532,25 @@ defmodule PhoenixReplay.Web.Components.Player do
     assigns = assign(assigns, :groups, Shortcuts.groups())
 
     ~H"""
-    <div
-      id="replay-shortcuts"
-      class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
-      phx-window-keydown="close_shortcuts"
-      phx-key="Escape"
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="replay-shortcuts-title"
-        phx-click-away="close_shortcuts"
-        phx-mounted={JS.focus_first()}
-        class="max-h-full w-full max-w-lg overflow-y-auto rounded-xl border border-line bg-surface p-5 text-sm shadow-xl"
-      >
-        <div class="flex items-center justify-between gap-3">
-          <h2 id="replay-shortcuts-title" class="text-base font-semibold">Keyboard shortcuts</h2>
-          <.icon_button
-            phx-click="close_shortcuts"
-            label="Close"
-            variant="ghost"
-            keys={[["Escape"]]}
-            tooltip="bottom"
-          >
-            <.icon name="lucide:x" class="size-4" />
-          </.icon_button>
-        </div>
-        <section :for={{heading, shortcuts} <- @groups} class="mt-4">
-          <h3 class="mb-1.5 text-xs font-medium tracking-wide text-muted uppercase">{heading}</h3>
-          <dl class="divide-y divide-line">
-            <div :for={shortcut <- shortcuts} class="flex items-center justify-between gap-4 py-1.5">
+    <.dialog id="replay-shortcuts" title="Keyboard shortcuts" close="close_shortcuts" size="lg">
+      <%!-- Groups flow into two columns where there is room, so the sheet fits. --%>
+      <div class="gap-8 sm:columns-2">
+        <section :for={{heading, shortcuts} <- @groups} class="mb-4 break-inside-avoid">
+          <h3 class="mb-1 text-xs font-medium tracking-wide text-muted uppercase">{heading}</h3>
+          <dl>
+            <div :for={shortcut <- shortcuts} class="flex items-center justify-between gap-4 py-1">
               <dt>{shortcut.label}</dt>
-              <dd class="flex items-center gap-1.5 text-xs text-muted">
+              <dd class="flex shrink-0 items-center gap-1 text-xs text-muted">
                 <%= for {combination, index} <- Enum.with_index(shortcut.keys) do %>
                   <span :if={index > 0}>or</span>
-                  <.kbd keys={combination} size="md" />
+                  <.kbd keys={combination} />
                 <% end %>
               </dd>
             </div>
           </dl>
         </section>
       </div>
-    </div>
+    </.dialog>
     """
   end
 
