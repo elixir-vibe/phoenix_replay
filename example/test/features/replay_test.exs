@@ -168,7 +168,9 @@ defmodule ExampleWeb.Features.ReplayTest do
     assert loaded < Enum.find_index(recording.events, &(&1.type == :event))
 
     # --- Verify the recording is listed ---
-    conn = conn |> assert_has("li", text: "ExampleWeb.TaskLive.Index")
+    # The list keeps its place while sessions end, so it shows the session
+    # saved since it opened once it is opened again.
+    conn = conn |> visit(~p"/replay") |> assert_has("li", text: "ExampleWeb.TaskLive.Index")
 
     # Open it: the whole row links to the recording
     conn = conn |> click_link("ExampleWeb.TaskLive.Index")
