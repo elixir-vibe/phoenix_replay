@@ -35,6 +35,7 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
   attr :playing, :boolean, required: true
   attr :speed, :integer, required: true
   attr :speeds, :list, required: true
+  attr :first, :integer, default: 0, doc: "the first event the view can be shown at"
   attr :slow_ms, :integer, default: 100, doc: "how long a collected event takes to count as slow"
 
   @spec playback(map()) :: Phoenix.LiveView.Rendered.t()
@@ -67,7 +68,7 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
           label="Previous event"
           size="lg"
           keys={Shortcuts.keys(:previous)}
-          disabled={@index == 0}
+          disabled={@index <= @first}
         >
           <.icon name="lucide:chevron-left" class="size-4" />
         </.icon_button>
@@ -114,7 +115,7 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
           phx-hook="Scrubber"
           role="slider"
           aria-label="Playback position"
-          aria-valuemin="0"
+          aria-valuemin={@first}
           aria-valuemax={@last}
           aria-valuenow={@index}
           aria-valuetext={Format.clock(@at)}

@@ -47,6 +47,7 @@ Pointer, touch and form recording, client state, and a richer player.
 
 ### Fixed
 
+- Scrubbing to the start, **Previous** at the first render, or a link to the mount no longer shows "Could not render" in the player: it stops at the first render, the first moment the view has assigns to render with.
 - The player loads its replay frame once, after it has connected, instead of loading it, then loading it again with the connected player's channel.
 - Starting the application a second time on the same machine, such as `iex -S mix` or a Mix task next to a running server, no longer saves the server's running sessions as interrupted and deletes their chunks. File storage tags part files with the VM's process id and recovers only those whose VM is gone; on a system without `kill` to tell, it leaves them.
 - Scrubbing to a moment between two events keeps that moment instead of snapping back to the earlier event, and while dragging over a stretch without events the thumb stays under the pointer and the clock shows its time, instead of flicking back to the last event, such as 0:00.

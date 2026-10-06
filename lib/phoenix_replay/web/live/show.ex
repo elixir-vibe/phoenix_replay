@@ -56,6 +56,7 @@ defmodule PhoenixReplay.Web.Live.Show do
         context: context,
         id: id,
         recording: nil,
+        first_render: 0,
         live?: Catalog.live?(id),
         frame_ready?: false,
         progress: nil,
@@ -162,13 +163,16 @@ defmodule PhoenixReplay.Web.Live.Show do
       kinds: Events.kinds(recording),
       kind_counts: Events.kind_counts(recording),
       first_error: Events.first_error_index(recording),
+      # Events before the first render have no assigns to render the view
+      # with, so the player never goes before it.
+      first_render: Timeline.first_render_index(recording),
       marks: Events.marks(recording),
       dropped: Events.dropped_count(recording),
       journey: journey(socket, recording)
     )
     |> hand_over()
     |> filter_events()
-    |> seek(socket.assigns.start_at || Timeline.first_render_index(recording))
+    |> seek(socket.assigns.start_at || 0)
     |> at_time(socket.assigns.start_time)
   end
 
@@ -246,8 +250,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   def handle_event("jump", %{"to" => "start"}, %{assigns: %{recording: %{}}} = socket),
-    do:
-      {:noreply, socket |> pause() |> seek(Timeline.first_render_index(socket.assigns.recording))}
+    do: {:noreply, socket |> pause() |> seek(0)}
 
   def handle_event("jump", %{"to" => "end"}, %{assigns: %{recording: %{}}} = socket) do
     %{timeline: timeline, duration_ms: duration} = socket.assigns
@@ -417,7 +420,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   def handle_info({Export, _other_recording}, socket), do: {:noreply, socket}
 
   defp seek(socket, index) do
-    timeline = Timeline.seek(socket.assigns.timeline, index)
+    timeline = Timeline.seek(socket.assigns.timeline, max(index, socket.assigns.first_render))
     :ok = Channel.seek(socket.assigns.channel, timeline.index)
 
     assign(socket,
@@ -442,11 +445,11 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   defp play(socket) do
-    %{recording: recording, index: index} = socket.assigns
+    %{index: index} = socket.assigns
 
     if index >= Timeline.last_index(socket.assigns.timeline) and
          socket.assigns.at >= socket.assigns.duration_ms,
-       do: socket |> seek(Timeline.first_render_index(recording)) |> schedule(),
+       do: socket |> seek(0) |> schedule(),
        else: schedule(socket)
   end
 
@@ -589,6 +592,7 @@ defmodule PhoenixReplay.Web.Live.Show do
           playing={@playing != nil}
           speed={@speed}
           speeds={@speeds}
+          first={@first_render}
           slow_ms={Events.slow_ms(@context.config.keep)}
         />
       </main>

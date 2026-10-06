@@ -366,8 +366,11 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert assigns(view).index == 2
     render_click(view, "previous")
     render_click(view, "previous")
-    render_click(view, "previous")
-    assert assigns(view).index == 0
+    # The mount before the first render has no assigns to render with.
+    assert assigns(view).index == 1
+    assert has_element?(view, ~s(button[aria-label="Previous event"][disabled]))
+    render_hook(view, "seek", %{"index" => 0})
+    assert assigns(view).index == 1
 
     render_hook(view, "seek", %{"index" => 5})
     assert assigns(view).index == 5
