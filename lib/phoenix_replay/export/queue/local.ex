@@ -46,16 +46,38 @@ defmodule PhoenixReplay.Export.Queue.Local do
 
   @impl GenServer
   def init(nil) do
-    sweep_dir()
-    {:ok, %{jobs: %{}, order: [], queue: :queue.new(), running: %{}}}
+    {:ok, sweep(%{jobs: %{}, order: [], queue: :queue.new(), running: %{}})}
   end
 
-  # Sweeps now, and again in a quarter of `:ttl`.
-  defp sweep_dir do
-    with %{} = export <- PhoenixReplay.Config.load().export do
-      sweep_dir(export)
-      Process.send_after(self(), :sweep_dir, div(export.ttl, 4))
+  # The one cleanup, now and every quarter of `:ttl`: jobs finished
+  # longer ago are forgotten, and their videos, with any other export's
+  # files that old, deleted.
+  defp sweep(state) do
+    case PhoenixReplay.Config.load().export do
+      %{} = export ->
+        Process.send_after(self(), :sweep, div(export.ttl, 4))
+        state = forget_expired(state, export.ttl)
+        sweep_dir(export)
+        state
+
+      nil ->
+        state
     end
+  end
+
+  defp forget_expired(state, ttl) do
+    now = System.monotonic_time(:millisecond)
+
+    {expired, kept} =
+      Enum.split_with(state.order, fn id ->
+        match?(%Job{finished_at: at} when is_integer(at) and now - at >= ttl, state.jobs[id])
+      end)
+
+    Enum.each(expired, fn id ->
+      with %Job{path: path} when is_binary(path) <- state.jobs[id], do: File.rm(path)
+    end)
+
+    %{state | order: kept, jobs: Map.drop(state.jobs, expired)}
   end
 
   # Another VM may be exporting into the same directory, so only what is
@@ -100,10 +122,10 @@ defmodule PhoenixReplay.Export.Queue.Local do
     state =
       case state.jobs[id] do
         %Job{status: :queued} = job ->
-          {[{^id, config}], queue} =
+          {[{^id, _config}], queue} =
             state.queue |> :queue.to_list() |> Enum.split_with(&match?({^id, _config}, &1))
 
-          finish(%{state | queue: :queue.from_list(queue)}, %{job | status: :cancelled}, config)
+          finish(%{state | queue: :queue.from_list(queue)}, %{job | status: :cancelled})
 
         %Job{status: :running} = job ->
           {_ref, {_id, _config, pid}} = Enum.find(state.running, &match?({_ref, {^id, _, _}}, &1))
@@ -158,7 +180,7 @@ defmodule PhoenixReplay.Export.Queue.Local do
           %{state.jobs[id] | status: :failed, error: Video.describe_error(reason)}
       end
 
-    {:noreply, %{state | running: running} |> finish(finished, config) |> run_next(config)}
+    {:noreply, %{state | running: running} |> finish(finished) |> run_next(config)}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, %{running: running} = state)
@@ -166,28 +188,10 @@ defmodule PhoenixReplay.Export.Queue.Local do
     {{id, config, _pid}, running} = Map.pop(running, ref)
     Logger.error("PhoenixReplay: video export #{id} crashed: #{Exception.format_exit(reason)}")
     failed = %{state.jobs[id] | status: :failed, error: "The export crashed."}
-    {:noreply, %{state | running: running} |> finish(failed, config) |> run_next(config)}
+    {:noreply, %{state | running: running} |> finish(failed) |> run_next(config)}
   end
 
-  def handle_info(:sweep_dir, state) do
-    sweep_dir()
-    {:noreply, state}
-  end
-
-  def handle_info({:sweep, ttl}, state) do
-    now = System.monotonic_time(:millisecond)
-
-    {expired, kept} =
-      Enum.split_with(state.order, fn id ->
-        match?(%Job{finished_at: at} when is_integer(at) and now - at >= ttl, state.jobs[id])
-      end)
-
-    Enum.each(expired, fn id ->
-      with %Job{path: path} when is_binary(path) <- state.jobs[id], do: File.rm(path)
-    end)
-
-    {:noreply, %{state | order: kept, jobs: Map.drop(state.jobs, expired)}}
-  end
+  def handle_info(:sweep, state), do: {:noreply, sweep(state)}
 
   defp active(state), do: state.jobs |> Map.values() |> Enum.reject(&Job.finished?/1)
 
@@ -219,8 +223,7 @@ defmodule PhoenixReplay.Export.Queue.Local do
   end
 
   # A finished video is deleted once it is `:ttl` old.
-  defp finish(state, job, config) do
-    Process.send_after(self(), {:sweep, config.export.ttl}, config.export.ttl)
+  defp finish(state, job) do
     put(state, %{job | finished_at: System.monotonic_time(:millisecond)})
   end
 
