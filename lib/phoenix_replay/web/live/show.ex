@@ -27,7 +27,8 @@ defmodule PhoenixReplay.Web.Live.Show do
   use Phoenix.LiveView
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.{Core, Export, Player, State}
+  import PhoenixReplay.Web.Components.{Core, Export, State}
+  import PhoenixReplay.Web.Components.Player.{EventList, Frame, Header, Playback, Visit}
 
   alias PhoenixReplay.Recording.{Event, Filter, PointerTrack, Timeline}
   alias PhoenixReplay.{Catalog, Export}
