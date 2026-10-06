@@ -67,6 +67,10 @@ defmodule PhoenixReplay.Export.Video do
   def describe_error(:not_found), do: "The recording no longer exists."
   def describe_error(:running), do: "The session is still running. Export it once it ends."
   def describe_error(:empty), do: "The recording has nothing to show."
+
+  def describe_error({:too_long, ms}),
+    do: "The export took longer than the #{div(ms, 60_000)} minutes it may take."
+
   def describe_error(:cancelled), do: "The export was cancelled."
   def describe_error({:browser, message}), do: "The browser failed: #{message}"
   def describe_error({:ffmpeg, :timeout}), do: "ffmpeg stopped responding."

@@ -93,7 +93,8 @@ defmodule PhoenixReplay.Test.ObanQueueCase do
         "oban-" <> number = job.id
         oban_job = unquote(repo).get!(Oban.Job, String.to_integer(number))
 
-        assert Queue.Worker.timeout(oban_job) == 5_000
+        # Oban kills the job only a minute after the worker stops it itself.
+        assert Queue.Worker.timeout(oban_job) == 5_000 + :timer.minutes(1)
       end
 
       test "cancels a running export no node runs any more", %{opts: opts, config: config} do
@@ -196,6 +197,26 @@ defmodule PhoenixReplay.Test.ObanQueueCase do
           assert Path.basename(path) == job.id <> ".mp4"
           assert_received {Export, %Job{status: :running}}
           assert_received {Export, %Job{status: :done}}
+        end
+
+        test "fails an export that runs past its time, closing what it opened",
+             %{recording: recording, opts: opts, config: config} do
+          {:ok, job} =
+            Queue.start(
+              recording.id,
+              config,
+              Options.new(config.export),
+              Keyword.put(opts, :timeout, 1)
+            )
+
+          drain()
+
+          assert %Job{status: :failed, error: "The export took longer than" <> _} =
+                   Queue.get(job.id, opts)
+
+          dir = Export.Video.dir(config.export)
+          refute File.exists?(Path.join(dir, job.id))
+          refute File.exists?(Path.join(dir, job.id <> ".mp4"))
         end
 
         test "stops a running export where it runs", %{
