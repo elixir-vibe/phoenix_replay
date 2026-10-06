@@ -74,6 +74,7 @@ defmodule PhoenixReplay.Export.Video do
   def describe_error(:cancelled), do: "The export was cancelled."
   def describe_error({:browser, message}), do: "The browser failed: #{message}"
   def describe_error({:ffmpeg, :timeout}), do: "ffmpeg stopped responding."
+  def describe_error({:ffmpeg, :crashed}), do: "ffmpeg stopped unexpectedly."
   def describe_error({:ffmpeg, status}), do: "ffmpeg failed with exit status #{status}."
 
   def describe_error({:too_long, shots, max}),

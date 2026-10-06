@@ -22,8 +22,11 @@ if Code.ensure_loaded?(MuonTrap) do
     @typedoc "Called with how much of the video is encoded so far, in milliseconds."
     @type progress :: (non_neg_integer() -> any())
 
-    @typedoc "Why `ffmpeg` did not finish: its exit status, or that it went quiet."
-    @type error :: {:ffmpeg, pos_integer() | :timeout} | :cancelled
+    @typedoc """
+    Why `ffmpeg` did not finish: its exit status, that it went quiet, or
+    that running it failed.
+    """
+    @type error :: {:ffmpeg, pos_integer() | :timeout | :crashed} | :cancelled
 
     # The last lines of output kept, to log when ffmpeg fails.
     @kept_lines 20
@@ -43,8 +46,11 @@ if Code.ensure_loaded?(MuonTrap) do
       ref = make_ref()
       output = %Output{to: self(), ref: ref}
 
+      # Unlinked: MuonTrap before 2.0 can die of `:epipe` when ffmpeg exits
+      # as its output is acknowledged, which must fail the export, not
+      # take its process down.
       task =
-        Task.async(fn ->
+        Task.Supervisor.async_nolink(PhoenixReplay.Export.TaskSupervisor, fn ->
           MuonTrap.cmd(executable, args, into: output, stderr_to_stdout: true)
         end)
 
@@ -68,6 +74,10 @@ if Code.ensure_loaded?(MuonTrap) do
           ])
 
           {:error, {:ffmpeg, status}}
+
+        {:DOWN, ^task_ref, :process, _pid, reason} ->
+          Logger.error("PhoenixReplay: running ffmpeg failed: #{Exception.format_exit(reason)}")
+          {:error, {:ffmpeg, :crashed}}
 
         {PhoenixReplay.Export, :cancel} ->
           stop(run)

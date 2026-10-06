@@ -24,6 +24,8 @@ defmodule PhoenixReplay.Export.FFmpegTest do
       fake(dir, """
       echo "[libx264 @ 0x1] broken: the encoder gave up"
       for i in 1 2 3 4 5; do printf '%s\\n' "#{report}"; done
+      # As ffmpeg does, it exits once its output is read.
+      sleep 0.2
       exit 1
       """)
 

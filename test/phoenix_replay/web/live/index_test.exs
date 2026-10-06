@@ -337,7 +337,6 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
   test "filter form patches the URL" do
     save("alpha")
     save("beta")
-    {:ok, view, _html} = live(build_conn(), "/replay")
 
     {:ok, view, _html} = live(build_conn(), "/replay?event=inc")
     # The search keeps the chips' criteria.
