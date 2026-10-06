@@ -1,5 +1,17 @@
 import Config
 
+# Ecto queries, and the moments Example.Tasks marks, recorded alongside
+# LiveView events. Functions in configuration belong here, so releases
+# can load them.
+config :phoenix_replay,
+  collect: [
+    {PhoenixReplay.Collector.Ecto, repo: Example.Repo},
+    {[:example, :task, :created],
+     metadata: [:title, :priority], summary: &"created #{&1.title}", mark: true},
+    {[:example, :task, :completed],
+     metadata: [:title], summary: &"completed #{&1.title}", mark: true}
+  ]
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

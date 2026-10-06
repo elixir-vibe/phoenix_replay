@@ -80,12 +80,12 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-# Record Ecto queries and log messages alongside LiveView events, and always
-# keep sessions that hit an error.
+# Record log messages alongside LiveView events, and always keep sessions
+# that hit an error or a mark. What is collected from telemetry is in
+# config/runtime.exs, because it takes functions.
 config :phoenix_replay,
-  collect: [{PhoenixReplay.Collector.Ecto, repo: Example.Repo}],
   logs: [level: :info],
-  keep: [errors: true],
+  keep: [errors: true, marks: true],
   # Which language visitors browse in and which campaign brought them.
   context: [headers: ["accept-language"], landing: [params: [:utm, :click_ids]]],
   # Where the pointer moved and what it pressed, shown over the replay.

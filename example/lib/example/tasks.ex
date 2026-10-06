@@ -1,6 +1,11 @@
 defmodule Example.Tasks do
   @moduledoc """
   Task management context backed by Ecto + SQLite.
+
+  Creating and completing a task emit `[:example, :task, :created]` and
+  `[:example, :task, :completed]`, the moments a product would track as
+  analytics events. PhoenixReplay collects them as marks; see
+  `config/runtime.exs`.
   """
 
   import Ecto.Query
@@ -36,8 +41,12 @@ defmodule Example.Tasks do
     |> Task.changeset(attrs)
     |> Repo.insert()
     |> tap(fn
-      {:ok, task} -> broadcast({:task_created, task})
-      _ -> :ok
+      {:ok, task} ->
+        mark(:created, task)
+        broadcast({:task_created, task})
+
+      _ ->
+        :ok
     end)
   end
 
@@ -67,8 +76,12 @@ defmodule Example.Tasks do
         |> Task.changeset(%{"completed" => !task.completed})
         |> Repo.update()
         |> tap(fn
-          {:ok, task} -> broadcast({:task_updated, task})
-          _ -> :ok
+          {:ok, task} ->
+            if task.completed, do: mark(:completed, task)
+            broadcast({:task_updated, task})
+
+          _ ->
+            :ok
         end)
     end
   end
@@ -82,6 +95,13 @@ defmodule Example.Tasks do
 
   def subscribe do
     Phoenix.PubSub.subscribe(Example.PubSub, "tasks")
+  end
+
+  defp mark(moment, task) do
+    :telemetry.execute([:example, :task, moment], %{}, %{
+      title: task.title,
+      priority: task.priority
+    })
   end
 
   defp broadcast(message) do

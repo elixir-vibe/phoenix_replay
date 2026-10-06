@@ -156,6 +156,15 @@ defmodule ExampleWeb.Features.ReplayTest do
              event.type == :telemetry and event.data.summary =~ "GROUP BY"
            end)
 
+    # Creating and completing tasks are marked, from Example.Tasks' telemetry
+    marks =
+      for event <- recording.events,
+          PhoenixReplay.Recording.Event.mark?(event),
+          do: event.data.summary
+
+    assert Enum.any?(marks, &String.starts_with?(&1, "created "))
+    assert "completed Review PR #42" in marks
+
     # The stats component's first async result is recorded as component
     # state before the user did anything. Later updates keep the previous
     # result while reloading, so only the first load proves it is recorded.
