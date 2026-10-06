@@ -30,6 +30,23 @@ defmodule PhoenixReplay.Web.FormatTest do
     assert Format.count(2, "match", "matches") == "2 matches"
   end
 
+  test "says which sessions sampling saves, when it leaves some out" do
+    keep = %{rate: 1.0, errors: false, marks: false, slower_than: nil}
+    assert Format.sampling(1.0, keep) == nil
+
+    assert Format.sampling(1.0, %{keep | rate: 0.05, errors: true, slower_than: 1_000}) ==
+             "Saves every session with an error or an event over 1.0 s, and 5% of the others with interaction."
+
+    assert Format.sampling(1.0, %{keep | rate: 0.0, marks: true}) ==
+             "Saves only sessions with a mark."
+
+    assert Format.sampling(0.5, %{keep | rate: 0.25}) ==
+             "Records 50% of sessions. Saves 25% of sessions with interaction."
+
+    assert Format.window("15m") == "Last 15 min"
+    assert Format.seconds(90) == "1 min 30 s"
+  end
+
   test "labels viewports, devices and referers" do
     assert Format.viewport(%{width: 390, height: 844, dpr: 3}) == "390 × 844 @3x"
     assert Format.viewport(%{width: 1440, height: 900, dpr: 1}) == "1440 × 900"

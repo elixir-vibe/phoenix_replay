@@ -256,6 +256,32 @@ if Code.ensure_loaded?(Ecto.Query) do
     end
 
     @impl true
+    def histogram(%Filter{event: nil, query: nil} = filter, size, page_opts, opts) do
+      filter
+      |> matching(page_opts)
+      |> group_by(selected_as(:bucket))
+      |> order_by(selected_as(:bucket))
+      |> select([r], {
+        selected_as(fragment("? - (? % ?)", r.connected_at, r.connected_at, ^size), :bucket),
+        count(r.id),
+        sum(fragment("CASE WHEN ? > 0 THEN 1 ELSE 0 END", r.error_count))
+      })
+      |> repo(opts).all()
+      |> Enum.map(fn {start, sessions, errors} -> {start, sessions, errors || 0} end)
+    end
+
+    def histogram(%Filter{} = filter, size, page_opts, opts) do
+      %{filter | event: nil, query: nil}
+      |> matching(page_opts)
+      |> summaries(opts)
+      |> Filter.histogram(
+        %Filter{query: filter.query, event: filter.event},
+        size,
+        page_opts[:now]
+      )
+    end
+
+    @impl true
     def delete(id, opts) do
       repo(opts).delete_all(from(r in @table, where: r.id == ^id))
       repo(opts).delete_all(from(m in @marks, where: m.recording_id == ^id))

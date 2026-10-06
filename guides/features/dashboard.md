@@ -42,7 +42,9 @@ Without an `:authorize` module, storage pages the recording list itself. With on
 
 ## Finding recordings
 
-The list shows sessions still running under **Live now**, then saved recordings in a table: the view, the page it started on, the device and where the visit came from, how long ago it started, its duration, event count and errors. An icon marks each session as a phone, tablet or desktop. Click anywhere on a row to open it; hover a saved row, or focus it from the keyboard, to delete it. **Delete all recordings** is in the ⋯ menu. A line above the list counts sessions, live ones and ones with errors.
+The list shows sessions still running under **Live now**, then saved recordings in a table: the view, the page it started on, the device and where the visit came from, how long ago it started, its duration, event count and errors. An icon marks each session as a phone, tablet or desktop. Click anywhere on a row to open it; hover a saved row, or focus it from the keyboard, to delete it. **Delete all recordings** is in the ⋯ menu. A line above the list counts sessions, live ones and ones with errors. When sampling leaves sessions out, a note under it says which are saved, such as "Saves every session with an error, and 5% of the others with interaction", so the counts are not read as all of your traffic.
+
+A chart above the list shows how many of the sessions matching the filters started over time, in bars of a few minutes to a day, depending on the time range, with those that had an error in red. Without a time range it shows the last 30 days. Hover a bar for its time and counts, and click it to narrow the list to that stretch.
 
 Saved recordings are listed as of when you opened the list or last changed its filters, so rows stay put while sessions end. Recordings saved since then are counted in a **"3 new recordings · Show"** banner; showing them brings the list up to date. The list pages with numbered links, reading one page at a time from storage.
 

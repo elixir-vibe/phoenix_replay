@@ -77,6 +77,65 @@ defmodule PhoenixReplay.Catalog do
     end
   end
 
+  @typedoc """
+  How many sessions started in each stretch of a time range, for a chart:
+  `buckets` are `{start, sessions, with_errors}`, every `size`
+  milliseconds from `from` to `to`, empty ones included.
+  """
+  @type activity :: %{
+          from: integer(),
+          to: integer(),
+          size: pos_integer(),
+          buckets: [Filter.bucket() | {integer(), 0, 0}]
+        }
+
+  # Stretch lengths a chart picks from: the shortest that leaves at most
+  # this many bars.
+  @bucket_sizes Enum.map([1, 5, 15, 30, 60, 180, 360, 720, 1_440], &:timer.minutes/1)
+  @longest_bucket :timer.hours(24 * 7)
+  @max_buckets 40
+
+  @doc """
+  Counts the buffered and stored sessions matching `filter` by when they
+  started, over the stretch of time it covers; see
+  `PhoenixReplay.Recording.Filter.time_range/2`. Takes `:now` and
+  `:allow` as `query/3` does.
+  """
+  @spec activity(Config.t(), Filter.t(), keyword()) :: activity()
+  def activity(%Config{storage: storage} = config, %Filter{} = filter, opts) do
+    now = Keyword.fetch!(opts, :now)
+    {from, to} = Filter.time_range(filter, now)
+
+    size =
+      Enum.find(@bucket_sizes, @longest_bucket, &(div(to - from, &1) < @max_buckets))
+
+    ranged = %{filter | within: nil, from: from, to: to}
+
+    counts =
+      case Keyword.get(opts, :allow) do
+        nil ->
+          Buffer.summaries()
+          |> Filter.histogram(ranged, size, now)
+          |> Enum.concat(Storage.histogram(storage, ranged, size, now: now))
+
+        allow ->
+          config |> list() |> Enum.filter(allow) |> Filter.histogram(ranged, size, now)
+      end
+
+    by_start =
+      Enum.reduce(counts, %{}, fn {start, sessions, errors}, acc ->
+        Map.update(acc, start, {sessions, errors}, fn {s, e} -> {s + sessions, e + errors} end)
+      end)
+
+    buckets =
+      for start <- Filter.bucket(from, size)..Filter.bucket(to, size)//size do
+        {sessions, errors} = Map.get(by_start, start, {0, 0})
+        {start, sessions, errors}
+      end
+
+    %{from: from, to: to, size: size, buckets: buckets}
+  end
+
   @doc """
   Fetches a recording from the buffer or storage.
 

@@ -146,6 +146,75 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   end
 
   @doc """
+  How many sessions started over time, from
+  `PhoenixReplay.Catalog.activity/3`: a bar for each stretch, with the
+  ones that had an error in red. Each bar links to the list narrowed to
+  its stretch, through `path`, a function from a `{from, to}` range.
+  """
+  attr :activity, :map, required: true
+  attr :path, :any, required: true
+
+  @spec activity_chart(map()) :: Phoenix.LiveView.Rendered.t()
+  def activity_chart(assigns) do
+    %{buckets: buckets, size: size} = assigns.activity
+    top = buckets |> Enum.map(&elem(&1, 1)) |> Enum.max(fn -> 0 end) |> max(1)
+
+    assigns =
+      assign(assigns,
+        bars:
+          for {{start, sessions, errors}, index} <- Enum.with_index(buckets) do
+            %{
+              index: index,
+              start: start,
+              sessions: sessions,
+              errors: errors,
+              height: Float.round(sessions / top * 100, 1),
+              error_share: if(sessions > 0, do: Float.round(errors / sessions * 100, 1), else: 0),
+              path: assigns.path.({start, start + size - 1})
+            }
+          end
+      )
+
+    ~H"""
+    <section id="recordings-activity" aria-label="Sessions over time" class="mb-5">
+      <div class="flex h-14 items-end gap-px">
+        <.link
+          :for={bar <- @bars}
+          patch={bar.path}
+          aria-label={"#{Format.count(bar.sessions, "session")}, #{bar.errors} with errors"}
+          class="group/bar relative flex h-full min-w-0 flex-1 flex-col justify-end rounded-sm hover:bg-hover focus-visible:bg-hover"
+        >
+          <span
+            class="flex w-full flex-col justify-end overflow-hidden rounded-sm bg-track"
+            style={"height: max(2px, #{bar.height}%)"}
+          >
+            <span :if={bar.sessions > 0} class="w-full flex-1 bg-faint/60 group-hover/bar:bg-muted"></span>
+            <span :if={bar.errors > 0} class="w-full bg-error" style={"height: #{bar.error_share}%"}></span>
+          </span>
+          <span
+            aria-hidden="true"
+            class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 rounded-md bg-ink px-2 py-1 text-xs whitespace-nowrap text-on-ink shadow-md group-hover/bar:block group-focus-visible/bar:block"
+          >
+            <.local_time id={"recordings-activity-#{bar.index}"} at={bar.start}>
+              {Format.started(bar.start)} UTC
+            </.local_time>
+            · {Format.count(bar.sessions, "session")}<span :if={bar.errors > 0}>, {bar.errors} with errors</span>
+          </span>
+        </.link>
+      </div>
+      <div class="mt-1 flex justify-between text-xs text-muted">
+        <.local_time id="recordings-activity-from" at={@activity.from}>
+          {Format.started(@activity.from)} UTC
+        </.local_time>
+        <.local_time id="recordings-activity-to" at={@activity.to}>
+          {Format.started(@activity.to)} UTC
+        </.local_time>
+      </div>
+    </section>
+    """
+  end
+
+  @doc """
   Says how many recordings ended since the list was read, with a button
   that sends `show_new` to bring it up to date.
   """

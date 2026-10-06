@@ -79,6 +79,22 @@ defmodule PhoenixReplay.Recording.FilterTest do
              ~w(checkout-1)
   end
 
+  test "counts sessions by when they started, over the time it covers" do
+    summaries = [
+      summary("a", connected_at: 1_000),
+      summary("b", connected_at: 1_500, error_count: 1),
+      summary("c", connected_at: 2_100)
+    ]
+
+    assert Filter.histogram(summaries, %Filter{}, 1_000, @now) == [{1_000, 2, 1}, {2_000, 1, 0}]
+    assert Filter.histogram(summaries, %Filter{errors: true}, 1_000, @now) == [{1_000, 1, 1}]
+
+    assert Filter.time_range(%Filter{within: "1h"}, @now) == {@now - 3_600_000, @now}
+    assert Filter.time_range(%Filter{from: 5, to: 9}, @now) == {5, 9}
+    assert Filter.time_range(%Filter{from: 5}, @now) == {5, @now}
+    assert Filter.time_range(%Filter{}, @now) == {@now - :timer.hours(24 * 30), @now}
+  end
+
   test "matches where a visit came from, its device, marks and duration" do
     summaries = [
       summary("paid",

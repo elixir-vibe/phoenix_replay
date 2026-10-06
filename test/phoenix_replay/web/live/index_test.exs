@@ -245,6 +245,30 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     refute has_element?(view, "#recording-filter-time-picker")
   end
 
+  test "charts sessions over time, each bar narrowing the list to its stretch" do
+    now = System.system_time(:millisecond)
+    save_at("recent", now - :timer.minutes(10))
+    {:ok, view, _html} = live(build_conn(), "/replay?within=1h")
+
+    # An hour in five-minute bars, the session in the one ten minutes ago.
+    bars =
+      view |> render() |> LazyHTML.from_document() |> LazyHTML.query("#recordings-activity a")
+
+    assert Enum.count(bars) in 12..13
+    assert has_element?(view, ~s(#recordings-activity a[aria-label="1 session, 0 with errors"]))
+    refute has_element?(view, "#recordings-sampling")
+
+    href =
+      view
+      |> element(~s(#recordings-activity a[aria-label="1 session, 0 with errors"]))
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("href")
+      |> hd()
+
+    assert href =~ ~r"^/replay\?from=.+&to=.+$"
+  end
+
   test "shows the first page for page 0, and for a page past the end once emptied" do
     for i <- 1..26, do: save("page-#{i}")
 

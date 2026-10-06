@@ -175,6 +175,46 @@ defmodule PhoenixReplay.Recording.Filter do
   def top(counts, limit),
     do: counts |> Enum.sort_by(fn {value, count} -> {-count, value} end) |> Enum.take(limit)
 
+  @typedoc "Sessions started in one stretch of time: its start, how many, and how many with an error."
+  @type bucket :: {integer(), pos_integer(), non_neg_integer()}
+
+  # The stretch of time a chart of start times covers without a range.
+  @default_span :timer.hours(24 * 30)
+
+  @doc """
+  The stretch of time `filter` covers at `now`, in Unix milliseconds: its
+  window, its range, completed by the last 30 days or now where it is
+  open, or the last 30 days without either.
+  """
+  @spec time_range(t(), integer()) :: {integer(), integer()}
+  def time_range(%__MODULE__{within: within}, now) when is_binary(within),
+    do: {now - @windows[within], now}
+
+  def time_range(%__MODULE__{from: from, to: to}, now) do
+    to = to || now
+    {from || to - @default_span, to}
+  end
+
+  @doc """
+  Counts the `summaries` matching `filter` by when they started, in
+  stretches of `size` milliseconds from the Unix epoch, earliest first;
+  see `t:bucket/0`.
+  """
+  @spec histogram([Summary.t()], t(), pos_integer(), integer()) :: [bucket()]
+  def histogram(summaries, %__MODULE__{} = filter, size, now) do
+    summaries
+    |> select(filter, now)
+    |> Enum.group_by(&bucket(&1.connected_at, size))
+    |> Enum.map(fn {start, started} ->
+      {start, length(started), Enum.count(started, &(&1.error_count > 0))}
+    end)
+    |> Enum.sort()
+  end
+
+  @doc "The start of the stretch of `size` milliseconds that `at` falls in."
+  @spec bucket(integer(), pos_integer()) :: integer()
+  def bucket(at, size), do: at - rem(at, size)
+
   @doc "Returns true when no criteria are set."
   @spec empty?(t()) :: boolean()
   def empty?(%__MODULE__{} = filter), do: to_params(filter) == %{}

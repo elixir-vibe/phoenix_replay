@@ -32,6 +32,44 @@ defmodule PhoenixReplay.Web.Format do
   end
 
   @doc """
+  Says which sessions are recorded and saved when sampling leaves some
+  out, such as `"Saves every session with an error, and 5% of the
+  others with interaction."`, so counts are not read as all traffic, or
+  returns `nil` when every session with interaction is saved.
+  """
+  @spec sampling(float(), PhoenixReplay.Config.keep()) :: String.t() | nil
+  def sampling(sample_rate, keep) when sample_rate >= 1.0 and keep.rate >= 1.0, do: nil
+
+  def sampling(sample_rate, keep) do
+    always =
+      [
+        keep.errors && "an error",
+        keep.marks && "a mark",
+        keep.slower_than && "an event over #{milliseconds(keep.slower_than)}"
+      ]
+      |> Enum.filter(& &1)
+
+    saved =
+      case {always, keep.rate} do
+        {[], rate} ->
+          "Saves #{percent(rate)} of sessions with interaction."
+
+        {_any, rate} when rate <= 0 ->
+          "Saves only sessions with #{Enum.join(always, " or ")}."
+
+        {_any, rate} ->
+          "Saves every session with #{Enum.join(always, " or ")}, and #{percent(rate)} of the others with interaction."
+      end
+
+    if sample_rate < 1.0,
+      do: "Records #{percent(sample_rate)} of sessions. " <> saved,
+      else: saved
+  end
+
+  defp percent(rate) when rate * 100 == trunc(rate * 100), do: "#{trunc(rate * 100)}%"
+  defp percent(rate), do: "#{Float.round(rate * 100, 1)}%"
+
+  @doc """
   Names a time window of `PhoenixReplay.Recording.Filter`, such as
   `"Last 15 min"` for `"15m"` or `"Last 7 days"` for `"7d"`.
   """

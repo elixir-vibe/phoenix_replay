@@ -203,6 +203,8 @@ defmodule PhoenixReplay.Web.Live.Index do
       page: page,
       stored: %{saved: saved, total: total, all: all, errors: count.(%Filter{errors: true})},
       newer: newer(socket, now, allow),
+      activity: Catalog.activity(config, socket.assigns.filter, now: now, allow: allow),
+      sampling: Format.sampling(config.sample_rate, config.keep),
       can_clear?: all > 0 and Context.allowed?(socket, :clear, nil)
     )
   end
@@ -290,6 +292,10 @@ defmodule PhoenixReplay.Web.Live.Index do
     assign(socket, :refresh_timer, timer)
   end
 
+  # The list narrowed to sessions started from `from` to `to`.
+  defp range_path(context, %Filter{} = filter, {from, to}),
+    do: index_path(context, %Filter{filter | within: nil, from: from, to: to}, 1)
+
   defp index_path(context, filter, page) do
     params = Filter.to_params(filter)
     params = if page > 1, do: Map.put(params, "page", Integer.to_string(page)), else: params
@@ -333,6 +339,13 @@ defmodule PhoenixReplay.Web.Live.Index do
         <p :if={@any?} class="mt-1.5 text-sm text-muted">
           {Format.count(@counts.all, "session")} · {@counts.live} live · {@counts.errors} with errors
         </p>
+        <p
+          :if={@any? and @sampling}
+          id="recordings-sampling"
+          class="mt-1 flex items-center gap-1.5 text-xs text-muted"
+        >
+          <.icon name="lucide:info" class="size-3.5 shrink-0" /> {@sampling}
+        </p>
       </header>
 
       <.filter_bar
@@ -342,6 +355,12 @@ defmodule PhoenixReplay.Web.Live.Index do
         editing={@editing}
         values={@values}
         typed={@typed}
+      />
+
+      <.activity_chart
+        :if={@any?}
+        activity={@activity}
+        path={&range_path(@context, @filter, &1)}
       />
 
       <.empty_state :if={@any? and @total == 0} title="No recordings match these filters.">
