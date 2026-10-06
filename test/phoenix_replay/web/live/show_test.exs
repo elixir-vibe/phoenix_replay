@@ -135,7 +135,9 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     open_tab(view, "State")
 
     changes = view |> element(~s([data-changes="tasks"])) |> render()
-    assert changes =~ "tasks[id: 2].done"
+    # Within the assign's row, by the path inside it; the full path on hover.
+    assert changes =~ ~s(title="tasks[id: 2].done")
+    assert changes =~ ~r/>\s*\[id: 2\]\.done\s*</
 
     assert changes =~
              ~s(<span class="l-boolean">false</span> → <span class="l-boolean">true</span>)
@@ -147,6 +149,14 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     # Where the assign first appears, there is nothing to compare it with.
     render_click(view, "seek", %{"index" => "1"})
     refute has_element?(view, "[data-changes]")
+  end
+
+  test "shows the value an assign replaced whole, under its new one" do
+    {:ok, view, _html} = live(build_conn(), "/replay/show?at=3")
+    open_tab(view, "State")
+
+    assert has_element?(view, ~s([data-assign="count"] [data-was]), "was 0")
+    refute has_element?(view, ~s([data-changes="count"]))
   end
 
   test "lists client state in a lane of its own, as steps" do

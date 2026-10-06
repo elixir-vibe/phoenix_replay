@@ -60,7 +60,10 @@ defmodule PhoenixReplay.Web.Components.State do
                 class="mt-0.5 size-3 text-muted transition-transform group-open:rotate-90"
               />
               <span class={["truncate", row.key in @changed && "text-accent"]}>{row.key}</span>
-              <span class="truncate">{row.preview}</span>
+              <span class="min-w-0">
+                <span class="block truncate">{row.preview}</span>
+                <.was :if={row.was} value={row.was} />
+              </span>
             </div>
             <%!-- What changed stays in view whether the value is open or not. --%>
             <.changes :if={row.changes != []} key={row.key} changes={row.changes} more={row.more} />
@@ -85,7 +88,10 @@ defmodule PhoenixReplay.Web.Components.State do
         >
           <span></span>
           <span class={["truncate", row.key in @changed && "text-accent"]}>{row.key}</span>
-          <span>{row.preview}</span>
+          <span class="min-w-0">
+            <span class="block">{row.preview}</span>
+            <.was :if={row.was} value={row.was} />
+          </span>
         </div>
         <.changes
           :if={!row.full and row.changes != []}
@@ -98,22 +104,38 @@ defmodule PhoenixReplay.Web.Components.State do
     """
   end
 
+  attr :value, :any, required: true
+
+  # The value an assign had before the event replaced it whole.
+  defp was(assigns) do
+    ~H"""
+    <span data-was class="block truncate text-faint">was {@value}</span>
+    """
+  end
+
   attr :key, :any, required: true
   attr :changes, :list, required: true
   attr :more, :integer, required: true
 
+  # Changes inside an assign, in the row's columns: a mark for what was
+  # added or removed, the path within the assign, and its values.
   defp changes(assigns) do
     ~H"""
-    <ul data-changes={@key} class="mx-3.5 mb-1.5 ml-8 space-y-0.5">
+    <ul data-changes={@key} class="pb-1.5">
       <li
-        :for={{change, path} <- Enum.map(@changes, &{&1, Diff.path(@key, elem(&1, 1))})}
-        class="flex min-w-0 items-baseline gap-2"
+        :for={{change, steps} <- Enum.map(@changes, &{&1, elem(&1, 1)})}
+        class="grid grid-cols-[0.75rem_minmax(0,8rem)_minmax(0,1fr)] gap-2 px-3.5 py-0.5"
       >
-        <span class={["w-3 shrink-0 text-center", change_class(change)]}>{change_mark(change)}</span>
-        <span class="max-w-[70%] shrink-0 truncate text-muted" title={path}>{path}</span>
+        <span class={["text-center", change_class(change)]}>{change_mark(change)}</span>
+        <span class="truncate pl-2 text-muted" title={Diff.path(@key, steps)}>
+          {Diff.path("", steps)}
+        </span>
         <span class="min-w-0 truncate">{change_values(change)}</span>
       </li>
-      <li :if={@more > 0} class="ml-5 text-muted">and {@more} more</li>
+      <li :if={@more > 0} class="grid grid-cols-[0.75rem_minmax(0,1fr)] gap-2 px-3.5 py-0.5">
+        <span></span>
+        <span class="pl-2 text-muted">and {@more} more</span>
+      </li>
     </ul>
     """
   end
@@ -141,7 +163,8 @@ defmodule PhoenixReplay.Web.Components.State do
     full = inspect(value, pretty: true, limit: 50)
     expand? = full != preview or String.length(preview) > @short_value
 
-    # What the current event changed, when the assign was there before it.
+    # What the current event changed, when the assign was there before it:
+    # the value it replaced whole, or the changes inside it.
     {changes, lines} =
       case before do
         %{^key => old} when changed? and old != value ->
@@ -151,8 +174,15 @@ defmodule PhoenixReplay.Web.Components.State do
           {[], nil}
       end
 
+    {was, changes} =
+      case changes do
+        [{:changed, [], old, _new}] -> {Highlight.term(old, limit: 5, printable_limit: 40), []}
+        changes -> {nil, changes}
+      end
+
     %{
       key: key,
+      was: was,
       preview: Highlight.code(preview, :elixir),
       full: if(expand?, do: Highlight.code(full, :elixir)),
       changes: Enum.take(changes, @shown_changes),
@@ -161,7 +191,7 @@ defmodule PhoenixReplay.Web.Components.State do
     }
   end
 
-  defp change_mark({:changed, _path, _old, _new}), do: "~"
+  defp change_mark({:changed, _path, _old, _new}), do: nil
   defp change_mark({:added, _path, _new}), do: "+"
   defp change_mark({:removed, _path, _old}), do: "−"
 
