@@ -48,14 +48,20 @@ defmodule PhoenixReplay.Export.Queue do
 
   def of(%Config{}), do: {PhoenixReplay.Export.Queue.Local, []}
 
-  @doc "Tells subscribers of the job's recording that it changed."
-  @spec broadcast(Job.t()) :: :ok | {:error, term()}
+  @doc """
+  Tells subscribers of the job's recording that it changed. Nobody may be
+  listening, and the export goes on either way.
+  """
+  @spec broadcast(Job.t()) :: :ok
   def broadcast(%Job{} = job) do
-    Phoenix.PubSub.broadcast(
-      PhoenixReplay.PubSub,
-      @topic <> job.recording_id,
-      {PhoenixReplay.Export, job}
-    )
+    _delivered =
+      Phoenix.PubSub.broadcast(
+        PhoenixReplay.PubSub,
+        @topic <> job.recording_id,
+        {PhoenixReplay.Export, job}
+      )
+
+    :ok
   end
 
   @doc "Subscribes the caller to the jobs of a recording; see `broadcast/1`."
