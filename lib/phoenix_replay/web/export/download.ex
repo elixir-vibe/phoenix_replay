@@ -19,7 +19,7 @@ defmodule PhoenixReplay.Web.Export.Download do
   import Plug.Conn
 
   alias PhoenixReplay.Export
-  alias PhoenixReplay.Export.Job
+  alias PhoenixReplay.Export.{Job, Video}
 
   @salt "phoenix_replay video"
   # How much of a video is read from another node at a time, and how long
@@ -51,16 +51,29 @@ defmodule PhoenixReplay.Web.Export.Download do
   end
 
   @doc """
-  Reads up to `size` bytes of the file at `path` from `offset`, for a node
-  serving a video rendered on this one.
+  Reads up to `size` bytes of the video at `path` from `offset`, for a node
+  serving a video rendered on this one. Only an export's video is read: a
+  file in this node's export directory, named as exports name them.
   """
   @spec read_chunk(Path.t(), non_neg_integer(), pos_integer()) ::
           {:ok, binary()} | :eof | {:error, term()}
   def read_chunk(path, offset, size) do
-    case File.open(path, [:read, :binary], &:file.pread(&1, offset, size)) do
-      {:ok, result} -> result
-      {:error, reason} -> {:error, reason}
+    if video?(path) do
+      case File.open(path, [:read, :binary], &:file.pread(&1, offset, size)) do
+        {:ok, result} -> result
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, :not_a_video}
     end
+  end
+
+  defp video?(path) do
+    dir = Video.dir(PhoenixReplay.Config.load().export)
+    name = Path.basename(path)
+
+    Path.expand(Path.dirname(path)) == Path.expand(dir) and Path.extname(name) == ".mp4" and
+      Job.file?(name)
   end
 
   # This node's queue knows the job, or the node that signed the link does.
