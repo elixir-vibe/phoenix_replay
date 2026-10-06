@@ -55,11 +55,12 @@ defmodule PhoenixReplay.ConfigTest do
   end
 
   test "validates tail sampling, logs, redaction and memory" do
-    assert Config.new([]).keep == %{rate: 1.0, errors: false, slower_than: nil}
+    assert Config.new([]).keep == %{rate: 1.0, errors: false, marks: false, slower_than: nil}
 
-    assert Config.new(keep: [rate: 0, errors: true]).keep == %{
+    assert Config.new(keep: [rate: 0, errors: true, marks: true]).keep == %{
              rate: 0.0,
              errors: true,
+             marks: true,
              slower_than: nil
            }
 

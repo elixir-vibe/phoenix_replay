@@ -28,8 +28,11 @@ defmodule PhoenixReplay.Web.Components.Player do
   alias PhoenixReplay.Web.Format
   alias PhoenixReplay.Web.Player.{Events, Shortcuts}
 
-  @doc "The icon for an event's type."
-  attr :type, :atom, required: true, doc: "a `PhoenixReplay.Recording.Event` type"
+  @doc "The icon for an event's type, or for a mark."
+  attr :type, :atom,
+    required: true,
+    doc: "a `PhoenixReplay.Recording.Event` type, or `:mark` for a mark"
+
   attr :class, :any, default: "size-3.5"
 
   @spec event_icon(map()) :: Phoenix.LiveView.Rendered.t()
@@ -58,6 +61,8 @@ defmodule PhoenixReplay.Web.Components.Player do
         <.icon name="lucide:scaling" class={@class} />
       <% :state -> %>
         <.icon name="lucide:text-cursor-input" class={@class} />
+      <% :mark -> %>
+        <.icon name="lucide:flag" class={@class} />
     <% end %>
     """
   end
@@ -519,6 +524,8 @@ defmodule PhoenixReplay.Web.Components.Player do
     """
   end
 
+  defp icon_type(event), do: if(Event.mark?(event), do: :mark, else: event.type)
+
   defp position(_at, 0), do: 0
   defp position(at, duration_ms), do: Float.round(at / duration_ms * 100, 3)
 
@@ -679,7 +686,7 @@ defmodule PhoenixReplay.Web.Components.Player do
       class="h-(--details) shrink-0 overflow-y-auto overscroll-contain bg-canvas"
     >
       <header class="sticky top-0 flex items-center gap-2 border-b border-line bg-canvas/95 px-3.5 py-2 text-[13px] backdrop-blur">
-        <.event_icon type={@ev.type} class="size-3.5 shrink-0 opacity-70" />
+        <.event_icon type={icon_type(@ev)} class="size-3.5 shrink-0 opacity-70" />
         <span class="min-w-0 flex-1 truncate font-medium" title={Event.label(@ev)}>
           <%= for {kind, content} <- Events.parts(@ev) do %>
             <span :if={kind == :text}>{content}</span>
@@ -740,7 +747,7 @@ defmodule PhoenixReplay.Web.Components.Player do
         @index <= @current && Event.error?(@ev) && "text-error"
       ]}
     >
-      <.event_icon type={@ev.type} class="size-3.5 shrink-0 opacity-70" />
+      <.event_icon type={icon_type(@ev)} class="size-3.5 shrink-0 opacity-70" />
       <span class="min-w-0 flex-1 truncate" title={Event.label(@ev)}>
         <%= for {kind, content} <- @parts do %>
           <span :if={kind == :text}>{content}</span>

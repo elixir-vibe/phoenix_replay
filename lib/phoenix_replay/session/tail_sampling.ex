@@ -73,8 +73,9 @@ defmodule PhoenixReplay.Session.TailSampling do
     new() |> observe(recording.events, keep) |> decision(keep, draw)
   end
 
-  defp flagged?(event, %{errors: errors, slower_than: slower_than}) do
-    (errors and Event.error?(event)) or slow?(event, slower_than)
+  defp flagged?(event, %{errors: errors, marks: marks, slower_than: slower_than}) do
+    (errors and Event.error?(event)) or (marks and Event.mark?(event)) or
+      slow?(event, slower_than)
   end
 
   defp slow?(_event, nil), do: false

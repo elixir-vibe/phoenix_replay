@@ -3,7 +3,10 @@ defmodule PhoenixReplay.Recording.Summary do
   Lightweight description of a recording, used for listings and filtering.
 
   Storage backends return summaries without decoding full recordings.
-  `event_names` are the distinct `handle_event/3` names, sorted.
+  `event_names` are the distinct `handle_event/3` names and the names of
+  the telemetry events that mark moments (see
+  `PhoenixReplay.Recording.Event.mark?/1`), such as `"my_app.signup.done"`,
+  sorted.
   `error_count` counts the events for which `PhoenixReplay.Recording.Event.error?/1`
   holds. `tab` is the browser tab the session ran in, when the client sent
   it, shared by the sessions of one journey. `viewport`, `device` and
@@ -97,7 +100,8 @@ defmodule PhoenixReplay.Recording.Summary do
 
   @doc """
   How one event adds to `totals/2`: `1` or `0` to the event count and to
-  the error count, and its `handle_event/3` name, if it has one.
+  the error count, and its `handle_event/3` name or its name as a mark, if
+  it has one.
   `PhoenixReplay.Session.Buffer` keeps running totals with it as events
   are written.
   """
@@ -122,6 +126,10 @@ defmodule PhoenixReplay.Recording.Summary do
   defp one(false), do: 0
 
   defp event_name(%Event{type: :event, data: %{name: name}}), do: name
+
+  defp event_name(%Event{type: :telemetry, data: %{mark: true, event: event}}),
+    do: Enum.map_join(event, ".", &Atom.to_string/1)
+
   defp event_name(_event), do: nil
 
   @doc """

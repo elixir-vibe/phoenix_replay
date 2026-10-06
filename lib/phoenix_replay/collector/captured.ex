@@ -10,6 +10,10 @@ defmodule PhoenixReplay.Collector.Captured do
     * `:metadata` — the metadata worth keeping
     * `:error` — a description of a failure, which makes the session match
       `keep: [errors: true]`
+    * `:mark` — whether the event marks a moment in the session, such as
+      a signup or a checkout, rather than measuring work: the player
+      gives marks a lane of their own, and the recording list finds
+      sessions by their names
   """
 
   @type t :: %__MODULE__{
@@ -17,8 +21,14 @@ defmodule PhoenixReplay.Collector.Captured do
           language: :sql | nil,
           measurements: %{atom() => number()},
           metadata: map(),
-          error: String.t() | nil
+          error: String.t() | nil,
+          mark: boolean()
         }
 
-  defstruct summary: nil, language: nil, measurements: %{}, metadata: %{}, error: nil
+  defstruct summary: nil,
+            language: nil,
+            measurements: %{},
+            metadata: %{},
+            error: nil,
+            mark: false
 end

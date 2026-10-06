@@ -63,7 +63,7 @@ The header names the view, the page and when the session started, with its durat
 
 The replayed page sits under a bar showing its URL at that moment. When the browser's viewport was recorded, the page renders at that size, and the bar shows its orientation, size and scale. That chip opens the **View** menu: fit the page to the window or show it at its actual size in a scrolling box, or **Rotate** it to the other orientation.
 
-Below it, play at 1×, 2×, 5× or 10×, step to the previous or next event, and see the time to the hundredth of a second. The timeline has a lane of markers per kind of event, LiveView, Telemetry and Logs, with errors larger and red. Click or drag it to seek, or focus it and use `←`, `→` and `Space`.
+Below it, play at 1×, 2×, 5× or 10×, step to the previous or next event, and see the time to the hundredth of a second. The timeline has a lane of markers per kind of event, LiveView, Marks, Telemetry and Logs, with errors larger and red, and marks larger and pink. Click or drag it to seek, or focus it and use `←`, `→` and `Space`.
 
 The panel beside it has three tabs:
 
@@ -84,6 +84,7 @@ The player takes these keys anywhere on its page, except while a dialog is open,
 | `Shift` + `←` / `→` | Back or forward 5 seconds |
 | `Home` / `End` | To the start or the end |
 | `E` / `Shift` + `E` | Next or previous error |
+| `M` / `Shift` + `M` | Next or previous [mark](telemetry-and-logs.md#marking-moments) |
 | `1` – `4` | Speed 1×, 2×, 5× or 10× |
 | `F` | Fit to the window or show at actual size |
 | `R` | Rotate |

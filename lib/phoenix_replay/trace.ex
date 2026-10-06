@@ -79,7 +79,8 @@ defmodule PhoenixReplay.Trace do
 
     * `:text` — found in the URL, id or event names
     * `:view` — the view module, such as `MyAppWeb.CheckoutLive`
-    * `:event` — a `handle_event/3` name the session triggered
+    * `:event` — a `handle_event/3` name the session triggered, or the name
+      of a telemetry event that marked a moment in it
     * `:within` — `"1h"`, `"24h"` or `"7d"` since the session started
     * `:min_events` — at least that many events
     * `:errors` — `true` for sessions with an error only

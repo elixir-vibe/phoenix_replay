@@ -7,7 +7,8 @@ defmodule PhoenixReplay.Recording.Filter do
 
     * `"q"` — text found in the recording's URL, id or event names
     * `"view"` — exact view module name, such as `"MyAppWeb.CheckoutLive"`
-    * `"event"` — a `handle_event/3` name the session triggered
+    * `"event"` — a `handle_event/3` name the session triggered, or the
+      name of a telemetry event that marked a moment in it
     * `"within"` — `"1h"`, `"24h"` or `"7d"` since the session started
     * `"min_events"` — minimum number of recorded events
     * `"errors"` — `"1"` to keep only sessions with an error, such as an

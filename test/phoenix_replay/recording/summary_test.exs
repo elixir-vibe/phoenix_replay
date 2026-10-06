@@ -40,4 +40,13 @@ defmodule PhoenixReplay.Recording.SummaryTest do
     assert Summary.totals(events).event_names == ~w(delete inc save)
     assert Summary.totals(events, Summary.totals(events)).event_count == 8
   end
+
+  test "lists the names of the telemetry events that mark moments, but not of others" do
+    telemetry = fn event, mark ->
+      %Event{at: 0, type: :telemetry, data: %{event: event, measurements: %{}, mark: mark}}
+    end
+
+    events = [telemetry.([:shop, :checkout, :done], true), telemetry.([:repo, :query], false)]
+    assert Summary.totals(events).event_names == ["shop.checkout.done"]
+  end
 end

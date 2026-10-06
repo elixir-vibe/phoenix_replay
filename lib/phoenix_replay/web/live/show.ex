@@ -252,11 +252,13 @@ defmodule PhoenixReplay.Web.Live.Show do
     {:noreply, socket |> pause() |> seek(Timeline.last_index(timeline)) |> at_time(duration)}
   end
 
-  def handle_event("error", %{"direction" => direction}, %{assigns: %{recording: %{}}} = socket)
-      when direction in ~w(next previous) do
+  # Jumps to the next or previous error, or mark.
+  def handle_event(to, %{"direction" => direction}, %{assigns: %{recording: %{}}} = socket)
+      when to in ~w(error mark) and direction in ~w(next previous) do
     %{recording: recording, index: index} = socket.assigns
+    found? = if to == "error", do: &Event.error?/1, else: &Event.mark?/1
 
-    case Events.error_index(recording, index, String.to_existing_atom(direction)) do
+    case Events.nearest_index(recording, index, String.to_existing_atom(direction), found?) do
       nil -> {:noreply, socket}
       found -> {:noreply, socket |> pause() |> seek(found)}
     end

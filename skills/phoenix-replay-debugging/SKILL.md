@@ -20,6 +20,7 @@ A recording is a LiveView session as a timeline: every mount, user event, naviga
 PhoenixReplay.Trace.find(errors: true, within: "24h")
 PhoenixReplay.Trace.find(view: MyAppWeb.CheckoutLive, event: "submit", limit: 5)
 PhoenixReplay.Trace.find(text: "/orders/42")   # URL, id or event names
+PhoenixReplay.Trace.find(event: "my_app.checkout.completed")   # sessions that reached a mark
 ```
 
 ```bash
@@ -27,7 +28,7 @@ mix phoenix_replay.list --errors --within 24h
 mix phoenix_replay.list --view MyAppWeb.CheckoutLive --event submit --limit 5
 ```
 
-Each `PhoenixReplay.Recording.Summary` has `id`, `view`, `url`, `connected_at` (Unix ms), `duration_ms`, `event_count`, `error_count`, `event_names`, `device`, `viewport`, `tab`, and `live?`. Sessions of one browser tab share `tab`: `find(tab: tab)` is the user's journey across LiveViews.
+Each `PhoenixReplay.Recording.Summary` has `id`, `view`, `url`, `connected_at` (Unix ms), `duration_ms`, `event_count`, `error_count`, `event_names` (`handle_event/3` names and the dotted names of telemetry events collected with `mark: true`), `device`, `viewport`, `tab`, and `live?`. Sessions of one browser tab share `tab`: `find(tab: tab)` is the user's journey across LiveViews.
 
 ## 2. Read what happened
 

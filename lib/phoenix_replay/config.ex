@@ -20,6 +20,8 @@ defmodule PhoenixReplay.Config do
       when they end, as described in "Tail sampling" below:
       * `:rate` — share of interactive sessions to save (default `1.0`)
       * `:errors` — always save sessions with an error (default `false`)
+      * `:marks` — always save sessions with a telemetry event collected
+        with `mark: true`, such as a completed checkout (default `false`)
       * `:slower_than` — always save sessions with a collected event
         lasting at least this many milliseconds (default `nil`)
     * `:collect` — telemetry events to record alongside LiveView events.
@@ -149,8 +151,8 @@ defmodule PhoenixReplay.Config do
 
   `:sample_rate` decides when a session mounts whether it is recorded.
   `:keep` decides when it ends whether it is saved: a session with an
-  error or a slow event matching `:errors` or `:slower_than` is always
-  saved, a session without user interaction is discarded, and `:rate` of
+  error, a mark or a slow event matching `:errors`, `:marks` or
+  `:slower_than` is always saved, a session without user interaction is discarded, and `:rate` of
   the rest are saved.
 
   To save every failing session but only a few others, record every session
@@ -214,7 +216,12 @@ defmodule PhoenixReplay.Config do
 
   @type persist :: %{attempts: pos_integer(), backoff: non_neg_integer()}
 
-  @type keep :: %{rate: float(), errors: boolean(), slower_than: pos_integer() | nil}
+  @type keep :: %{
+          rate: float(),
+          errors: boolean(),
+          marks: boolean(),
+          slower_than: pos_integer() | nil
+        }
 
   @typedoc "A `PhoenixReplay.Collector` and its options."
   @type collector :: {module(), keyword()}
@@ -297,7 +304,7 @@ defmodule PhoenixReplay.Config do
             sanitizer: PhoenixReplay.Sanitizer.Default,
             max_events: 10_000,
             sample_rate: 1.0,
-            keep: %{rate: 1.0, errors: false, slower_than: nil},
+            keep: %{rate: 1.0, errors: false, marks: false, slower_than: nil},
             collect: [],
             logs: nil,
             redact: nil,
@@ -465,6 +472,7 @@ defmodule PhoenixReplay.Config do
 
   defp valid_keep?(:rate, value), do: is_number(value) and value >= 0 and value <= 1
   defp valid_keep?(:errors, value), do: is_boolean(value)
+  defp valid_keep?(:marks, value), do: is_boolean(value)
   defp valid_keep?(:slower_than, value), do: is_nil(value) or pos_integer?(value)
 
   defp valid_logs?(:level, value), do: value in Logger.levels()

@@ -22,6 +22,8 @@ const ACTIONS: Record<string, Action> = {
   end: { push: 'jump', payload: { to: 'end' } },
   next_error: { push: 'error', payload: { direction: 'next' } },
   previous_error: { push: 'error', payload: { direction: 'previous' } },
+  next_mark: { push: 'mark', payload: { direction: 'next' } },
+  previous_mark: { push: 'mark', payload: { direction: 'previous' } },
   speed_1: { push: 'speed', payload: { value: '1' } },
   speed_2: { push: 'speed', payload: { value: '2' } },
   speed_5: { push: 'speed', payload: { value: '5' } },

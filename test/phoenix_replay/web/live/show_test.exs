@@ -251,6 +251,44 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert assigns(view).index == 2
   end
 
+  test "gives marks a lane of their own and jumps between them" do
+    recording = Fixtures.counter_recording(id: "marked")
+
+    mark = fn at, summary ->
+      %Event{
+        at: at,
+        type: :telemetry,
+        data: %{
+          event: [:shop, :step],
+          summary: summary,
+          measurements: %{},
+          metadata: %{},
+          error: nil,
+          mark: true
+        }
+      }
+    end
+
+    events =
+      recording.events
+      |> List.insert_at(4, mark.(1_500, "paid"))
+      |> List.insert_at(3, mark.(1_000, "carted"))
+
+    Storage.save(Fixtures.storage(), %{recording | events: events})
+    {:ok, view, html} = live(build_conn(), "/replay/marked")
+
+    assert html =~ "Marks"
+    assert has_element?(view, ~s(button[phx-click="toggle_kind"][phx-value-kind="marks"]))
+
+    render_hook(view, "mark", %{"direction" => "next"})
+    assert assigns(view).index == 3
+    assert has_element?(view, "#replay-details", "carted")
+    render_hook(view, "mark", %{"direction" => "next"})
+    assert assigns(view).index == 5
+    render_hook(view, "mark", %{"direction" => "previous"})
+    assert assigns(view).index == 3
+  end
+
   test "shows its keyboard shortcuts on its controls and in a sheet" do
     {:ok, view, _html} = live(build_conn(), "/replay/show")
 

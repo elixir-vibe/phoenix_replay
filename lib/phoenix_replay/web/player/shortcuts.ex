@@ -32,6 +32,8 @@ defmodule PhoenixReplay.Web.Player.Shortcuts do
     %{id: :end, keys: [["End"]], label: "To the end", group: :moving},
     %{id: :next_error, keys: [["E"]], label: "Next error", group: :moving},
     %{id: :previous_error, keys: [["Shift", "E"]], label: "Previous error", group: :moving},
+    %{id: :next_mark, keys: [["M"]], label: "Next mark", group: :moving},
+    %{id: :previous_mark, keys: [["Shift", "M"]], label: "Previous mark", group: :moving},
     %{id: :speed_1, keys: [["1"]], label: "Speed 1×", group: :playback},
     %{id: :speed_2, keys: [["2"]], label: "Speed 2×", group: :playback},
     %{id: :speed_5, keys: [["3"]], label: "Speed 5×", group: :playback},

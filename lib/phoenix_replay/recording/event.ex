@@ -18,9 +18,10 @@ defmodule PhoenixReplay.Recording.Event do
       LiveComponent removed from the page
     * `:telemetry` — `%{event: [atom], summary: String.t() | nil,
       language: :sql | nil, measurements: map, metadata: map,
-      error: String.t() | nil}`, a telemetry event captured by a
-      `PhoenixReplay.Collector`; `language` is what the summary is written
-      in, absent from events recorded before 0.6
+      error: String.t() | nil, mark: boolean}`, a telemetry event captured
+      by a `PhoenixReplay.Collector`; `language` is what the summary is
+      written in, and `mark` whether it marks a moment, both absent from
+      events recorded before 0.6
     * `:log` — `%{level: Logger.level(), message: String.t(), metadata: map}`,
       a log message, see `PhoenixReplay.Capture.Logs`
     * `:exit` — `%{reason: String.t()}`, the LiveView process exited
@@ -69,6 +70,14 @@ defmodule PhoenixReplay.Recording.Event do
   def error?(%__MODULE__{type: :log, data: %{level: level}}), do: level in @error_levels
   def error?(%__MODULE__{type: :telemetry, data: %{error: error}}), do: error != nil
   def error?(%__MODULE__{}), do: false
+
+  @doc """
+  Returns true for a telemetry event that marks a moment, such as a signup,
+  rather than measuring work; see `PhoenixReplay.Collector.Captured`.
+  """
+  @spec mark?(t()) :: boolean()
+  def mark?(%__MODULE__{type: :telemetry, data: %{mark: true}}), do: true
+  def mark?(%__MODULE__{}), do: false
 
   @doc "One line describing the event; see `PhoenixReplay.Recording.Label`."
   @spec label(t()) :: String.t()

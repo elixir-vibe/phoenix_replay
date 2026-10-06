@@ -65,7 +65,7 @@ defmodule PhoenixReplay.Recording.StateTest do
   end
 
   test "counts as interaction once a key changes, not when first reported" do
-    keep = %{rate: 1.0, errors: false, slower_than: nil}
+    keep = %{rate: 1.0, errors: false, marks: false, slower_than: nil}
     first = recording([@mount, batch(10, 0, [[0, "a", %{"x" => 1}], [0, "b", %{}]])])
 
     again =

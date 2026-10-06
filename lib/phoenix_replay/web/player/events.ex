@@ -10,19 +10,24 @@ defmodule PhoenixReplay.Web.Player.Events do
   alias PhoenixReplay.Web.{Format, Highlight}
 
   @typedoc "What the event list filters by."
-  @type kind :: :liveview | :state | :telemetry | :logs
+  @type kind :: :liveview | :marks | :state | :telemetry | :logs
 
-  @kinds [:liveview, :state, :telemetry, :logs]
+  @kinds [:liveview, :marks, :state, :telemetry, :logs]
 
-  # Errors stand out: larger, red, with a soft ring.
+  # Errors stand out: larger, red, with a soft ring. Marks stand out too,
+  # in their own colour.
   @error_marker "size-2.5 bg-error ring-3 ring-error-soft"
+  @mark_marker "size-2.5 bg-kind-mark ring-3 ring-kind-mark/25"
 
-  @doc "The kind an event type is filtered as."
-  @spec kind(Event.type()) :: kind()
-  def kind(:state), do: :state
-  def kind(:telemetry), do: :telemetry
-  def kind(:log), do: :logs
-  def kind(_type), do: :liveview
+  @doc "The kind an event is filtered as."
+  @spec kind(Event.t()) :: kind()
+  def kind(%Event{type: :state}), do: :state
+
+  def kind(%Event{type: :telemetry} = event),
+    do: if(Event.mark?(event), do: :marks, else: :telemetry)
+
+  def kind(%Event{type: :log}), do: :logs
+  def kind(%Event{}), do: :liveview
 
   @doc "Reads a kind sent by the browser, or returns `:error`."
   @spec parse_kind(String.t()) :: {:ok, kind()} | :error
@@ -33,13 +38,13 @@ defmodule PhoenixReplay.Web.Player.Events do
     end
   end
 
-  @doc "The kinds in a recording, LiveView first."
+  @doc "The kinds in a recording, LiveView first, then marks."
   @spec kinds(Recording.t()) :: [kind()]
   def kinds(%Recording{events: events}) do
     events
-    |> Enum.map(&kind(&1.type))
+    |> Enum.map(&kind/1)
     |> Enum.uniq()
-    |> Enum.sort_by(&(&1 != :liveview))
+    |> Enum.sort_by(&{&1 != :liveview, &1 != :marks})
   end
 
   @typedoc "What the event list shows: hidden kinds, a search, and errors only."
@@ -65,16 +70,17 @@ defmodule PhoenixReplay.Web.Player.Events do
     indexed = Enum.with_index(events)
 
     for kind <- kinds(recording),
-        do: {kind, Enum.filter(indexed, &(kind(elem(&1, 0).type) == kind))}
+        do: {kind, Enum.filter(indexed, &(kind(elem(&1, 0)) == kind))}
   end
 
   @doc "How many events of each kind a recording has."
   @spec kind_counts(Recording.t()) :: %{kind() => non_neg_integer()}
-  def kind_counts(%Recording{events: events}), do: Enum.frequencies_by(events, &kind(&1.type))
+  def kind_counts(%Recording{events: events}), do: Enum.frequencies_by(events, &kind/1)
 
   @doc "The colour class of a kind's swatch."
   @spec kind_class(kind()) :: String.t()
   def kind_class(:liveview), do: "bg-kind-event"
+  def kind_class(:marks), do: "bg-kind-mark"
   def kind_class(:state), do: "bg-kind-component"
   def kind_class(:telemetry), do: "bg-kind-query"
   def kind_class(:logs), do: "bg-kind-log"
@@ -83,15 +89,19 @@ defmodule PhoenixReplay.Web.Player.Events do
   @spec first_error_index(Recording.t()) :: non_neg_integer() | nil
   def first_error_index(%Recording{events: events}), do: Enum.find_index(events, &Event.error?/1)
 
-  @doc "The index of the nearest event after or before `index` that reports an error, or `nil`."
-  @spec error_index(Recording.t(), non_neg_integer(), :next | :previous) ::
+  @doc """
+  The index of the nearest event after or before `index` for which `fun`
+  holds, such as `PhoenixReplay.Recording.Event.error?/1`, or `nil`.
+  """
+  @spec nearest_index(Recording.t(), non_neg_integer(), :next | :previous, (Event.t() ->
+                                                                              boolean())) ::
           non_neg_integer() | nil
-  def error_index(%Recording{events: events}, index, direction) do
-    errors = for {event, at} <- Enum.with_index(events), Event.error?(event), do: at
+  def nearest_index(%Recording{events: events}, index, direction, fun) do
+    found = for {event, at} <- Enum.with_index(events), fun.(event), do: at
 
     case direction do
-      :next -> Enum.find(errors, &(&1 > index))
-      :previous -> errors |> Enum.reverse() |> Enum.find(&(&1 < index))
+      :next -> Enum.find(found, &(&1 > index))
+      :previous -> found |> Enum.reverse() |> Enum.find(&(&1 < index))
     end
   end
 
@@ -173,6 +183,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   @doc "A kind's name in the filter."
   @spec kind_label(kind()) :: String.t()
   def kind_label(:liveview), do: "LiveView"
+  def kind_label(:marks), do: "Marks"
   def kind_label(:state), do: "Client state"
   def kind_label(:telemetry), do: "Telemetry"
   def kind_label(:logs), do: "Logs"
@@ -193,10 +204,14 @@ defmodule PhoenixReplay.Web.Player.Events do
   def dropped_count(%Recording{dropped: dropped}),
     do: Enum.sum_by(dropped, fn {_name, count} -> count end)
 
-  @doc "Classes for an event's timeline marker. Errors are larger and red."
+  @doc "Classes for an event's timeline marker. Errors and marks are larger."
   @spec marker_class(Event.t()) :: String.t()
   def marker_class(%Event{} = event) do
-    if Event.error?(event), do: @error_marker, else: type_marker_class(event.type)
+    cond do
+      Event.error?(event) -> @error_marker
+      Event.mark?(event) -> @mark_marker
+      true -> type_marker_class(event.type)
+    end
   end
 
   @typedoc "A piece of an event's row: words in the interface's font, or code in monospace."
@@ -311,7 +326,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   defp type_marker_class(:state), do: "size-1 bg-kind-component"
 
   defp visible?(event, filters) do
-    not MapSet.member?(filters.hidden, kind(event.type)) and matches?(event, filters.query) and
+    not MapSet.member?(filters.hidden, kind(event)) and matches?(event, filters.query) and
       (not filters.errors_only or Event.error?(event))
   end
 
