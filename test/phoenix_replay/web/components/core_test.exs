@@ -4,6 +4,7 @@ defmodule PhoenixReplay.Web.Components.CoreTest do
   import Phoenix.Component, only: [sigil_H: 2]
   import Phoenix.LiveViewTest
   import PhoenixReplay.Web.Components.Core
+  import PhoenixReplay.Web.Components.Layout
 
   defp pages(page, total_pages) do
     assigns = %{page: page, total_pages: total_pages}

@@ -21,6 +21,7 @@ defmodule PhoenixReplay.Web.Live.Index do
 
   import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.Core
+  import PhoenixReplay.Web.Components.Layout
   import PhoenixReplay.Web.Components.Filters, only: [filter_bar: 1]
   import PhoenixReplay.Web.Components.RecordingList
 

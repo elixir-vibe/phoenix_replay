@@ -10,7 +10,8 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
   use Phoenix.Component
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.Core, only: [badge: 1, data_list: 1, local_time: 1]
+  import PhoenixReplay.Web.Components.Layout, only: [data_list: 1]
+  import PhoenixReplay.Web.Components.Core, only: [badge: 1, local_time: 1]
 
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.Client

@@ -12,6 +12,7 @@ defmodule ExampleWeb.Catalog.Live do
 
   import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.Core
+  import PhoenixReplay.Web.Components.Layout
   import PhoenixReplay.Web.Components.Player.EventList, only: [event_icon: 1]
   import PhoenixReplay.Web.Components.Filters, only: [filter_bar: 1]
   import PhoenixReplay.Web.Components.RecordingList

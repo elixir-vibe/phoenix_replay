@@ -27,7 +27,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   use Phoenix.LiveView
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.{Core, Export, State}
+  import PhoenixReplay.Web.Components.{Export, Layout, State}
   import PhoenixReplay.Web.Components.Player.{EventList, Frame, Header, Playback, Visit}
 
   alias PhoenixReplay.Recording.{Event, Filter, PointerTrack, Timeline}
@@ -35,11 +35,10 @@ defmodule PhoenixReplay.Web.Live.Show do
   alias PhoenixReplay.Export.Options
   alias PhoenixReplay.Web.{Context, Highlight, Layouts, Params}
   alias PhoenixReplay.Web.Export.Download
-  alias PhoenixReplay.Web.Player.{Channel, Events, Shortcuts}
+  alias PhoenixReplay.Web.Player.{Channel, Events, Journey, Shortcuts}
 
   @speeds [1, 2, 5, 10]
   # The most sessions of one browser tab the player links between.
-  @journey_limit 200
   @progress_every 25
 
   @impl true
@@ -168,7 +167,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       first_render: Timeline.first_render_index(recording),
       marks: Events.marks(recording),
       dropped: Events.dropped_count(recording),
-      journey: journey(socket, recording)
+      journey: Journey.of(socket, recording)
     )
     |> hand_over()
     |> filter_events()
@@ -479,168 +478,6 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   defp redaction_percent({done, total}) when total > 0, do: Float.round(done / total * 100, 1)
   defp redaction_percent(_progress), do: 0.0
-
-  # The sessions of the recording's browser tab, oldest first, when it has more than one.
-  defp journey(socket, %{id: id, client: %{tab: tab}}) when is_binary(tab) do
-    %{config: config} = socket.assigns.context
-    filter = %Filter{tab: tab}
-    now = System.system_time(:millisecond)
-    allowed? = &Context.allowed?(socket, :list, &1)
-    {stored, _total} = Catalog.query(config, filter, now: now, limit: @journey_limit)
-
-    sessions =
-      (Catalog.live(filter, now) ++ stored)
-      |> Enum.uniq_by(& &1.id)
-      |> Enum.filter(allowed?)
-      |> Enum.sort_by(& &1.connected_at)
-
-    case {Enum.find_index(sessions, &(&1.id == id)), sessions} do
-      {index, [_first, _second | _rest]} when is_integer(index) ->
-        context = socket.assigns.context
-
-        %{
-          tab_path: Context.path(context, []) <> "?" <> URI.encode_query(%{"tab" => tab}),
-          position: index + 1,
-          total: length(sessions),
-          previous: index > 0 && Context.path(context, [Enum.at(sessions, index - 1).id]),
-          next: (next = Enum.at(sessions, index + 1)) && Context.path(context, [next.id])
-        }
-
-      _alone ->
-        nil
-    end
-  end
-
-  defp journey(_socket, _recording), do: nil
-
-  @impl true
-  def render(%{recording: nil} = assigns) do
-    ~H"""
-    <.app_bar>
-      <:mark><.icon name="lucide:circle-play" class="size-5 text-accent" /></:mark>
-      <:crumb>
-        <.link navigate={Context.path(@context, [])} class="hover:text-accent">PhoenixReplay</.link>
-      </:crumb>
-      <:crumb>Live session</:crumb>
-    </.app_bar>
-    <main class="flex flex-col gap-4 p-4 sm:p-5">
-      <.flash flash={@flash} />
-      <p :if={@load_error?} role="alert" class="text-sm text-error">
-        Could not redact this session, so it is not shown.
-      </p>
-      <div :if={!@load_error?} id="replay-redaction" role="status" class="max-w-md text-sm text-muted">
-        <p class="mb-2">{redaction_label(@progress)}</p>
-        <.progress label="Redaction" value={redaction_percent(@progress)} />
-      </div>
-      <.replay_frame :if={!@load_error?} src={frame_src(assigns)} ready={@frame_ready?} />
-    </main>
-    """
-  end
-
-  def render(assigns) do
-    ~H"""
-    <.player_header
-      recording={@recording}
-      back={Context.path(@context, [])}
-      duration_ms={@duration_ms}
-      error_count={@error_count}
-      first_error={@first_error}
-      marks={@marks}
-      dropped={@dropped}
-      at={@at}
-      link={Context.path(@context, [@recording.id]) <> "?at=#{@index}&t=#{@at}"}
-      can_export={@exportable?}
-    />
-    <.export_dialog
-      :if={@export_dialog}
-      params={@export_dialog.params}
-      error={@export_dialog.error}
-      rotatable={@viewport != nil}
-      max_dpr={@context.config.export.max_dpr}
-    />
-    <.export_status
-      :if={@export}
-      job={@export}
-      download={
-        @export.status == :done &&
-          Context.path(@context, [@recording.id, "video", Download.sign(@socket, @export)])
-      }
-    />
-    <.shortcut_sheet :if={@shortcuts?} />
-    <div id="replay-keys" phx-hook="PlayerKeys" data-shortcuts={Shortcuts.json()} hidden></div>
-    <div class="flex flex-wrap items-stretch">
-      <main class="flex min-w-0 flex-[999_1_40rem] flex-col gap-4 p-4 sm:p-5">
-        <.flash flash={@flash} />
-        <.replay_frame
-          src={frame_src(assigns)}
-          url={@url}
-          viewport={@viewport}
-          mode={@frame_mode}
-          rotated={@rotated?}
-          follow_scroll={@follow_scroll?}
-          below="replay-playback"
-          pointer={@pointer}
-          ready={@frame_ready?}
-        />
-        <.playback
-          id="replay-playback"
-          recording={@recording}
-          index={@index}
-          at={@at}
-          next_at={@next_at}
-          duration_ms={@duration_ms}
-          playing={@playing != nil}
-          speed={@speed}
-          speeds={@speeds}
-          first={@first_render}
-          slow_ms={Events.slow_ms(@context.config.keep)}
-        />
-      </main>
-      <aside
-        aria-label="Session"
-        class="flex max-w-full min-w-0 flex-[1_1_24rem] flex-col border-l border-line bg-surface"
-      >
-        <.tabs
-          id="replay-tabs"
-          label="Session details"
-          tabs={[{"events", "Events"}, {"state", "State"}, {"visit", "Visit"}]}
-          value={@tab}
-          event="tab"
-        />
-        <div id="replay-tabs-panel" role="tabpanel" class="flex min-h-0 flex-1 flex-col">
-          <.event_list
-            :if={@tab == "events"}
-            groups={@event_groups}
-            kinds={@kinds}
-            counts={@kind_counts}
-            error_count={@error_count}
-            index={@index}
-            hidden={@hidden}
-            query={@query}
-            errors_only={@errors_only}
-            details={details_event(assigns)}
-            pinned={@pinned != nil}
-            slow_ms={Events.slow_ms(@context.config.keep)}
-          />
-          <.state
-            :if={@tab == "state"}
-            assigns={@replayed}
-            before={@before}
-            changed={@changed}
-            at={@at}
-          />
-          <.visit
-            :if={@tab == "visit"}
-            recording={@recording}
-            viewport={@viewport}
-            journey={@journey}
-            filter_path={&filtered_list(@context, &1)}
-          />
-        </div>
-      </aside>
-    </div>
-    """
-  end
 
   # The channel is made at each mount, and the page's first render is not
   # connected, so the frame gets its address only once the player is: an
