@@ -10,6 +10,7 @@ import { DetailsResizer } from './hooks/details_resizer'
 import { EventList } from './hooks/event_list'
 import { ExportStage } from './hooks/export_stage'
 import { FrameViewport } from './hooks/frame_viewport'
+import { PlayerKeys } from './hooks/player_keys'
 import { Pointer } from './hooks/pointer'
 import { Scrubber } from './hooks/scrubber'
 
@@ -18,7 +19,7 @@ const meta = (name: string): string | undefined =>
 
 const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Socket, {
   params: { _csrf_token: meta('csrf-token') },
-  hooks: { DetailsResizer, EventList, ExportStage, FrameViewport, Pointer, Scrubber }
+  hooks: { DetailsResizer, EventList, ExportStage, FrameViewport, PlayerKeys, Pointer, Scrubber }
 })
 
 confirmClicks(window)

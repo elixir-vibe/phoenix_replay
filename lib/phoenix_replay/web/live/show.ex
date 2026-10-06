@@ -34,7 +34,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   alias PhoenixReplay.Export.Options
   alias PhoenixReplay.Web.{Context, Highlight, Layouts, Params}
   alias PhoenixReplay.Web.Export.Download
-  alias PhoenixReplay.Web.Player.{Channel, Events}
+  alias PhoenixReplay.Web.Player.{Channel, Events, Shortcuts}
 
   @speeds [1, 2, 5, 10]
   # The most sessions of one browser tab the player links between.
@@ -79,6 +79,8 @@ defmodule PhoenixReplay.Web.Live.Show do
         pinned: nil,
         # The export dialog's params and error while it is open.
         export_dialog: nil,
+        # The keyboard shortcut sheet, opened with ?.
+        shortcuts?: false,
         # A link to a moment opens the player there.
         start_at: Params.integer(params["at"], nil),
         # And the time there, which may fall between that event and the next.
@@ -228,6 +230,43 @@ defmodule PhoenixReplay.Web.Live.Show do
   def handle_event("frame_mode", %{"value" => mode}, socket) when mode in ~w(fit actual) do
     {:noreply, assign(socket, :frame_mode, mode)}
   end
+
+  def handle_event("toggle_frame_mode", _params, socket),
+    do: {:noreply, update(socket, :frame_mode, &if(&1 == "fit", do: "actual", else: "fit"))}
+
+  # Moves by time, landing between events as the scrubber can.
+  def handle_event("skip", %{"by" => by}, %{assigns: %{recording: %{}}} = socket)
+      when is_integer(by) do
+    time = (socket.assigns.at + by) |> max(0) |> min(socket.assigns.duration_ms)
+
+    {:noreply,
+     socket |> pause() |> seek(Timeline.index_at(socket.assigns.recording, time)) |> at_time(time)}
+  end
+
+  def handle_event("jump", %{"to" => "start"}, %{assigns: %{recording: %{}}} = socket),
+    do:
+      {:noreply, socket |> pause() |> seek(Timeline.first_render_index(socket.assigns.recording))}
+
+  def handle_event("jump", %{"to" => "end"}, %{assigns: %{recording: %{}}} = socket) do
+    %{timeline: timeline, duration_ms: duration} = socket.assigns
+    {:noreply, socket |> pause() |> seek(Timeline.last_index(timeline)) |> at_time(duration)}
+  end
+
+  def handle_event("error", %{"direction" => direction}, %{assigns: %{recording: %{}}} = socket)
+      when direction in ~w(next previous) do
+    %{recording: recording, index: index} = socket.assigns
+
+    case Events.error_index(recording, index, String.to_existing_atom(direction)) do
+      nil -> {:noreply, socket}
+      found -> {:noreply, socket |> pause() |> seek(found)}
+    end
+  end
+
+  def handle_event("shortcuts", _params, socket),
+    do: {:noreply, update(socket, :shortcuts?, &not/1)}
+
+  def handle_event("close_shortcuts", _params, socket),
+    do: {:noreply, assign(socket, :shortcuts?, false)}
 
   def handle_event("rotate", _params, socket),
     do: {:noreply, update(socket, :rotated?, &not/1)}
@@ -519,6 +558,8 @@ defmodule PhoenixReplay.Web.Live.Show do
           Context.path(@context, [@recording.id, "video", Download.sign(@socket, @export)])
       }
     />
+    <.shortcut_sheet :if={@shortcuts?} />
+    <div id="replay-keys" phx-hook="PlayerKeys" data-shortcuts={Shortcuts.json()} hidden></div>
     <div class="flex flex-wrap items-stretch">
       <main class="flex min-w-0 flex-[999_1_40rem] flex-col gap-4 p-4 sm:p-5">
         <.flash flash={@flash} />

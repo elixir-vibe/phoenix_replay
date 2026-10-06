@@ -73,6 +73,26 @@ The panel beside it has three tabs:
 
 When the session recorded the pointer, it is drawn over the replay: the cursor, moved between samples with a short trail, a ripple where it pressed, on the pressed element when the replayed page has it, and a fingertip for each touch. The replayed page scrolls as the user's did, and stays there: the wheel does not move it. Turn off **Follow scroll** in the **View** menu to scroll it yourself. The cursor button in the frame's bar hides or shows them. See [Pointer, touches and scrolling](recording.md#pointer-touches-and-scrolling).
 
+### Keyboard shortcuts
+
+The player takes these keys anywhere on its page, except while you type in a field or hold Control, Command or Alt. `?`, or the keyboard button by the speeds, lists them; each control's tooltip shows its own.
+
+| Keys | Action |
+| --- | --- |
+| `Space` or `K` | Play or pause |
+| `←` / `→` | Previous or next event |
+| `Shift` + `←` / `→` | Back or forward 5 seconds |
+| `Home` / `End` | To the start or the end |
+| `E` / `Shift` + `E` | Next or previous error |
+| `1` – `4` | Speed 1×, 2×, 5× or 10× |
+| `F` | Fit to the window or show at actual size |
+| `R` | Rotate |
+| `P` | Show or hide the pointer |
+| `/` | Search events |
+| `Esc` | Close a menu or dialog |
+
+`Space` on a focused button presses that button, as it does everywhere.
+
 Each viewer drives a private frame, so several people can watch the same recording independently.
 
 ## Exporting videos

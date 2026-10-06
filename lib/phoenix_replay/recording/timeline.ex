@@ -154,6 +154,17 @@ defmodule PhoenixReplay.Recording.Timeline do
     Enum.find_index(events, &(&1.type == :render)) || 0
   end
 
+  @doc """
+  Index of the last event at or before `time`, in milliseconds, but not
+  before the first render: where the player stands at that moment.
+  """
+  @spec index_at(Recording.t(), non_neg_integer()) :: non_neg_integer()
+  def index_at(%Recording{events: events} = recording, time) do
+    first = first_render_index(recording)
+    later = Enum.find_index(events, &(&1.at > time)) || length(events)
+    max(later - 1, first)
+  end
+
   defp rewind(%__MODULE__{start: start} = timeline) do
     %{
       timeline

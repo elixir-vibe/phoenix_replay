@@ -219,6 +219,60 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert %{index: 1, at: 1_000} = assigns(view)
   end
 
+  test "moves by time, to either end and between errors, as its keyboard shortcuts ask" do
+    recording = Fixtures.counter_recording(id: "keys")
+    error = %Event{at: 1500, type: :log, data: %{level: :error, message: "boom", metadata: %{}}}
+    events = recording.events |> List.insert_at(4, error) |> List.insert_at(2, %{error | at: 500})
+    Storage.save(Fixtures.storage(), %{recording | events: events})
+    {:ok, view, _html} = live(build_conn(), "/replay/keys")
+    assert %{index: 1, at: 5} = assigns(view)
+
+    # Five seconds on is past the end; five back is before the first render.
+    render_hook(view, "skip", %{"by" => 5_000})
+    assert %{index: 7, at: 2_001} = assigns(view)
+    render_hook(view, "skip", %{"by" => -1_000})
+    assert %{index: 4, at: 1_001} = assigns(view)
+    render_hook(view, "skip", %{"by" => -5_000})
+    assert %{index: 1, at: 5} = assigns(view)
+
+    render_hook(view, "jump", %{"to" => "end"})
+    assert %{index: 7, at: 2_001} = assigns(view)
+    render_hook(view, "jump", %{"to" => "start"})
+    assert %{index: 1} = assigns(view)
+
+    render_hook(view, "error", %{"direction" => "next"})
+    assert assigns(view).index == 2
+    render_hook(view, "error", %{"direction" => "next"})
+    assert assigns(view).index == 5
+    render_hook(view, "error", %{"direction" => "next"})
+    assert assigns(view).index == 5
+    render_hook(view, "error", %{"direction" => "previous"})
+    assert assigns(view).index == 2
+  end
+
+  test "shows its keyboard shortcuts on its controls and in a sheet" do
+    {:ok, view, _html} = live(build_conn(), "/replay/show")
+
+    assert has_element?(view, ~s(#replay-keys[phx-hook="PlayerKeys"][data-shortcuts]))
+    assert has_element?(view, ~s(button[aria-label="Play"][aria-keyshortcuts="Space K"]))
+    assert has_element?(view, ~s(button[aria-label="Next event"][aria-keyshortcuts="ArrowRight"]))
+    assert has_element?(view, ~s(button[value="5"][aria-keyshortcuts="3"]))
+    assert has_element?(view, "#replay-event-search kbd", "/")
+    # The arrow shows as a glyph and reads as its name.
+    assert has_element?(view, "kbd .sr-only", "Right arrow")
+
+    render_hook(view, "toggle_frame_mode", %{})
+    assert assigns(view).frame_mode == "actual"
+    render_hook(view, "toggle_frame_mode", %{})
+    assert assigns(view).frame_mode == "fit"
+
+    view |> element("#replay-shortcuts-button") |> render_click()
+    assert has_element?(view, "#replay-shortcuts h3", "Playback")
+    assert has_element?(view, "#replay-shortcuts dt", "Back 5 seconds")
+    render_hook(view, "close_shortcuts", %{})
+    refute has_element?(view, "#replay-shortcuts")
+  end
+
   test "jumps to the first error" do
     recording = Fixtures.counter_recording(id: "failing")
     error = %Event{at: 1500, type: :log, data: %{level: :error, message: "boom", metadata: %{}}}

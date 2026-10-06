@@ -7,7 +7,11 @@ defmodule PhoenixReplay.Web.Components.Player do
   `index` and optionally the time `at`, `previous`, `next`, `toggle`,
   `speed` and `frame_mode` with a `value`, `rotate`, `follow_scroll`,
   `toggle_kind` with a `kind`, `errors_only`, `search_events` with `q`,
-  `pin_details`, `export_dialog` and `delete`.
+  `pin_details`, `export_dialog`, `shortcuts`, `close_shortcuts` and
+  `delete`.
+
+  Controls with a keyboard shortcut show it, from
+  `PhoenixReplay.Web.Player.Shortcuts`, in their tooltip or menu item.
 
   The **State** tab is `PhoenixReplay.Web.Components.State`, and the
   video export's dialog and progress `PhoenixReplay.Web.Components.Export`.
@@ -22,7 +26,7 @@ defmodule PhoenixReplay.Web.Components.Player do
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.{Client, Event, PointerTrack}
   alias PhoenixReplay.Web.Format
-  alias PhoenixReplay.Web.Player.Events
+  alias PhoenixReplay.Web.Player.{Events, Shortcuts}
 
   @doc "The icon for an event's type."
   attr :type, :atom, required: true, doc: "a `PhoenixReplay.Recording.Event` type"
@@ -109,10 +113,12 @@ defmodule PhoenixReplay.Web.Components.Player do
           type="button"
           phx-click="seek"
           phx-value-index={@first_error}
+          aria-keyshortcuts={aria_keyshortcuts(Shortcuts.keys(:next_error))}
           class="inline-flex h-7 items-center gap-1.5 rounded-full bg-error-soft px-2.5 text-xs font-medium text-error transition-colors hover:bg-error/15 pointer-coarse:h-9"
         >
           <span class="size-1.5 rounded-full bg-current"></span>
           {Format.count(@error_count, "error")} · jump to first
+          <.kbd keys={hd(Shortcuts.keys(:next_error))} class="ml-0.5" />
         </button>
         <span class="flex-1"></span>
         <.button size="md" data-copy={@link} class="group">
@@ -222,28 +228,34 @@ defmodule PhoenixReplay.Web.Components.Player do
           <.icon name="lucide:info" class="size-3.5" />
         </span>
         <%!-- The pointer is switched often, so it stays out of the menu. --%>
-        <button
+        <.tooltip
           :if={@pointer? and @viewport}
-          id="replay-pointer-switch"
-          type="button"
-          role="switch"
-          aria-checked="true"
-          aria-label="Pointer"
-          disabled={@rotated}
-          title={
+          label={
             if @rotated,
               do: "The pointer was recorded in the other orientation",
               else: "Show the pointer"
           }
-          phx-click={
-            %JS{}
-            |> JS.toggle_class("hidden", to: "#replay-pointer")
-            |> JS.toggle_attribute({"aria-checked", "true", "false"})
-          }
-          class="inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-hover hover:text-ink aria-checked:bg-accent/15 aria-checked:text-accent disabled:opacity-40 disabled:hover:bg-transparent pointer-coarse:size-11"
+          keys={if !@rotated, do: Shortcuts.keys(:pointer)}
+          position="bottom"
         >
-          <.icon name="lucide:mouse-pointer-2" class="size-3.5" />
-        </button>
+          <button
+            id="replay-pointer-switch"
+            type="button"
+            role="switch"
+            aria-checked="true"
+            aria-label="Pointer"
+            aria-keyshortcuts={aria_keyshortcuts(Shortcuts.keys(:pointer))}
+            disabled={@rotated}
+            phx-click={
+              %JS{}
+              |> JS.toggle_class("hidden", to: "#replay-pointer")
+              |> JS.toggle_attribute({"aria-checked", "true", "false"})
+            }
+            class="inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-hover hover:text-ink aria-checked:bg-accent/15 aria-checked:text-accent disabled:opacity-40 disabled:hover:bg-transparent pointer-coarse:size-11"
+          >
+            <.icon name="lucide:mouse-pointer-2" class="size-3.5" />
+          </button>
+        </.tooltip>
         <.menu
           :if={@viewport}
           id="replay-view"
@@ -287,11 +299,14 @@ defmodule PhoenixReplay.Web.Components.Player do
               role="menuitemradio"
               value={value}
               aria-checked={to_string(value == @mode)}
+              aria-keyshortcuts={value != @mode && aria_keyshortcuts(Shortcuts.keys(:fit))}
               phx-click={JS.push("frame_mode", value: %{value: value}) |> close_menu("replay-view")}
               class="group"
             >
               <.icon name="lucide:check" class="size-4 opacity-0 group-aria-checked:opacity-100" />
               {label}
+              <%!-- F switches to the other mode. --%>
+              <.kbd :if={value != @mode} keys={hd(Shortcuts.keys(:fit))} class="ml-auto" />
             </button>
           </:item>
           <:item>
@@ -300,12 +315,13 @@ defmodule PhoenixReplay.Web.Components.Player do
               type="button"
               role="menuitemcheckbox"
               aria-checked={to_string(@rotated)}
+              aria-keyshortcuts={aria_keyshortcuts(Shortcuts.keys(:rotate))}
               title="Show the replay in the other orientation"
               phx-click={JS.push("rotate") |> close_menu("replay-view")}
               class="group"
             >
               <.icon name="lucide:check" class="size-4 opacity-0 group-aria-checked:opacity-100" />
-              Rotate
+              Rotate <.kbd keys={hd(Shortcuts.keys(:rotate))} class="ml-auto" />
             </button>
           </:item>
           <:item :if={@scrolls?}>
@@ -410,14 +426,27 @@ defmodule PhoenixReplay.Web.Components.Player do
           label={if @playing, do: "Pause", else: "Play"}
           variant="primary"
           size="lg"
+          keys={Shortcuts.keys(:toggle)}
         >
           <.icon :if={@playing} name="lucide:pause" class="size-5" />
           <.icon :if={!@playing} name="lucide:play" class="size-5" />
         </.icon_button>
-        <.icon_button phx-click="previous" label="Previous event" size="lg" disabled={@index == 0}>
+        <.icon_button
+          phx-click="previous"
+          label="Previous event"
+          size="lg"
+          keys={Shortcuts.keys(:previous)}
+          disabled={@index == 0}
+        >
           <.icon name="lucide:chevron-left" class="size-4" />
         </.icon_button>
-        <.icon_button phx-click="next" label="Next event" size="lg" disabled={@index == @last}>
+        <.icon_button
+          phx-click="next"
+          label="Next event"
+          size="lg"
+          keys={Shortcuts.keys(:next)}
+          disabled={@index == @last}
+        >
           <.icon name="lucide:chevron-right" class="size-4" />
         </.icon_button>
         <span class="ml-1.5 font-mono tabular-nums">
@@ -430,7 +459,17 @@ defmodule PhoenixReplay.Web.Components.Player do
           options={for speed <- @speeds, do: {Integer.to_string(speed), "#{speed}×"}}
           value={Integer.to_string(@speed)}
           event="speed"
+          keys={Shortcuts.speed_keys(@speeds)}
         />
+        <.icon_button
+          id="replay-shortcuts-button"
+          phx-click="shortcuts"
+          label="Keyboard shortcuts"
+          variant="ghost"
+          keys={Shortcuts.keys(:help)}
+        >
+          <.icon name="lucide:keyboard" class="size-4" />
+        </.icon_button>
       </div>
 
       <div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3">
@@ -484,6 +523,55 @@ defmodule PhoenixReplay.Web.Components.Player do
   defp position(at, duration_ms), do: Float.round(at / duration_ms * 100, 3)
 
   @doc """
+  Every keyboard shortcut of the player, by group, from
+  `PhoenixReplay.Web.Player.Shortcuts`. Escape or a click outside sends
+  `"close_shortcuts"`.
+  """
+  @spec shortcut_sheet(map()) :: Phoenix.LiveView.Rendered.t()
+  def shortcut_sheet(assigns) do
+    assigns = assign(assigns, :groups, Shortcuts.groups())
+
+    ~H"""
+    <div
+      id="replay-shortcuts"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+      phx-window-keydown="close_shortcuts"
+      phx-key="Escape"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="replay-shortcuts-title"
+        phx-click-away="close_shortcuts"
+        phx-mounted={JS.focus_first()}
+        class="max-h-full w-full max-w-lg overflow-y-auto rounded-xl border border-line bg-surface p-5 text-sm shadow-xl"
+      >
+        <div class="flex items-center justify-between gap-3">
+          <h2 id="replay-shortcuts-title" class="text-base font-semibold">Keyboard shortcuts</h2>
+          <.icon_button phx-click="close_shortcuts" label="Close" variant="ghost" keys={[["Escape"]]}>
+            <.icon name="lucide:x" class="size-4" />
+          </.icon_button>
+        </div>
+        <section :for={{heading, shortcuts} <- @groups} class="mt-4">
+          <h3 class="mb-1.5 text-xs font-medium tracking-wide text-muted uppercase">{heading}</h3>
+          <dl class="divide-y divide-line">
+            <div :for={shortcut <- shortcuts} class="flex items-center justify-between gap-4 py-1.5">
+              <dt>{shortcut.label}</dt>
+              <dd class="flex items-center gap-1.5 text-xs text-muted">
+                <%= for {combination, index} <- Enum.with_index(shortcut.keys) do %>
+                  <span :if={index > 0}>or</span>
+                  <.kbd keys={combination} size="md" />
+                <% end %>
+              </dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
   The recording's events grouped by interaction, with a search, kind
   filters and, when there are errors, a filter to them alone, above a
   pane with the details of the current event, or of the one pinned there.
@@ -513,6 +601,8 @@ defmodule PhoenixReplay.Web.Components.Player do
 
   @spec event_list(map()) :: Phoenix.LiveView.Rendered.t()
   def event_list(assigns) do
+    assigns = assign(assigns, :search_keys, Shortcuts.keys(:search))
+
     ~H"""
     <div id="replay-events-panel" class="flex min-h-0 flex-1 flex-col [--details:14rem]">
       <div class="flex flex-col gap-2.5 border-b border-line p-3">
@@ -527,7 +617,12 @@ defmodule PhoenixReplay.Web.Components.Player do
               placeholder="Filter events, SQL, logs"
               phx-debounce="200"
               data-shortcut="/"
-              class="h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-faint"
+              aria-keyshortcuts={aria_keyshortcuts(@search_keys)}
+              class="peer h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-faint"
+            />
+            <.kbd
+              keys={hd(@search_keys)}
+              class="peer-focus:hidden peer-[:not(:placeholder-shown)]:hidden"
             />
           </label>
         </form>

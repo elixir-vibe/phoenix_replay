@@ -83,6 +83,18 @@ defmodule PhoenixReplay.Web.Player.Events do
   @spec first_error_index(Recording.t()) :: non_neg_integer() | nil
   def first_error_index(%Recording{events: events}), do: Enum.find_index(events, &Event.error?/1)
 
+  @doc "The index of the nearest event after or before `index` that reports an error, or `nil`."
+  @spec error_index(Recording.t(), non_neg_integer(), :next | :previous) ::
+          non_neg_integer() | nil
+  def error_index(%Recording{events: events}, index, direction) do
+    errors = for {event, at} <- Enum.with_index(events), Event.error?(event), do: at
+
+    case direction do
+      :next -> Enum.find(errors, &(&1 > index))
+      :previous -> errors |> Enum.reverse() |> Enum.find(&(&1 < index))
+    end
+  end
+
   @doc "Whether an event's label contains `query`, ignoring case."
   @spec matches?(Event.t(), String.t()) :: boolean()
   def matches?(_event, ""), do: true
