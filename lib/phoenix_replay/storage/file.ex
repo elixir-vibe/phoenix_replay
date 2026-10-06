@@ -123,29 +123,41 @@ defmodule PhoenixReplay.Storage.File do
   # as running: a part left behind waits, where one still being written
   # would be lost.
   defp os_alive?(pid) do
-    case :os.type() do
-      {:win32, _name} ->
-        with {:ok, out, _status} <- ask("tasklist", ["/FI", "PID eq #{pid}", "/NH"]),
-             do: String.contains?(out, " #{pid} ")
-
-      {:unix, _name} ->
-        with {:ok, out, status} <- ask("kill", ["-0", pid]),
-             do: status == 0 or out =~ "not permitted"
+    case {:os.type(), ask(pid)} do
+      {_os, :missing} -> true
+      {{:win32, _name}, {:ok, out, _status}} -> String.contains?(out, " #{pid} ")
+      {{:unix, _name}, {:ok, out, status}} -> status == 0 or out =~ "not permitted"
     end
   end
 
-  defp ask(command, args) do
+  defp ask(pid) do
+    {command, args} =
+      case :os.type() do
+        {:win32, _name} -> {"tasklist", ["/FI", "PID eq #{pid}", "/NH"]}
+        {:unix, _name} -> {"kill", ["-0", pid]}
+      end
+
     case System.find_executable(command) do
       nil ->
-        Logger.warning(
-          "PhoenixReplay: no #{command} to tell whether a recording's writer runs; leaving its chunks"
-        )
-
-        true
+        warn_missing(command)
+        :missing
 
       path ->
         {out, status} = System.cmd(path, args, stderr_to_stdout: true)
         {:ok, out, status}
+    end
+  end
+
+  # Once per boot, however many part files there are.
+  defp warn_missing(command) do
+    key = {__MODULE__, :missing, command}
+
+    unless :persistent_term.get(key, false) do
+      :persistent_term.put(key, true)
+
+      Logger.warning(
+        "PhoenixReplay: no #{command} to tell whether a recording's writer runs; leaving its chunks"
+      )
     end
   end
 

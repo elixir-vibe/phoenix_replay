@@ -16,13 +16,21 @@ defmodule PhoenixReplay.Storage.FileWithoutKillTest do
     # A VM that is gone, as after a crash.
     {gone, 0} = System.cmd("sh", ["-c", "echo $$"])
     File.write!(Path.join(opts[:path], "crashed.#{node}-#{String.trim(gone)}.part"), "")
-    assert Enum.sort(FileStorage.partials(opts)) == ["crashed", "mine"]
+    File.write!(Path.join(opts[:path], "crashed-too.#{node}-#{String.trim(gone)}.part"), "")
+    assert Enum.sort(FileStorage.partials(opts)) == ["crashed", "crashed-too", "mine"]
 
     path = System.get_env("PATH")
     System.put_env("PATH", "")
 
     try do
-      assert FileStorage.partials(opts) == ["mine"]
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert FileStorage.partials(opts) == ["mine"]
+          assert FileStorage.partials(opts) == ["mine"]
+        end)
+
+      # Warned at most once per boot, however many parts are left.
+      assert length(String.split(log, "no kill")) <= 2
     after
       System.put_env("PATH", path)
     end
