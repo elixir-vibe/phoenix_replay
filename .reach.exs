@@ -30,6 +30,8 @@ orchestrator = [
   # Video export: the queue and the render of one video.
   "PhoenixReplay.Export.Queue",
   "PhoenixReplay.Export.Queue.Local",
+  "PhoenixReplay.Export.Queue.Oban",
+  "PhoenixReplay.Export.Queue.Oban.Worker",
   "PhoenixReplay.Export.Supervisor",
   "PhoenixReplay.Export.Video"
 ]

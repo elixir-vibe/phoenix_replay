@@ -94,6 +94,37 @@ defmodule PhoenixReplay.Export.Options do
   end
 
   @doc """
+  The options as a map of strings and numbers, for a job queue that stores
+  them as JSON, such as `PhoenixReplay.Export.Queue.Oban`; `from_map/1`
+  reads it back.
+  """
+  @spec to_map(t()) :: %{String.t() => term()}
+  def to_map(%__MODULE__{} = options) do
+    options
+    |> Map.from_struct()
+    |> Map.new(fn
+      {key, value} when key in [:size, :quality] -> {Atom.to_string(key), Atom.to_string(value)}
+      {key, value} -> {Atom.to_string(key), value}
+    end)
+  end
+
+  @doc "Reads options written by `to_map/1`."
+  @spec from_map(%{String.t() => term()}) :: t()
+  def from_map(map) do
+    %__MODULE__{
+      from: map["from"],
+      to: map["to"],
+      skip_idle: map["skip_idle"],
+      pointer: map["pointer"],
+      rotated: map["rotated"],
+      size: Map.fetch!(%{"recorded" => :recorded, "one" => :one, "half" => :half}, map["size"]),
+      fps: map["fps"],
+      quality:
+        Map.fetch!(%{"small" => :small, "balanced" => :balanced, "best" => :best}, map["quality"])
+    }
+  end
+
+  @doc """
   The `:export` configuration the options make: the frame rate, the idle
   time, the pixel ratio, the quality and a `:scale` for the encoder.
   """

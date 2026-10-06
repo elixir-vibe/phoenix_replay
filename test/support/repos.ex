@@ -27,7 +27,7 @@ defmodule PhoenixReplay.Test.Repos do
   alias Ecto.Adapters.SQL.Sandbox
   alias PhoenixReplay.Test.{DuckDBRepo, PostgresRepo, SQLiteRepo}
 
-  @migrations [{1, PhoenixReplay.Storage.Ecto.Migration}]
+  @migrations [{1, PhoenixReplay.Storage.Ecto.Migration}, {2, PhoenixReplay.Test.ObanMigration}]
 
   @doc "Starts and migrates the repos available here, returning them."
   def start do

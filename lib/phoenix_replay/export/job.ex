@@ -51,10 +51,12 @@ defmodule PhoenixReplay.Export.Job do
 
   @doc """
   Whether `name`, a file or directory in the export directory, is one an
-  export made: `<id>.mp4` or the `<id>` directory of its screenshots.
+  export made: `<id>.mp4` or the `<id>` directory of its screenshots, for
+  an id `new/2` made or one of `PhoenixReplay.Export.Queue.Oban`'s, such as
+  `oban-42`.
   """
   @spec file?(String.t()) :: boolean()
-  def file?(name), do: Regex.match?(~r/\A[A-Za-z0-9_-]{16}(\.mp4)?\z/, name)
+  def file?(name), do: Regex.match?(~r/\A([A-Za-z0-9_-]{16}|oban-\d+)(\.mp4)?\z/, name)
 
   @doc "Whether the export has finished, either way."
   @spec finished?(t()) :: boolean()

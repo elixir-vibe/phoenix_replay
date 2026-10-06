@@ -66,6 +66,9 @@ defmodule PhoenixReplay.MixProject do
         {:playwright_ex, "~> 0.14", optional: true},
         # Runs ffmpeg for video export, and stops it with the process that started it.
         {:muontrap, "~> 1.6 or ~> 2.0", optional: true},
+        # Keeps video exports in the app's Oban queue; see PhoenixReplay.Export.Queue.Oban.
+        {:oban, "~> 2.20", optional: true},
+        {:oban_quackdb, "~> 0.1", only: :test},
         {:bandit, "~> 1.5", only: :test},
         {:volt, "~> 0.20", only: [:dev, :test], runtime: false},
         {:ex_doc, "~> 0.35", only: :dev, runtime: false},

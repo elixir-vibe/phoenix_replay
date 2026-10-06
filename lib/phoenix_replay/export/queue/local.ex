@@ -7,10 +7,12 @@ defmodule PhoenixReplay.Export.Queue.Local do
 
   It keeps every job until its video is `:ttl` old, broadcasts each change
   to a job on the recording's topic, and deletes expired videos. A job
-  whose task crashes fails, and the next one starts. When it starts it
-  deletes the videos and screenshots in the export directory older than
-  `:ttl`, left by a server that stopped, so they do not pile up across
-  deploys. Other files there are left alone, so `:dir` may be shared.
+  whose task crashes fails, and the next one starts. When it starts, and
+  every quarter of `:ttl` from then on, it deletes the videos and
+  screenshots in the export directory older than `:ttl`: those a server
+  that stopped left, so they do not pile up across deploys, and those of
+  exports another queue, such as `PhoenixReplay.Export.Queue.Oban`,
+  rendered on this node. Other files there are left alone, so `:dir` may be shared.
 
   Cancelling a queued job takes it out of the queue. A running one is sent
   `{PhoenixReplay.Export, :cancel}` rather than killed, so it closes its
@@ -44,8 +46,16 @@ defmodule PhoenixReplay.Export.Queue.Local do
 
   @impl GenServer
   def init(nil) do
-    with %{} = export <- PhoenixReplay.Config.load().export, do: sweep_dir(export)
+    sweep_dir()
     {:ok, %{jobs: %{}, order: [], queue: :queue.new(), running: %{}}}
+  end
+
+  # Sweeps now, and again in a quarter of `:ttl`.
+  defp sweep_dir do
+    with %{} = export <- PhoenixReplay.Config.load().export do
+      sweep_dir(export)
+      Process.send_after(self(), :sweep_dir, div(export.ttl, 4))
+    end
   end
 
   # Another VM may be exporting into the same directory, so only what is
@@ -157,6 +167,11 @@ defmodule PhoenixReplay.Export.Queue.Local do
     Logger.error("PhoenixReplay: video export #{id} crashed: #{Exception.format_exit(reason)}")
     failed = %{state.jobs[id] | status: :failed, error: "The export crashed."}
     {:noreply, %{state | running: running} |> finish(failed, config) |> run_next(config)}
+  end
+
+  def handle_info(:sweep_dir, state) do
+    sweep_dir()
+    {:noreply, state}
   end
 
   def handle_info({:sweep, ttl}, state) do

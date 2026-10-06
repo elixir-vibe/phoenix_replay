@@ -19,6 +19,9 @@ defmodule PhoenixReplay.Export.Supervisor do
     Supervisor.init(
       [
         PhoenixReplay.Export.Runtime,
+        # Where a running export of PhoenixReplay.Export.Queue.Oban is found
+        # to cancel it, on any node.
+        %{id: :pg, start: {:pg, :start_link, [PhoenixReplay.Export]}},
         PhoenixReplay.Export.Queue.Local,
         {Task.Supervisor, name: PhoenixReplay.Export.TaskSupervisor}
       ],

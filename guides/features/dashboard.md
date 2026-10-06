@@ -138,6 +138,22 @@ Only saved recordings are exported, not sessions still running. An export that w
 
 Exports wait in memory on the node that started them, `:max_concurrency` at a time. In a cluster, the link to a video works on any node: the node it reaches asks the one that queued the export for it, and streams the video from the node that rendered it, over the cluster's connection.
 
+### In your Oban queue
+
+With [Oban](https://hexdocs.pm/oban), exports can wait in your own queue instead, so they survive restarts and deploys and run on whichever node takes them:
+
+```elixir
+config :phoenix_replay,
+  export: [
+    endpoint: MyAppWeb.Endpoint,
+    queue: {PhoenixReplay.Export.Queue.Oban, oban: Oban, queue: :replay_exports}
+  ]
+
+config :my_app, Oban, queues: [replay_exports: 1]
+```
+
+The queue's limit is how many videos export at once, and every node that runs it needs Chromium and `ffmpeg`. Oban keeps one export of a recording at a time; a queued one is cancelled in Oban, and a running one is asked to stop on whichever node runs it, so it closes its browser and stops encoding. Progress is shown live, and kept in the job now and then. An export is not retried. See `PhoenixReplay.Export.Queue.Oban`.
+
 ## Light and dark
 
 The dashboard follows the system's light or dark appearance. The sun and moon button in its header switches to the other one, and the browser remembers the choice. It ships its own fonts, Geist and Geist Mono, and icons, so it looks the same in every app.
