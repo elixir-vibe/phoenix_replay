@@ -77,7 +77,7 @@ defmodule PhoenixReplay.Web.Components.Core do
   @spec theme_toggle(map()) :: Phoenix.LiveView.Rendered.t()
   def theme_toggle(assigns) do
     ~H"""
-    <.icon_button label="Switch theme" variant="ghost" data-theme-toggle {@rest}>
+    <.icon_button label="Switch theme" variant="ghost" tooltip="bottom" data-theme-toggle {@rest}>
       <.icon name="lucide:moon" class="size-4 dark:hidden" />
       <.icon name="lucide:sun" class="hidden size-4 dark:block" />
     </.icon_button>
@@ -92,6 +92,13 @@ defmodule PhoenixReplay.Web.Components.Core do
   attr :variant, :string, values: ~w(primary secondary ghost), default: "secondary"
   attr :size, :string, values: ~w(md lg), default: "md", doc: "`lg` is round, for main controls"
   attr :class, :any, default: nil
+
+  attr :keys, :list,
+    default: nil,
+    doc: "the key combinations that do the same, shown in a tooltip; see `kbd/1`"
+
+  attr :tooltip, :string, values: ~w(top bottom), default: "top", doc: "where the tooltip shows"
+
   attr :rest, :global, include: ~w(disabled)
   slot :inner_block, required: true
 
@@ -104,21 +111,23 @@ defmodule PhoenixReplay.Web.Components.Core do
       )
 
     ~H"""
-    <button
-      type="button"
-      aria-label={@label}
-      title={@label}
-      class={[
-        "inline-flex shrink-0 items-center justify-center border transition-colors",
-        "disabled:pointer-events-none disabled:opacity-40",
-        @variant_class,
-        @size_class,
-        @class
-      ]}
-      {@rest}
-    >
-      {render_slot(@inner_block)}
-    </button>
+    <.tooltip label={@label} keys={@keys} position={@tooltip}>
+      <button
+        type="button"
+        aria-label={@label}
+        aria-keyshortcuts={@keys && aria_keyshortcuts(@keys)}
+        class={[
+          "inline-flex shrink-0 items-center justify-center border transition-colors",
+          "disabled:pointer-events-none disabled:opacity-40",
+          @variant_class,
+          @size_class,
+          @class
+        ]}
+        {@rest}
+      >
+        {render_slot(@inner_block)}
+      </button>
+    </.tooltip>
     """
   end
 
@@ -201,29 +210,134 @@ defmodule PhoenixReplay.Web.Components.Core do
   attr :value, :string, required: true
   attr :event, :string, required: true
 
+  attr :keys, :map,
+    default: %{},
+    doc: "key combinations by option value, shown in each option's tooltip"
+
   @spec segmented(map()) :: Phoenix.LiveView.Rendered.t()
   def segmented(assigns) do
     ~H"""
-    <div
-      role="group"
-      aria-label={@label}
-      class="inline-flex overflow-hidden rounded-md border border-line text-xs"
-    >
-      <button
+    <div role="group" aria-label={@label} class="inline-flex rounded-md border border-line text-xs">
+      <.tooltip
         :for={{value, label} <- @options}
-        type="button"
-        phx-click={@event}
-        value={value}
-        aria-pressed={to_string(value == @value)}
+        label={"#{@label}: #{label}"}
+        keys={@keys[value]}
+        enabled={Map.has_key?(@keys, value)}
+      >
+        <button
+          type="button"
+          phx-click={@event}
+          value={value}
+          aria-pressed={to_string(value == @value)}
+          aria-keyshortcuts={@keys[value] && aria_keyshortcuts(@keys[value])}
+          class={[
+            "h-7 px-2.5 transition-colors group-first/tip:rounded-l-[5px] group-last/tip:rounded-r-[5px] pointer-coarse:h-11",
+            value == @value && "bg-ink text-on-ink",
+            value != @value && "text-muted hover:bg-hover hover:text-ink"
+          ]}
+        >
+          {label}
+        </button>
+      </.tooltip>
+    </div>
+    """
+  end
+
+  @key_glyphs %{
+    "ArrowLeft" => {"←", "Left arrow"},
+    "ArrowRight" => {"→", "Right arrow"},
+    "ArrowUp" => {"↑", "Up arrow"},
+    "ArrowDown" => {"↓", "Down arrow"},
+    "Escape" => {"Esc", nil},
+    "Space" => {"Space", nil}
+  }
+
+  @doc """
+  A keyboard shortcut as keycaps: one `<kbd>` per key inside one for the
+  combination, as HTML nests them. `keys` is one combination, such as
+  `["Shift", "ArrowRight"]`, in the browser's key names
+  (`KeyboardEvent.key`, with `"Space"` for the space bar). Arrows show as
+  glyphs, with their name for screen readers; letters show capitalized.
+  """
+  attr :keys, :list, required: true
+  attr :size, :string, values: ~w(sm md), default: "sm"
+
+  attr :tone, :string,
+    values: ~w(default inverted),
+    default: "default",
+    doc: "`inverted` on dark surfaces"
+
+  attr :class, :any, default: nil
+
+  @spec kbd(map()) :: Phoenix.LiveView.Rendered.t()
+  def kbd(assigns) do
+    ~H"""
+    <kbd class={["inline-flex items-center gap-0.5 align-baseline", @class]}>
+      <kbd
+        :for={key <- @keys}
         class={[
-          "h-7 px-2.5 transition-colors pointer-coarse:h-11",
-          value == @value && "bg-ink text-on-ink",
-          value != @value && "text-muted hover:bg-hover hover:text-ink"
+          "inline-flex items-center justify-center rounded border border-b-2 font-mono leading-none",
+          @size == "sm" && "h-[1.15rem] min-w-[1.15rem] px-1 text-[0.7rem]",
+          @size == "md" && "h-6 min-w-6 px-1.5 text-xs",
+          @tone == "default" && "border-line bg-surface text-muted",
+          @tone == "inverted" && "border-on-ink/30 bg-on-ink/10 text-on-ink"
         ]}
       >
-        {label}
-      </button>
-    </div>
+        <%= case key_glyph(key) do %>
+          <% {glyph, nil} -> %>
+            {glyph}
+          <% {glyph, name} -> %>
+            <span aria-hidden="true">{glyph}</span><span class="sr-only">{name}</span>
+          <% nil -> %>
+            {String.upcase(key)}
+        <% end %>
+      </kbd>
+    </kbd>
+    """
+  end
+
+  defp key_glyph(key), do: Map.get(@key_glyphs, key)
+
+  @doc """
+  The value of `aria-keyshortcuts` for key combinations, such as
+  `"Space K"`, each combination's keys joined with `+`.
+  """
+  @spec aria_keyshortcuts([[String.t()]]) :: String.t()
+  def aria_keyshortcuts(combinations),
+    do: Enum.map_join(combinations, " ", &Enum.join(&1, "+"))
+
+  @doc """
+  Shows `label`, and the first of `keys` as keycaps, in a small dark
+  tooltip over the control in its slot, on hover and keyboard focus. It is
+  hidden from assistive technology: the control names itself, with
+  `aria-label` and `aria-keyshortcuts`. Without `enabled`, it renders the
+  control alone.
+  """
+  attr :label, :string, required: true
+  attr :keys, :list, default: nil, doc: "key combinations; the tooltip shows the first"
+  attr :position, :string, values: ~w(top bottom), default: "top"
+  attr :enabled, :boolean, default: true
+  slot :inner_block, required: true
+
+  @spec tooltip(map()) :: Phoenix.LiveView.Rendered.t()
+  def tooltip(assigns) do
+    ~H"""
+    <span class="group/tip relative inline-flex">
+      {render_slot(@inner_block)}
+      <span
+        :if={@enabled}
+        aria-hidden="true"
+        class={[
+          "pointer-events-none absolute left-1/2 z-30 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-md bg-ink px-2 py-1 text-xs whitespace-nowrap text-on-ink opacity-0 shadow-md transition-opacity",
+          "group-hover/tip:opacity-100 group-hover/tip:delay-300 group-has-focus-visible/tip:opacity-100",
+          @position == "top" && "bottom-full mb-1.5",
+          @position == "bottom" && "top-full mt-1.5"
+        ]}
+      >
+        {@label}
+        <.kbd :if={@keys} keys={hd(@keys)} tone="inverted" />
+      </span>
+    </span>
     """
   end
 
