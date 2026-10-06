@@ -6,6 +6,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
   alias PhoenixReplay.{Catalog, Config, Storage}
   alias PhoenixReplay.Recording.Client.Landing
+  alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Session.Buffer
   alias PhoenixReplay.Test.Fixtures
 
@@ -61,13 +62,10 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     }
 
     Storage.save(Fixtures.storage(), %{recording | client: client})
-    {:ok, view, _html} = live(build_conn(), "/replay?errors=1&view=X")
-    assert has_element?(view, "#recording-filter-toggle", "2")
-
     {:ok, view, _html} = live(build_conn(), "/replay")
     row = view |> element("#recording-phone") |> render()
     assert row =~ "Mobile Safari 18 on iOS"
-    assert row =~ "from hn"
+    assert has_element?(view, ~s(#recording-phone a[href="/replay?source=hn"]), "hn")
     assert row =~ ~s(aria-label="Phone")
   end
 
@@ -126,24 +124,169 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     assert has_element?(view, "#recordings-new button", "2 new recordings · Show")
   end
 
-  test "offers quick filters on phones" do
+  test "shows filters as chips, adds them from a menu and offers values with counts" do
     save("one")
-    {:ok, view, _html} = live(build_conn(), "/replay?errors=1")
+    save("two")
+    {:ok, view, _html} = live(build_conn(), "/replay?errors=1&view=Other&tab=t1")
 
-    assert has_element?(view, ~s(nav[aria-label="Quick filters"] a[href="/replay"]), "All")
-
-    # With errors is on, so its chip turns it off.
+    # Set fields are chips that change or remove them; unset ones are in the menu.
     assert has_element?(
              view,
-             ~s(nav[aria-label="Quick filters"] a[aria-current="true"][href="/replay"]),
-             "With errors"
+             ~s(#recording-filter-errors[aria-pressed="true"][href="/replay?tab=t1&view=Other"])
+           )
+
+    assert has_element?(view, ~s([data-filter="view"]), "View is")
+
+    assert has_element?(
+             view,
+             ~s([data-filter="view"] a[aria-label="Remove the View filter"][href="/replay?errors=1&tab=t1"])
+           )
+
+    assert has_element?(view, ~s([data-filter="tab"]), "This browser tab")
+    assert has_element?(view, "#recording-filter-add-items button", "Event")
+    refute has_element?(view, "#recording-filter-add-items button", "View")
+
+    # The picker counts values among recordings matching the other criteria.
+    {:ok, view, _html} = live(build_conn(), "/replay?view=Other")
+    view |> element(~s([data-filter="view"] button)) |> render_click()
+    assert has_element?(view, ~s(#recording-filter-value input[placeholder="Other"]))
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-value a[href="/replay?view=PhoenixReplay.Test.Live.Counter"]),
+             "2"
+           )
+
+    # Typing narrows the values; Enter filters by what was typed.
+    view |> element("#recording-filter-value-form") |> render_change(%{"value" => "nothing"})
+    refute has_element?(view, "#recording-filter-value a")
+    view |> element("#recording-filter-value-form") |> render_submit(%{"value" => "Counter"})
+    assert_patch(view, "/replay?view=Counter")
+    refute has_element?(view, "#recording-filter-value")
+
+    # A number is typed in.
+    render_click(view, "edit_filter", %{"field" => "min_events"})
+    view |> element("#recording-filter-value-form") |> render_submit(%{"value" => "3"})
+    assert_patch(view, "/replay?min_events=3&view=Counter")
+
+    render_click(view, "edit_filter", %{"field" => "event"})
+    render_click(view, "close_filter", %{})
+    refute has_element?(view, "#recording-filter-value")
+
+    # Durations are picked from a few, and chips read naturally.
+    render_click(view, "edit_filter", %{"field" => "longer_than"})
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-value a[href="/replay?longer_than=60&min_events=3&view=Counter"]),
+             "1 min"
+           )
+
+    {:ok, view, _html} = live(build_conn(), "/replay?longer_than=90&device_type=phone")
+    assert has_element?(view, ~s([data-filter="longer_than"]), "Longer than")
+    assert has_element?(view, ~s([data-filter="longer_than"]), "1 min 30 s")
+    assert has_element?(view, ~s([data-filter="device_type"]), "Device is")
+    assert has_element?(view, ~s([data-filter="device_type"]), "Phone")
+    # Min events is no longer offered, but a link setting it shows its chip.
+    refute has_element?(view, "#recording-filter-add-items button", "Min events")
+  end
+
+  test "picks when sessions started: a recent window or a range, in the viewer's time zone" do
+    save_at("old", 1_000)
+    save("new")
+    {:ok, view, _html} = live(build_conn(), "/replay?view=Counter")
+    assert has_element?(view, "#recording-filter-time", "Any time")
+
+    view |> element("#recording-filter-time") |> render_click()
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-time-picker a[href="/replay?view=Counter&within=15m"]),
+             "Last 15 min"
            )
 
     assert has_element?(
              view,
-             ~s(nav[aria-label="Quick filters"] a[href="/replay?errors=1&within=24h"]),
-             "Last 24 h"
+             ~s(#recording-filter-time-picker a[aria-current="true"]),
+             "Any time"
            )
+
+    # The range comes from the browser in UTC; the list shows it localized.
+    render_hook(view, "time_range", %{
+      "from" => "1970-01-01T00:00:00.000Z",
+      "to" => "1970-01-01T00:00:02.000Z"
+    })
+
+    assert_patch(
+      view,
+      "/replay?from=1970-01-01T00%3A00%3A00Z&to=1970-01-01T00%3A00%3A02Z&view=Counter"
+    )
+
+    {:ok, view, _html} =
+      live(build_conn(), "/replay?from=1970-01-01T00:00:00Z&to=1970-01-01T00:00:02Z")
+
+    assert has_element?(view, "#recording-old")
+    refute has_element?(view, "#recording-new")
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-from[phx-hook="LocalTime"][datetime="1970-01-01T00:00:00.000Z"])
+           )
+
+    assert has_element?(view, ~s(#recording-filter-to[title="1970-01-01 00:00:02 UTC"]))
+
+    view |> element("#recording-filter-time") |> render_click()
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-range[phx-hook="TimeRange"][data-from="1970-01-01T00:00:00.000Z"])
+           )
+
+    render_click(view, "close_filter", %{})
+    refute has_element?(view, "#recording-filter-time-picker")
+  end
+
+  test "flags the marks each session reached, each a link to the sessions that did" do
+    recording = Fixtures.counter_recording(id: "marked")
+
+    mark = %Event{
+      at: 9,
+      type: :telemetry,
+      data: %{event: [:shop, :paid], measurements: %{}, metadata: %{}, mark: "Paid"}
+    }
+
+    Storage.save(Fixtures.storage(), %{recording | events: recording.events ++ [mark, mark]})
+    {:ok, view, _html} = live(build_conn(), "/replay")
+
+    assert has_element?(
+             view,
+             ~s(#recording-marked a[href="/replay?mark=Paid"][title="Reached Paid 2 times"]),
+             "×2"
+           )
+  end
+
+  test "charts sessions over time, each bar narrowing the list to its stretch" do
+    now = System.system_time(:millisecond)
+    save_at("recent", now - :timer.minutes(10))
+    {:ok, view, _html} = live(build_conn(), "/replay?within=1h")
+
+    # An hour in five-minute bars, the session in the one ten minutes ago.
+    bars =
+      view |> render() |> LazyHTML.from_document() |> LazyHTML.query("#recordings-activity a")
+
+    assert Enum.count(bars) in 12..13
+    assert has_element?(view, ~s(#recordings-activity a[aria-label="1 session, 0 with errors"]))
+    refute has_element?(view, "#recordings-sampling")
+
+    href =
+      view
+      |> element(~s(#recordings-activity a[aria-label="1 session, 0 with errors"]))
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("href")
+      |> hd()
+
+    assert href =~ ~r"^/replay\?from=.+&to=.+$"
   end
 
   test "shows the first page for page 0, and for a page past the end once emptied" do
@@ -194,14 +337,15 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
   test "filter form patches the URL" do
     save("alpha")
     save("beta")
-    {:ok, view, _html} = live(build_conn(), "/replay")
 
-    view |> element("#recording-filter") |> render_change(%{"q" => "beta", "event" => "inc"})
+    {:ok, view, _html} = live(build_conn(), "/replay?event=inc")
+    # The search keeps the chips' criteria.
+    view |> element("#recording-search") |> render_change(%{"q" => "beta"})
     assert_patch(view, "/replay?event=inc&q=beta")
     assert has_element?(view, "#recording-beta")
     refute has_element?(view, "#recording-alpha")
 
-    view |> element("#recording-filter") |> render_change(%{"q" => "nothing"})
+    view |> element("#recording-search") |> render_change(%{"q" => "nothing"})
     assert render(view) =~ "No recordings match these filters."
     view |> element("a", "Clear filters") |> render_click()
     assert has_element?(view, "#recording-alpha")

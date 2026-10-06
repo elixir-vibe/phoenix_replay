@@ -14,7 +14,11 @@ export class Scrubber extends ViewHook {
   private offsets: number[] = []
   private frame: number | undefined
   private dragging = false
-  private sentIndex: number | undefined
+  // Where the pointer holds the thumb while dragging.
+  private dragAt = 0
+  // One drag seek is in flight at a time; the latest waits for it.
+  private sending = false
+  private queued: { index: number; at: number } | null = null
 
   mounted(): void {
     this.offsets = JSON.parse(this.el.dataset.offsets ?? '[]') as number[]
@@ -25,8 +29,11 @@ export class Scrubber extends ViewHook {
     this.animate()
   }
 
+  // A patch renders the thumb at the server's time; while dragging it
+  // goes straight back under the pointer, before the browser paints.
   updated(): void {
-    this.animate()
+    if (this.dragging) this.place(this.dragAt)
+    else this.animate()
   }
 
   destroyed(): void {
@@ -36,7 +43,6 @@ export class Scrubber extends ViewHook {
   private readonly onPointerDown = (event: PointerEvent): void => {
     event.preventDefault()
     this.dragging = true
-    this.sentIndex = undefined
     this.el.setPointerCapture(event.pointerId)
     this.seek(event)
   }
@@ -45,7 +51,10 @@ export class Scrubber extends ViewHook {
     if (this.dragging) this.seek(event)
   }
 
+  // Where the pointer is let go is where playback stands, even between events.
   private readonly onPointerUp = (event: PointerEvent): void => {
+    if (!this.dragging) return
+    this.seek(event, true)
     this.dragging = false
     this.el.releasePointerCapture(event.pointerId)
   }
@@ -57,20 +66,43 @@ export class Scrubber extends ViewHook {
     this.push(action)
   }
 
-  private seek(event: PointerEvent): void {
+  // The frame follows the event under the pointer, and the player the
+  // time, so the clock reads the pointer's time even between events. Drag
+  // seeks go one at a time, the latest replacing any still waiting; letting
+  // go drops a waiting one and sends where the thumb was dropped.
+  private seek(event: PointerEvent, release = false): void {
     const rect = this.el.getBoundingClientRect()
     const ms = clamp((event.clientX - rect.left) / rect.width, 0, 1) * this.number('duration')
-    const index = indexAt(this.offsets, ms)
+    const seek = { index: indexAt(this.offsets, ms), at: Math.round(ms) }
     this.stop()
+    this.dragAt = ms
     this.place(ms)
 
-    if (index !== this.sentIndex) {
-      this.sentIndex = index
-      this.push('seek', { index })
+    if (release) {
+      this.queued = null
+      this.push('seek', seek)
+    } else if (this.sending) {
+      this.queued = seek
+    } else {
+      this.send(seek)
     }
   }
 
+  private send(seek: { index: number; at: number }): void {
+    this.sending = true
+    this.pushEvent('seek', seek)
+      .catch(() => undefined)
+      .finally(() => {
+        this.sending = false
+        const queued = this.queued
+        this.queued = null
+        if (queued && this.dragging) this.send(queued)
+      })
+  }
+
   private animate(): void {
+    // While dragging the thumb follows the pointer, not the server.
+    if (this.dragging) return
     this.stop()
     const at = this.number('at')
     this.place(at)

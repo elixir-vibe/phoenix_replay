@@ -1,6 +1,10 @@
 defmodule PhoenixReplay.Web.Components.Core do
   @moduledoc """
   Building blocks of the dashboard that know nothing about recordings.
+  These are its controls; how pages are laid out is
+  `PhoenixReplay.Web.Components.Layout`, keycaps are in
+  `PhoenixReplay.Web.Components.Keys`, and dialogs in
+  `PhoenixReplay.Web.Components.Dialog`.
 
   Colours come only from the theme tokens in `priv/css/dashboard.css`, such
   as `bg-surface`, `border-line` and `text-muted`, so dark mode needs no
@@ -12,6 +16,9 @@ defmodule PhoenixReplay.Web.Components.Core do
   """
 
   use Phoenix.Component
+
+  import PhoenixIconify, only: [icon: 1]
+  import PhoenixReplay.Web.Components.Keys, only: [aria_keyshortcuts: 1, kbd: 1]
 
   alias Phoenix.LiveView.JS
 
@@ -66,6 +73,23 @@ defmodule PhoenixReplay.Web.Components.Core do
   }
 
   @doc """
+  Switches the dashboard between its light and dark themes, overriding the
+  system's appearance; the choice is kept in the browser. See
+  `priv/ts/dom/theme.ts`.
+  """
+  attr :rest, :global
+
+  @spec theme_toggle(map()) :: Phoenix.LiveView.Rendered.t()
+  def theme_toggle(assigns) do
+    ~H"""
+    <.icon_button label="Switch theme" variant="ghost" tooltip="bottom" data-theme-toggle {@rest}>
+      <.icon name="lucide:moon" class="size-4 dark:hidden" />
+      <.icon name="lucide:sun" class="hidden size-4 dark:block" />
+    </.icon_button>
+    """
+  end
+
+  @doc """
   A square button showing only an icon. `label` names it for assistive
   technology and as a tooltip.
   """
@@ -73,6 +97,13 @@ defmodule PhoenixReplay.Web.Components.Core do
   attr :variant, :string, values: ~w(primary secondary ghost), default: "secondary"
   attr :size, :string, values: ~w(md lg), default: "md", doc: "`lg` is round, for main controls"
   attr :class, :any, default: nil
+
+  attr :keys, :list,
+    default: nil,
+    doc: "the key combinations that do the same, shown in a tooltip; see `kbd/1`"
+
+  attr :tooltip, :string, values: ~w(top bottom), default: "top", doc: "where the tooltip shows"
+
   attr :rest, :global, include: ~w(disabled)
   slot :inner_block, required: true
 
@@ -85,21 +116,23 @@ defmodule PhoenixReplay.Web.Components.Core do
       )
 
     ~H"""
-    <button
-      type="button"
-      aria-label={@label}
-      title={@label}
-      class={[
-        "inline-flex shrink-0 items-center justify-center border transition-colors",
-        "disabled:pointer-events-none disabled:opacity-40",
-        @variant_class,
-        @size_class,
-        @class
-      ]}
-      {@rest}
-    >
-      {render_slot(@inner_block)}
-    </button>
+    <.tooltip label={@label} keys={@keys} position={@tooltip}>
+      <button
+        type="button"
+        aria-label={@label}
+        aria-keyshortcuts={@keys && aria_keyshortcuts(@keys)}
+        class={[
+          "inline-flex shrink-0 items-center justify-center border transition-colors",
+          "disabled:pointer-events-none disabled:opacity-40",
+          @variant_class,
+          @size_class,
+          @class
+        ]}
+        {@rest}
+      >
+        {render_slot(@inner_block)}
+      </button>
+    </.tooltip>
     """
   end
 
@@ -182,134 +215,126 @@ defmodule PhoenixReplay.Web.Components.Core do
   attr :value, :string, required: true
   attr :event, :string, required: true
 
+  attr :keys, :map,
+    default: %{},
+    doc: "key combinations by option value, shown in each option's tooltip"
+
   @spec segmented(map()) :: Phoenix.LiveView.Rendered.t()
   def segmented(assigns) do
     ~H"""
-    <div
-      role="group"
-      aria-label={@label}
-      class="inline-flex overflow-hidden rounded-md border border-line text-xs"
-    >
-      <button
+    <div role="group" aria-label={@label} class="inline-flex rounded-md border border-line text-xs">
+      <.tooltip
         :for={{value, label} <- @options}
-        type="button"
-        phx-click={@event}
-        value={value}
-        aria-pressed={to_string(value == @value)}
-        class={[
-          "h-7 px-2.5 transition-colors pointer-coarse:h-11",
-          value == @value && "bg-ink text-on-ink",
-          value != @value && "text-muted hover:bg-hover hover:text-ink"
-        ]}
+        label={"#{@label}: #{label}"}
+        keys={@keys[value]}
+        enabled={Map.has_key?(@keys, value)}
       >
-        {label}
-      </button>
+        <button
+          type="button"
+          phx-click={@event}
+          value={value}
+          aria-pressed={to_string(value == @value)}
+          aria-keyshortcuts={@keys[value] && aria_keyshortcuts(@keys[value])}
+          class={[
+            "h-7 px-2.5 transition-colors group-first/tip:rounded-l-[5px] group-last/tip:rounded-r-[5px] pointer-coarse:h-11",
+            value == @value && "bg-ink text-on-ink",
+            value != @value && "text-muted hover:bg-hover hover:text-ink"
+          ]}
+        >
+          {label}
+        </button>
+      </.tooltip>
     </div>
     """
   end
 
   @doc """
-  Tabs that switch a panel. Clicking one sends `event` with the tab's value
-  as `value`; the panel is the caller's, with `id` plus `-panel`.
-  """
-  attr :id, :string, required: true
-  attr :label, :string, required: true, doc: "names the tabs for assistive technology"
-  attr :tabs, :list, required: true, doc: "`{value, label}` pairs"
-  attr :value, :string, required: true
-  attr :event, :string, required: true
+  Shows `label`, and the first of `keys` as keycaps, in a small dark
+  tooltip over the control in its slot, on hover and keyboard focus. It is
+  hidden from assistive technology: the control names itself, with
+  `aria-label` and `aria-keyshortcuts`. Without `enabled`, it renders the
+  control alone.
 
-  @spec tabs(map()) :: Phoenix.LiveView.Rendered.t()
-  def tabs(assigns) do
-    ~H"""
-    <div id={@id} role="tablist" aria-label={@label} class="flex gap-1 border-b border-line px-3 pt-2">
-      <button
-        :for={{value, label} <- @tabs}
-        type="button"
-        role="tab"
-        aria-selected={to_string(value == @value)}
-        aria-controls={"#{@id}-panel"}
-        phx-click={@event}
-        value={value}
-        class={[
-          "-mb-px h-10 border-b-2 px-3 text-sm font-medium transition-colors pointer-coarse:h-11",
-          value == @value && "border-accent text-ink",
-          value != @value && "border-transparent text-muted hover:text-ink"
-        ]}
-      >
-        {label}
-      </button>
-    </div>
-    """
-  end
-
-  @doc """
-  A bordered section with an optional title and actions in its header.
-  Without `padded`, the body runs to the edges, for lists and code.
+  `position` is the side it prefers: Floating UI places it there, or on
+  the other side when there is no room, within the window, as it shows;
+  see `priv/ts/dom/floating.ts`.
   """
-  attr :title, :string, default: nil
-  attr :padded, :boolean, default: false
-  attr :class, :any, default: nil
-  attr :rest, :global
-  slot :actions
+  attr :label, :string, required: true
+  attr :keys, :list, default: nil, doc: "key combinations; the tooltip shows the first"
+  attr :position, :string, values: ~w(top bottom), default: "top"
+  attr :enabled, :boolean, default: true
   slot :inner_block, required: true
 
-  @spec panel(map()) :: Phoenix.LiveView.Rendered.t()
-  def panel(assigns) do
+  @spec tooltip(map()) :: Phoenix.LiveView.Rendered.t()
+  def tooltip(assigns) do
     ~H"""
-    <section
-      class={["flex min-w-0 flex-col rounded-lg border border-line bg-surface", @class]}
-      {@rest}
-    >
-      <header
-        :if={@title || @actions != []}
-        class="flex min-h-10 items-center gap-2 border-b border-line px-4 py-2"
+    <span class="group/tip inline-flex" data-tip={@enabled}>
+      {render_slot(@inner_block)}
+      <span
+        :if={@enabled}
+        aria-hidden="true"
+        data-tip-content
+        data-placement={@position}
+        class={[
+          "pointer-events-none fixed top-0 left-0 z-50 not-data-placed:invisible inline-flex w-max items-center gap-1.5 rounded-md bg-ink px-2 py-1 text-xs whitespace-nowrap text-on-ink opacity-0 shadow-md transition-opacity",
+          "group-hover/tip:opacity-100 group-hover/tip:delay-300 group-has-focus-visible/tip:opacity-100"
+        ]}
       >
-        <h2 :if={@title} class="text-xs font-medium tracking-wide text-muted uppercase">
-          {@title}
-        </h2>
-        <span class="flex-1"></span>
-        {render_slot(@actions)}
-      </header>
-      <div class={["min-h-0 flex-1", @padded && "p-4"]}>
-        {render_slot(@inner_block)}
-      </div>
-    </section>
+        {@label}
+        <.kbd :if={@keys} keys={hd(@keys)} tone="inverted" />
+      </span>
+    </span>
     """
   end
 
   @doc """
-  The bar across the top of a page: a mark, a trail of titles and actions.
+  A time shown in the viewer's time zone by the `LocalTime` hook, as
+  `format` says: `"datetime"`, such as "Oct 6, 14:05", or `"date"`, such
+  as "Oct 6"; `"title"` keeps the text in the slot, such as "12 s ago".
+  Its tooltip has the full time in the viewer's zone and in UTC. Until the
+  hook runs, and without JavaScript, the slot's text shows, in UTC.
   """
-  attr :rest, :global
-  slot :mark, required: true
-  slot :crumb, required: true
-  slot :actions
+  attr :id, :string, required: true
+  attr :at, :integer, required: true, doc: "Unix milliseconds"
+  attr :format, :string, values: ~w(datetime date title), default: "datetime"
+  attr :class, :any, default: nil
+  slot :inner_block, required: true
 
-  @spec app_bar(map()) :: Phoenix.LiveView.Rendered.t()
-  def app_bar(assigns) do
+  @spec local_time(map()) :: Phoenix.LiveView.Rendered.t()
+  def local_time(assigns) do
+    time = DateTime.from_unix!(assigns.at, :millisecond)
+
+    assigns =
+      assign(assigns,
+        iso: DateTime.to_iso8601(time),
+        utc: Calendar.strftime(time, "%Y-%m-%d %H:%M:%S UTC")
+      )
+
     ~H"""
-    <header class="border-b border-line bg-surface" {@rest}>
-      <div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
-        {render_slot(@mark)}
-        <%= for {crumb, index} <- Enum.with_index(@crumb) do %>
-          <span :if={index > 0} class="text-faint" aria-hidden="true">/</span>
-          <span class={["truncate", index == 0 && "font-semibold", index > 0 && "text-muted"]}>
-            {render_slot(crumb)}
-          </span>
-        <% end %>
-        <span class="flex-1"></span>
-        {render_slot(@actions)}
-      </div>
-    </header>
+    <time
+      id={@id}
+      phx-hook="LocalTime"
+      datetime={@iso}
+      data-format={@format}
+      title={@utc}
+      class={@class}
+    >{render_slot(@inner_block)}</time>
     """
   end
 
   @doc """
   A button that opens a short list of actions, closed again by a click
-  elsewhere or Escape. `label` names the button.
+  elsewhere or Escape. `label` names the button; `trigger_class` styles
+  it, by default as an icon button. The list opens below the button, or
+  above it without room there, placed by the `Floating` hook.
   """
   attr :id, :string, required: true
   attr :label, :string, required: true
+
+  attr :trigger_class, :string,
+    default:
+      "inline-flex size-9 items-center justify-center rounded-md border border-line text-muted transition-colors hover:bg-hover hover:text-ink pointer-coarse:size-11"
+
   slot :trigger, required: true
 
   slot :item, required: true do
@@ -335,7 +360,7 @@ defmodule PhoenixReplay.Web.Components.Core do
         aria-expanded="false"
         aria-controls={"#{@id}-items"}
         phx-click={toggle_menu(@id)}
-        class="inline-flex size-9 items-center justify-center rounded-md border border-line text-muted transition-colors hover:bg-hover hover:text-ink pointer-coarse:size-11"
+        class={@trigger_class}
       >
         {render_slot(@trigger)}
       </button>
@@ -343,7 +368,10 @@ defmodule PhoenixReplay.Web.Components.Core do
         id={"#{@id}-items"}
         role="menu"
         aria-labelledby={"#{@id}-button"}
-        class="absolute right-0 z-20 mt-1 hidden min-w-48 rounded-lg border border-line bg-surface p-1 shadow-lg"
+        phx-hook="Floating"
+        data-anchor={"#{@id}-button"}
+        data-placement="bottom-end"
+        class="fixed top-0 left-0 z-40 hidden min-w-48 rounded-lg border border-line bg-surface p-1 shadow-lg data-open:block"
       >
         <div
           :for={item <- @item}
@@ -364,182 +392,19 @@ defmodule PhoenixReplay.Web.Components.Core do
 
   defp toggle_menu(id) do
     %JS{}
-    |> JS.toggle(to: "##{id}-items")
+    |> JS.toggle_attribute({"data-open", "true"}, to: "##{id}-items")
     |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "##{id}-button")
   end
 
-  defp close_menu(id) do
-    %JS{}
-    |> JS.hide(to: "##{id}-items")
-    |> JS.set_attribute({"aria-expanded", "false"}, to: "##{id}-button")
-  end
-
-  @doc "Shows a flash message of `kind`, if there is one."
-  attr :flash, :map, required: true
-  attr :kind, :atom, values: [:error, :info], default: :error
-
-  @spec flash(map()) :: Phoenix.LiveView.Rendered.t()
-  def flash(assigns) do
-    ~H"""
-    <p
-      :if={message = Phoenix.Flash.get(@flash, @kind)}
-      role="alert"
-      class={[
-        "mb-4 rounded-md border px-4 py-2 text-sm",
-        @kind == :error && "border-error/30 bg-error-soft text-error",
-        @kind == :info && "border-line bg-surface text-ink"
-      ]}
-    >
-      {message}
-    </p>
-    """
-  end
-
-  @doc "A thin progress bar, `value` percent full."
-  attr :value, :float, required: true
-  attr :label, :string, required: true
-
-  @spec progress(map()) :: Phoenix.LiveView.Rendered.t()
-  def progress(assigns) do
-    ~H"""
-    <div
-      role="progressbar"
-      aria-label={@label}
-      aria-valuemin="0"
-      aria-valuemax="100"
-      aria-valuenow={@value}
-      class="h-1 rounded-full bg-track"
-    >
-      <div class="h-1 rounded-full bg-ink transition-[width]" style={"width: #{@value}%"}></div>
-    </div>
-    """
-  end
-
-  @doc "Placeholder for a list with nothing to show."
-  attr :title, :string, required: true
-  attr :rest, :global
-  slot :icon
-  slot :inner_block
-  slot :action
-
-  @spec empty_state(map()) :: Phoenix.LiveView.Rendered.t()
-  def empty_state(assigns) do
-    ~H"""
-    <div class="flex flex-col items-center px-4 py-16 text-center" {@rest}>
-      <div :if={@icon != []} class="mb-4 text-faint">{render_slot(@icon)}</div>
-      <p class="font-medium text-ink">{@title}</p>
-      <div :if={@inner_block != []} class="mt-1 max-w-md text-sm text-muted">
-        {render_slot(@inner_block)}
-      </div>
-      <div :if={@action != []} class="mt-4">{render_slot(@action)}</div>
-    </div>
-    """
-  end
-
-  @doc "Name–value pairs, such as headers or query params."
-  attr :class, :any, default: nil
-  attr :rest, :global
-
-  slot :item, required: true do
-    attr :title, :string, required: true
-  end
-
-  @spec data_list(map()) :: Phoenix.LiveView.Rendered.t()
-  def data_list(assigns) do
-    ~H"""
-    <dl
-      class={["grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 font-mono text-xs", @class]}
-      {@rest}
-    >
-      <%= for item <- @item do %>
-        <dt class="text-muted">{item.title}</dt>
-        <dd class="break-all whitespace-pre-wrap text-ink">{render_slot(item)}</dd>
-      <% end %>
-    </dl>
-    """
-  end
-
   @doc """
-  Numbered page links, such as `‹ 1 … 4 5 6 … 12 ›`. `path` builds a
-  page's URL from its number.
+  Closes the `menu/1` with `id` after `js`. LiveView runs only the
+  nearest `phx-click`, so an item with its own chains this to close the
+  menu too. Unspecced, like Phoenix's own `JS` helpers: `JS.t()` is
+  opaque to Dialyzer.
   """
-  attr :page, :integer, required: true
-  attr :total_pages, :integer, required: true
-  attr :path, :any, required: true, doc: "a function from a page number to its URL"
-
-  @spec pagination(map()) :: Phoenix.LiveView.Rendered.t()
-  def pagination(assigns) do
-    assigns = assign(assigns, :items, page_items(assigns.page, assigns.total_pages))
-
-    ~H"""
-    <nav
-      :if={@total_pages > 1}
-      aria-label="Pagination"
-      class="flex items-center justify-center gap-1 text-sm tabular-nums"
-    >
-      <.page_link
-        :if={@page > 1}
-        path={@path.(@page - 1)}
-        label="Previous page"
-      >
-        ‹
-      </.page_link>
-      <%= for item <- @items do %>
-        <span :if={item == :gap} class="px-1 text-faint" aria-hidden="true">…</span>
-        <.page_link
-          :if={item != :gap}
-          path={@path.(item)}
-          label={"Page #{item}"}
-          current={item == @page}
-        >
-          {item}
-        </.page_link>
-      <% end %>
-      <.page_link
-        :if={@page < @total_pages}
-        path={@path.(@page + 1)}
-        label="Next page"
-      >
-        ›
-      </.page_link>
-    </nav>
-    """
-  end
-
-  attr :path, :string, required: true
-  attr :label, :string, required: true
-  attr :current, :boolean, default: false
-  slot :inner_block, required: true
-
-  defp page_link(assigns) do
-    ~H"""
-    <.link
-      patch={@path}
-      aria-label={@label}
-      aria-current={@current && "page"}
-      class={[
-        "inline-flex size-8 items-center justify-center rounded-md transition-colors pointer-coarse:size-11",
-        @current && "bg-ink font-medium text-on-ink",
-        !@current && "text-muted hover:bg-hover hover:text-ink"
-      ]}
-    >
-      {render_slot(@inner_block)}
-    </.link>
-    """
-  end
-
-  # The first and last pages and the ones around the current one, with a
-  # gap for each skipped run. A gap of a single page shows that page.
-  defp page_items(page, total) do
-    [1, page - 1, page, page + 1, total]
-    |> Enum.filter(&(&1 in 1..total//1))
-    |> Enum.uniq()
-    |> Enum.sort()
-    |> Enum.chunk_every(2, 1)
-    |> Enum.flat_map(fn
-      [a, b] when b - a == 2 -> [a, a + 1]
-      [a, b] when b - a > 2 -> [a, :gap]
-      [a | _rest] -> [a]
-    end)
+  def close_menu(js \\ %JS{}, id) do
+    js
+    |> JS.remove_attribute("data-open", to: "##{id}-items")
+    |> JS.set_attribute({"aria-expanded", "false"}, to: "##{id}-button")
   end
 end

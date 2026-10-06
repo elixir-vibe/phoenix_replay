@@ -31,7 +31,10 @@ defmodule PhoenixReplay.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {PhoenixReplay.Application, []}
+      mod: {PhoenixReplay.Application, []},
+      # The export endpoint takes its configuration as start options; Phoenix
+      # warns about an endpoint without an entry here, so it has an empty one.
+      env: [{PhoenixReplay.Web.Export.Endpoint, []}]
     ]
   end
 
@@ -46,6 +49,11 @@ defmodule PhoenixReplay.MixProject do
         {:ex2ms, "~> 1.7"},
         {:phoenix_iconify, "~> 0.3.7"},
         {:ua_parser, "~> 1.10"},
+        # Highlights SQL and inspected Elixir terms in the player.
+        {:lumis, "~> 0.10"},
+        {:lumis_wasm_elixir, "~> 0.26.6"},
+        {:lumis_wasm_sql, "~> 0.26.3"},
+        {:lumis_wasm_comment, "~> 0.26.2"},
         {:ecto, "~> 3.12", optional: true},
         {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
         {:ecto_sql, "~> 3.12", optional: true},
@@ -54,7 +62,13 @@ defmodule PhoenixReplay.MixProject do
         {:jason, "~> 1.4", optional: true},
         {:obscura, "~> 0.2", optional: true},
         {:lazy_html, ">= 0.1.0", only: :test},
-        {:playwright_ex, "~> 0.14", only: :test},
+        # Captures replays for video export; see PhoenixReplay.Export.
+        {:playwright_ex, "~> 0.14", optional: true},
+        # Runs ffmpeg for video export, and stops it with the process that started it.
+        {:muontrap, "~> 1.6 or ~> 2.0", optional: true},
+        # Keeps video exports in the app's Oban queue; see PhoenixReplay.Export.Queue.Oban.
+        {:oban, "~> 2.20", optional: true},
+        {:bandit, "~> 1.5", only: :test},
         {:volt, "~> 0.20", only: [:dev, :test], runtime: false},
         {:ex_doc, "~> 0.35", only: :dev, runtime: false},
         {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
@@ -65,11 +79,12 @@ defmodule PhoenixReplay.MixProject do
       ]
   end
 
-  # The Ecto storage tests also run on DuckDB through QuackDB, which needs
-  # Elixir 1.19; the minimum-version CI job skips them.
+  # The Ecto storage and Oban export queue tests also run on DuckDB through
+  # QuackDB and oban_quackdb, which need Elixir 1.19; the minimum-version CI
+  # job skips them.
   defp duckdb do
     if Version.match?(System.version(), "~> 1.19"),
-      do: [{:quackdb, "~> 0.5.28", only: :test}],
+      do: [{:quackdb, "~> 0.5.28", only: :test}, {:oban_quackdb, "~> 0.1", only: :test}],
       else: []
   end
 
@@ -88,6 +103,7 @@ defmodule PhoenixReplay.MixProject do
         priv/static/*.d.ts
         package.json
         guides
+        skills
         mix.exs
         .formatter.exs
         README.md
@@ -125,6 +141,8 @@ defmodule PhoenixReplay.MixProject do
         Recording: [
           PhoenixReplay,
           PhoenixReplay.Recorder,
+          PhoenixReplay.Replayable,
+          PhoenixReplay.Trace,
           PhoenixReplay.Plug,
           PhoenixReplay.Config,
           PhoenixReplay.Telemetry,
@@ -138,6 +156,7 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Storage.Retention
         ],
         Collectors: ~r/^PhoenixReplay\.Collector/,
+        "Video export": ~r/^PhoenixReplay\.Export/,
         Extension: [
           PhoenixReplay.Authorization,
           PhoenixReplay.Sanitizer,
@@ -173,6 +192,9 @@ defmodule PhoenixReplay.MixProject do
     ])
   end
 
+  # The gate runs the video export tests, which a plain `mix test` skips.
+  defp export_tests(_args), do: System.put_env("PHOENIX_REPLAY_EXPORT_TESTS", "1")
+
   defp aliases do
     [
       "assets.build": [
@@ -188,11 +210,13 @@ defmodule PhoenixReplay.MixProject do
       "hex.publish": ["cmd mix assets.build", "hex.publish"],
       # Built in its own process, so this one compiles Web.Assets with it.
       ci: [
+        &export_tests/1,
         "cmd mix assets.build",
         "compile --warnings-as-errors",
         "format --check-formatted",
         "volt.js.check --type-aware --type-check",
         "test",
+        "cmd elixir --sname phoenix_replay_ci -S mix test --only cluster",
         "credo --strict",
         "ex_dna --min-mass 20",
         "reach.check --arch --dead-code --smells --strict",

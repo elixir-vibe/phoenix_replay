@@ -20,6 +20,15 @@ defmodule PhoenixReplay.Storage.Ecto.MigrationTest do
     def down, do: Migration.down(from: 1, version: 2)
   end
 
+  # The table PhoenixReplay 0.6 added marks and traffic to.
+  defmodule Marks do
+    use Ecto.Migration
+    def up, do: Migration.up(from: 2, version: 3)
+    def down, do: Migration.down(from: 2, version: 3)
+  end
+
+  @migrations [{1, Released}, {2, Upgrade}, {3, Marks}]
+
   @moduletag :tmp_dir
 
   setup %{tmp_dir: tmp_dir} do
@@ -55,8 +64,26 @@ defmodule PhoenixReplay.Storage.Ecto.MigrationTest do
 
     run.([{1, Released}, {2, Upgrade}], :up)
 
-    assert [%{id: "old", error_count: 0, saved_at: nil, viewport: nil, device: nil}] =
-             PhoenixReplay.Storage.Ecto.list(repo: Repo)
+    # As 0.5 stored a campaign and a viewport.
+    Repo.update_all("phoenix_replay_recordings",
+      set: [source: "google / cpc / spring", viewport: "390x844@3"]
+    )
+
+    run.(@migrations, :up)
+
+    assert [
+             %{
+               id: "old",
+               error_count: 0,
+               saved_at: nil,
+               source: "google",
+               medium: "cpc",
+               campaign: "spring",
+               device_type: "phone",
+               browser: nil,
+               marks: %{}
+             }
+           ] = PhoenixReplay.Storage.Ecto.list(repo: Repo)
 
     assert {:ok, ^recording} = PhoenixReplay.Storage.Ecto.fetch("old", repo: Repo)
   end
@@ -80,15 +107,16 @@ defmodule PhoenixReplay.Storage.Ecto.MigrationTest do
 
   test "upgrades the released table and back" do
     run = &Ecto.Migrator.run(Repo, &1, &2, all: true, log: false)
-    new = MapSet.new(~w(error_count tab viewport device source saved_at))
+    new = MapSet.new(~w(error_count tab viewport device source saved_at medium campaign))
 
     run.([{1, Released}], :up)
     assert MapSet.disjoint?(columns(), new)
 
-    run.([{1, Released}, {2, Upgrade}], :up)
+    run.(@migrations, :up)
     assert MapSet.subset?(new, columns())
+    assert %{rows: []} = Repo.query!("SELECT * FROM phoenix_replay_marks")
 
-    run.([{1, Released}, {2, Upgrade}], :down)
+    run.(@migrations, :down)
 
     assert_raise Exqlite.Error, ~r/no such table/, &columns/0
   end

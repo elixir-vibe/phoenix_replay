@@ -11,6 +11,19 @@ exclude =
       repo not in repos,
       do: tag
 
+# Video export tests film real replays with Chromium and ffmpeg, so they
+# run in `mix ci` and on CI, where `PHOENIX_REPLAY_EXPORT_TESTS` or `CI` is
+# set, and only where both tools are there; a plain `mix test` skips them.
+export_tests? =
+  (System.get_env("PHOENIX_REPLAY_EXPORT_TESTS") || System.get_env("CI")) != nil and
+    PhoenixReplay.Export.available(PhoenixReplay.Config.load()) == :ok
+
+exclude = if export_tests?, do: exclude, else: [:export | exclude]
+
+# Tests across nodes start a peer, which needs a distributed VM: `mix ci`
+# runs them with `elixir --sname ... -S mix test --only cluster`.
+exclude = if Node.alive?(), do: exclude, else: [:cluster | exclude]
+
 ExUnit.start(exclude: exclude)
 
 # Dashboard TypeScript tests from priv/ts run as ExUnit tests: pure modules in

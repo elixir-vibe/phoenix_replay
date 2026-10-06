@@ -41,6 +41,7 @@ defmodule PhoenixReplay.Router do
         import Phoenix.LiveView.Router, only: [live: 3, live_session: 3]
 
         get "/assets/:asset", PhoenixReplay.Web.Assets, []
+        get "/:id/video/:token", PhoenixReplay.Web.Export.Download, []
 
         live_session dashboard_session, dashboard_opts do
           live "/", PhoenixReplay.Web.Live.Index, :index

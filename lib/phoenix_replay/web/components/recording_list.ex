@@ -5,16 +5,17 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   never the socket.
 
   Each row is a single link stretched over the whole row, so the row opens
-  the recording; its delete button sits above the link.
+  the recording; its delete button sits above the link. The filter bar
+  above the list is `PhoenixReplay.Web.Components.Filters`.
   """
 
   use Phoenix.Component
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.Core, only: [badge: 1]
 
-  alias Phoenix.LiveView.JS
-  alias PhoenixReplay.Recording.{Filter, Summary}
+  import PhoenixReplay.Web.Components.Core, only: [badge: 1, local_time: 1]
+
+  alias PhoenixReplay.Recording.{Client, Summary}
   alias PhoenixReplay.Web.Format
 
   # Columns on wider screens: mark, session, started, duration, events,
@@ -24,11 +25,17 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   @doc """
   A section of recordings: sessions still recording with `live`, or saved
   ones under a header row. `delete` names the event that deletes a saved
-  recording, or is `nil` when the viewer may not delete.
+  recording, or is `nil` when the viewer may not delete. Where each visit
+  came from links to the list filtered by it, through `filter_path`.
   """
   attr :recordings, :list, required: true
   attr :now, :integer, required: true
   attr :path, :any, required: true, doc: "a function from a summary to its URL"
+
+  attr :filter_path, :any,
+    required: true,
+    doc: "a function from a criterion and its value to the list's URL filtered by it"
+
   attr :live, :boolean, default: false
   attr :delete, :string, default: nil
 
@@ -43,7 +50,12 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
         <span class="size-2 animate-pulse rounded-full bg-live"></span> Live now
       </h2>
       <ul class="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-        <.row :for={recording <- @recordings} recording={recording} path={@path.(recording)}>
+        <.row
+          :for={recording <- @recordings}
+          recording={recording}
+          path={@path.(recording)}
+          filter_path={@filter_path}
+        >
           <:mark><span class="size-2.5 animate-pulse rounded-full bg-live"></span></:mark>
           <:meta>
             Live · {Format.clock(recording.duration_ms)} · {Format.count(
@@ -63,7 +75,8 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   end
 
   def recording_list(assigns) do
-    assigns = assign(assigns, :columns, @columns)
+    # Older starts read as dates, in the viewer's time zone.
+    assigns = assign(assigns, columns: @columns, two_days: :timer.hours(48))
 
     ~H"""
     <section :if={@recordings != []} aria-labelledby="recordings-saved">
@@ -82,7 +95,12 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
           <span>Events</span><span>Errors</span><span></span>
         </div>
         <ul class="divide-y divide-line">
-          <.row :for={recording <- @recordings} recording={recording} path={@path.(recording)}>
+          <.row
+            :for={recording <- @recordings}
+            recording={recording}
+            path={@path.(recording)}
+            filter_path={@filter_path}
+          >
             <:mark><.device_icon viewport={recording.viewport} /></:mark>
             <:meta>
               {Format.relative(recording.connected_at, @now)} · {Format.count(
@@ -91,9 +109,13 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
               )}
             </:meta>
             <:started>
-              <span title={Format.timestamp(recording.connected_at) <> " UTC"}>
+              <.local_time
+                id={"recording-#{recording.id}-started"}
+                at={recording.connected_at}
+                format={if @now - recording.connected_at < @two_days, do: "title", else: "date"}
+              >
                 {Format.relative(recording.connected_at, @now)}
-              </span>
+              </.local_time>
             </:started>
             <:status>
               <.badge :if={recording.error_count > 0} tone="error" dot="static">
@@ -123,6 +145,80 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   end
 
   @doc """
+  How many sessions started over time, from
+  `PhoenixReplay.Catalog.activity/3`: a bar for each stretch, with the
+  ones that had an error in red. Each bar links to the list narrowed to
+  its stretch, through `path`, a function from a `{from, to}` range.
+  """
+  attr :activity, :map, required: true
+  attr :path, :any, required: true
+
+  @spec activity_chart(map()) :: Phoenix.LiveView.Rendered.t()
+  def activity_chart(assigns) do
+    %{buckets: buckets, size: size} = assigns.activity
+    top = buckets |> Enum.map(&elem(&1, 1)) |> Enum.max(fn -> 0 end) |> max(1)
+
+    assigns =
+      assign(assigns,
+        bars:
+          for {{start, sessions, errors}, index} <- Enum.with_index(buckets) do
+            %{
+              index: index,
+              start: start,
+              sessions: sessions,
+              errors: errors,
+              height: Float.round(sessions / top * 100, 1),
+              error_share: if(sessions > 0, do: Float.round(errors / sessions * 100, 1), else: 0),
+              path: assigns.path.({start, start + size - 1})
+            }
+          end
+      )
+
+    ~H"""
+    <section id="recordings-activity" aria-label="Sessions over time" class="mb-5">
+      <div class="flex h-14 items-end gap-px">
+        <.link
+          :for={bar <- @bars}
+          patch={bar.path}
+          aria-label={"#{Format.count(bar.sessions, "session")}, #{bar.errors} with errors"}
+          data-tip
+          class="group/tip flex h-full min-w-0 flex-1 flex-col justify-end rounded-sm hover:bg-hover/50 focus-visible:bg-hover/50"
+        >
+          <%!-- An empty stretch is a baseline; any session at all shows. --%>
+          <span :if={bar.sessions == 0} class="h-px w-full bg-line group-hover/tip:bg-muted"></span>
+          <span
+            :if={bar.sessions > 0}
+            class="flex w-full flex-col justify-end overflow-hidden rounded-sm"
+            style={"height: max(4px, #{bar.height}%)"}
+          >
+            <span class="w-full flex-1 bg-faint/60 group-hover/tip:bg-muted"></span>
+            <span :if={bar.errors > 0} class="w-full bg-error" style={"height: #{bar.error_share}%"}></span>
+          </span>
+          <span
+            aria-hidden="true"
+            data-tip-content
+            class="pointer-events-none fixed top-0 left-0 z-50 not-data-placed:invisible w-max rounded-md bg-ink px-2 py-1 text-xs whitespace-nowrap text-on-ink opacity-0 shadow-md group-hover/tip:opacity-100 group-focus-visible/tip:opacity-100"
+          >
+            <.local_time id={"recordings-activity-#{bar.index}"} at={bar.start}>
+              {Format.started(bar.start)} UTC
+            </.local_time>
+            · {Format.count(bar.sessions, "session")}<span :if={bar.errors > 0}>, {bar.errors} with errors</span>
+          </span>
+        </.link>
+      </div>
+      <div class="mt-1 flex justify-between text-xs text-muted">
+        <.local_time id="recordings-activity-from" at={@activity.from}>
+          {Format.started(@activity.from)} UTC
+        </.local_time>
+        <.local_time id="recordings-activity-to" at={@activity.to}>
+          {Format.started(@activity.to)} UTC
+        </.local_time>
+      </div>
+    </section>
+    """
+  end
+
+  @doc """
   Says how many recordings ended since the list was read, with a button
   that sends `show_new` to bring it up to date.
   """
@@ -145,171 +241,9 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
     """
   end
 
-  @doc """
-  Narrows the list. Changes are sent as `filter` with the fields of
-  `PhoenixReplay.Recording.Filter.from_params/1`.
-  """
-  attr :filter, Filter, required: true
-  attr :views, :list, required: true
-  attr :event_names, :list, required: true
-  attr :path, :any, required: true, doc: "a function from a filter to the list's URL"
-
-  @spec filter_bar(map()) :: Phoenix.LiveView.Rendered.t()
-  def filter_bar(assigns) do
-    assigns =
-      assign(assigns,
-        field:
-          "flex h-10 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 focus-within:outline-2 focus-within:outline-accent pointer-coarse:h-11",
-        select: "cursor-pointer bg-transparent font-medium outline-none",
-        active: Enum.count(Map.delete(Filter.to_params(assigns.filter), "q"))
-      )
-
-    ~H"""
-    <form
-      id="recording-filter"
-      role="search"
-      phx-change="filter"
-      phx-submit="filter"
-      class="mb-6 flex flex-wrap items-center gap-2 text-sm"
-    >
-      <label class={[@field, "min-w-0 flex-[1_1_14rem]"]}>
-        <.icon name="lucide:search" class="size-4 shrink-0 text-muted" />
-        <span class="sr-only">Search by URL, session id or event</span>
-        <input
-          type="search"
-          name="q"
-          value={@filter.query}
-          placeholder="Search URL, session id or event"
-          phx-debounce="300"
-          data-shortcut="/"
-          class="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-faint"
-        />
-        <kbd class="hidden rounded border border-line px-1.5 font-mono text-[11px] text-muted sm:inline">
-          /
-        </kbd>
-      </label>
-      <button
-        id="recording-filter-toggle"
-        type="button"
-        aria-controls="recording-filter-more"
-        aria-expanded="false"
-        phx-click={
-          %JS{}
-          |> JS.toggle_attribute({"data-open", "true"}, to: "#recording-filter-more")
-          |> JS.toggle_attribute({"aria-expanded", "true", "false"})
-        }
-        class={[@field, "font-medium sm:hidden"]}
-      >
-        <.icon name="lucide:sliders-horizontal" class="size-4" /> Filters
-        <span :if={@active > 0} class="rounded-full bg-ink px-1.5 text-xs text-on-ink">{@active}</span>
-      </button>
-      <nav aria-label="Quick filters" class="flex w-full gap-1.5 sm:hidden">
-        <.quick_filter
-          :for={{label, target, active?} <- quick_filters(@filter)}
-          path={@path.(target)}
-          current={active?}
-        >
-          {label}
-        </.quick_filter>
-      </nav>
-      <%!-- Phones show these behind the button; wider screens lay them out in the bar. --%>
-      <div
-        id="recording-filter-more"
-        class="hidden w-full flex-wrap gap-2 data-open:flex sm:contents sm:data-open:contents"
-      >
-        <label class={@field}>
-          <span class="text-muted">View</span>
-          <select name="view" class={[@select, "max-w-44 truncate"]}>
-            <option value="">All</option>
-            <option :for={view <- @views} value={view} selected={view == @filter.view}>{view}</option>
-          </select>
-        </label>
-        <label class={@field}>
-          <span class="text-muted">Started</span>
-          <select name="within" class={@select}>
-            <option value="">Any time</option>
-            <option
-              :for={window <- Filter.windows()}
-              value={window}
-              selected={window == @filter.within}
-            >
-              Last {window}
-            </option>
-          </select>
-        </label>
-        <label class={@field}>
-          <span class="text-muted">Event</span>
-          <input
-            type="text"
-            name="event"
-            value={@filter.event}
-            list="recording-filter-events"
-            placeholder="Any"
-            phx-debounce="300"
-            class="w-24 bg-transparent font-medium outline-none placeholder:text-ink"
-          />
-          <datalist id="recording-filter-events">
-            <option :for={name <- @event_names} value={name} />
-          </datalist>
-        </label>
-        <label class={@field}>
-          <span class="text-muted">Min events</span>
-          <input
-            type="number"
-            name="min_events"
-            min="1"
-            value={@filter.min_events}
-            placeholder="Any"
-            phx-debounce="300"
-            class="w-14 bg-transparent font-medium outline-none placeholder:text-ink"
-          />
-        </label>
-        <label class={[
-          @field,
-          "cursor-pointer font-medium has-checked:border-error has-checked:bg-error-soft has-checked:text-error"
-        ]}>
-          <input type="checkbox" name="errors" value="1" checked={@filter.errors} class="sr-only" />
-          <.icon name="lucide:triangle-alert" class="size-4" /> With errors
-        </label>
-      </div>
-    </form>
-    """
-  end
-
-  # One tap on a phone: everything, sessions with errors, the last day.
-  # Each is the filter it leads to and whether it is in effect.
-  defp quick_filters(%Filter{} = filter) do
-    last_day? = filter.within == "24h"
-
-    [
-      {"All", %Filter{}, Filter.empty?(filter)},
-      {"With errors", %Filter{filter | errors: not filter.errors}, filter.errors},
-      {"Last 24 h", %Filter{filter | within: if(last_day?, do: nil, else: "24h")}, last_day?}
-    ]
-  end
-
-  attr :path, :string, required: true
-  attr :current, :boolean, required: true
-  slot :inner_block, required: true
-
-  defp quick_filter(assigns) do
-    ~H"""
-    <.link
-      patch={@path}
-      aria-current={@current && "true"}
-      class={[
-        "inline-flex h-9 items-center rounded-full border px-3 text-[13px] whitespace-nowrap",
-        @current && "border-ink bg-ink text-on-ink",
-        !@current && "border-line bg-surface text-ink"
-      ]}
-    >
-      {render_slot(@inner_block)}
-    </.link>
-    """
-  end
-
   attr :recording, Summary, required: true
   attr :path, :string, required: true
+  attr :filter_path, :any, required: true
   slot :mark, required: true
   slot :meta, required: true, doc: "the second line on phones"
   slot :started, required: true
@@ -317,7 +251,7 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   slot :action, required: true
 
   defp row(assigns) do
-    assigns = assign(assigns, :columns, @columns)
+    assigns = assign(assigns, columns: @columns, traffic: traffic_of(assigns.recording))
 
     ~H"""
     <li
@@ -329,19 +263,31 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
     >
       <span class="flex justify-center">{render_slot(@mark)}</span>
       <div class="min-w-0">
-        <.link
-          navigate={@path}
-          class="block truncate font-medium after:absolute after:inset-0 focus-visible:outline-none after:focus-visible:outline-2 after:focus-visible:-outline-offset-2 after:focus-visible:outline-accent"
-        >
-          {@recording.view}
-        </.link>
+        <div class="flex min-w-0 items-center gap-2">
+          <.link
+            navigate={@path}
+            class="truncate font-medium after:absolute after:inset-0 focus-visible:outline-none after:focus-visible:outline-2 after:focus-visible:-outline-offset-2 after:focus-visible:outline-accent"
+          >
+            {@recording.view}
+          </.link>
+          <.link
+            :for={{name, count} <- Enum.sort(@recording.marks)}
+            patch={@filter_path.(:mark, name)}
+            title={"Reached #{name}" <> if(count > 1, do: " #{count} times", else: "")}
+            class="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-full bg-kind-mark/15 px-2 py-px text-xs font-medium text-kind-mark hover:bg-kind-mark/25"
+          >
+            <.icon name="lucide:flag" class="size-3" />
+            {name}<span :if={count > 1} class="opacity-70">×{count}</span>
+          </.link>
+        </div>
         <p class="mt-0.5 truncate font-mono text-xs text-muted">
           <span class="sm:hidden">{render_slot(@meta)}</span>
           <span class="hidden sm:inline">
-            {page(@recording)}<span :if={@recording.device}> · {@recording.device}</span><span :if={
-              @recording.source
-            }> · from {@recording.source}</span>
-            · {short_id(@recording)}
+            {page(@recording)}<span :if={@recording.device}> · {@recording.device}</span><.traffic
+              :if={@traffic != []}
+              traffic={@traffic}
+              filter_path={@filter_path}
+            /> · {short_id(@recording)}
           </span>
         </p>
       </div>
@@ -358,20 +304,42 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
 
   attr :viewport, :map, default: nil
 
-  # The kind of screen the session ran on, by its width in CSS pixels.
+  # The kind of device the session ran on; see `Client.device_type/1`.
   defp device_icon(assigns) do
     ~H"""
-    <%= cond do %>
-      <% is_nil(@viewport) -> %>
+    <%= case Client.device_type(@viewport) do %>
+      <% nil -> %>
         <.icon name="lucide:circle-play" class="size-4 text-muted" />
-      <% @viewport.width < 640 -> %>
+      <% "phone" -> %>
         <.icon name="lucide:smartphone" class="size-4 text-muted" label="Phone" />
-      <% @viewport.width < 1024 -> %>
+      <% "tablet" -> %>
         <.icon name="lucide:tablet" class="size-4 text-muted" label="Tablet" />
-      <% true -> %>
+      <% "desktop" -> %>
         <.icon name="lucide:monitor" class="size-4 text-muted" label="Desktop" />
     <% end %>
     """
+  end
+
+  attr :traffic, :list, required: true
+  attr :filter_path, :any, required: true
+
+  # Each part of where the visit came from links to the list filtered by it.
+  defp traffic(%{traffic: _traffic} = assigns) do
+    ~H"""
+    <span phx-no-format> · from <%= for {{criterion, value}, index} <- Enum.with_index(@traffic) do %><%= if index > 0 do %> / <% end %><.link patch={@filter_path.(criterion, value)} class="relative z-10 hover:text-ink hover:underline">{value}</.link><% end %></span>
+    """
+  end
+
+  # Where the visit came from, leaving out what says nothing: a direct
+  # visit, no medium, or a referral, which the referrer's host as the
+  # source already tells.
+  defp traffic_of(%Summary{source: source, medium: medium, campaign: campaign}) do
+    [
+      {:source, if(source != "(direct)", do: source)},
+      {:medium, if(medium not in ["(none)", "referral"], do: medium)},
+      {:campaign, campaign}
+    ]
+    |> Enum.reject(fn {_criterion, value} -> is_nil(value) end)
   end
 
   defp page(%Summary{url: nil}), do: "—"

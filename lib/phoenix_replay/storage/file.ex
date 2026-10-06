@@ -8,12 +8,15 @@ defmodule PhoenixReplay.Storage.File do
   at a complete recording. Both are written to a temporary file, synced and
   renamed into place, so a crash never leaves half a recording.
 
-  While a session runs, its chunks are appended to `<id>.<node>.part` as
-  frames (see `PhoenixReplay.Storage.Codec.frame/1`), and saving the
+  While a session runs, its chunks are appended to `<id>.<node>-<pid>.part`
+  as frames (see `PhoenixReplay.Storage.Codec.frame/1`), and saving the
   finished recording deletes the part file. Part files carry a tag of the
-  node and host that wrote them, so instances sharing a directory, in a
-  cluster or not, only recover their own. Parts left by an instance that
-  never starts again under the same node and host name are not recovered.
+  node and host that wrote them, and the OS process id of the VM, so
+  instances sharing a directory, in a cluster or not, only recover their
+  own, and only once the VM that wrote them is gone: an `iex -S mix` or
+  `mix phoenix_replay.export` started next to a running server leaves its
+  sessions alone. Parts left by an instance that never starts again under
+  the same node and host name are not recovered.
 
   Summaries are kept in an ETS index once read, so listing reads only the
   summary files it has not seen. The directory's file names stay the
@@ -91,16 +94,70 @@ defmodule PhoenixReplay.Storage.File do
 
   @impl true
   def partials(opts) do
-    suffix = "." <> node_tag() <> @part_ext
-
     case File.ls(dir(opts)) do
-      {:ok, files} ->
-        for file <- files,
-            String.ends_with?(file, suffix),
-            do: String.replace_suffix(file, suffix, "")
+      {:ok, files} -> for file <- files, id = left_behind(file), do: id
+      {:error, :enoent} -> []
+    end
+  end
 
-      {:error, :enoent} ->
-        []
+  # A part file of this node's, written by this VM or one that is gone.
+  # Files from before the tag had a process id are taken as left behind.
+  defp left_behind(file) do
+    node = node_tag()
+    own = own_pid()
+
+    with true <- String.ends_with?(file, @part_ext),
+         [id, tag] <- file |> String.replace_suffix(@part_ext, "") |> String.split(".", parts: 2),
+         [^node | pid] <- String.split(tag, "-", parts: 2),
+         true <- pid in [[], [own]] or not os_alive?(hd(pid)) do
+      id
+    else
+      _not_left -> nil
+    end
+  end
+
+  defp own_pid, do: List.to_string(:os.getpid())
+
+  # Another user's process answers kill with "not permitted": it runs.
+  # Without the tool to ask, as in some minimal images, the writer is taken
+  # as running: a part left behind waits, where one still being written
+  # would be lost.
+  defp os_alive?(pid) do
+    case {:os.type(), ask(pid)} do
+      {_os, :missing} -> true
+      {{:win32, _name}, {:ok, out, _status}} -> String.contains?(out, " #{pid} ")
+      {{:unix, _name}, {:ok, out, status}} -> status == 0 or out =~ "not permitted"
+    end
+  end
+
+  defp ask(pid) do
+    {command, args} =
+      case :os.type() do
+        {:win32, _name} -> {"tasklist", ["/FI", "PID eq #{pid}", "/NH"]}
+        {:unix, _name} -> {"kill", ["-0", pid]}
+      end
+
+    case System.find_executable(command) do
+      nil ->
+        warn_missing(command)
+        :missing
+
+      path ->
+        {out, status} = System.cmd(path, args, stderr_to_stdout: true)
+        {:ok, out, status}
+    end
+  end
+
+  # Once per boot, however many part files there are.
+  defp warn_missing(command) do
+    key = {__MODULE__, :missing, command}
+
+    unless :persistent_term.get(key, false) do
+      :persistent_term.put(key, true)
+
+      Logger.warning(
+        "PhoenixReplay: no #{command} to tell whether a recording's writer runs; leaving its chunks"
+      )
     end
   end
 
@@ -198,7 +255,7 @@ defmodule PhoenixReplay.Storage.File do
 
   defp part_path(id, opts) do
     if Recording.valid_id?(id),
-      do: {:ok, Path.join(dir(opts), id <> "." <> node_tag() <> @part_ext)},
+      do: {:ok, Path.join(dir(opts), id <> "." <> node_tag() <> "-" <> own_pid() <> @part_ext)},
       else: {:error, :not_found}
   end
 

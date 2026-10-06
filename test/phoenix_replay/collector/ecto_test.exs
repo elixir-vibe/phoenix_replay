@@ -32,6 +32,7 @@ defmodule PhoenixReplay.Collector.EctoTest do
     assert {:ok,
             %{
               summary: "SELECT 1",
+              language: :sql,
               measurements: %{duration: 3.0, total_time: 3.0, query_time: 2.0, queue_time: 1.0},
               metadata: %{source: "users"} = metadata,
               error: nil

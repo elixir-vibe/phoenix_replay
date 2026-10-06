@@ -10,6 +10,8 @@ app_config = [
 adapter = [
   "Mix.Tasks.PhoenixReplay.*",
   "PhoenixReplay",
+  "PhoenixReplay.Export",
+  "PhoenixReplay.Trace",
   "PhoenixReplay.Plug",
   "PhoenixReplay.Recorder",
   "PhoenixReplay.Router",
@@ -24,11 +26,21 @@ orchestrator = [
   "PhoenixReplay.Session.Finalizer",
   "PhoenixReplay.Session.Flusher",
   "PhoenixReplay.Session.Monitor",
-  "PhoenixReplay.Session.Recovery"
+  "PhoenixReplay.Session.Recovery",
+  # Video export: the queue and the render of one video.
+  "PhoenixReplay.Export.Queue",
+  "PhoenixReplay.Export.Queue.Local",
+  "PhoenixReplay.Export.Queue.Oban",
+  "PhoenixReplay.Export.Queue.Oban.Worker",
+  "PhoenixReplay.Export.Supervisor",
+  "PhoenixReplay.Export.Video"
 ]
 
 model = [
   "PhoenixReplay.Config",
+  "PhoenixReplay.Export.Job",
+  "PhoenixReplay.Export.Options",
+  "PhoenixReplay.Export.Schedule",
   "PhoenixReplay.Recording",
   "PhoenixReplay.Recording.*"
 ]
@@ -36,6 +48,7 @@ model = [
 # Behaviours and their built-in implementations.
 logic = [
   "PhoenixReplay.Authorization",
+  "PhoenixReplay.Replayable",
   "PhoenixReplay.Collector*",
   "PhoenixReplay.Redactor*",
   "PhoenixReplay.Sanitizer*",
@@ -46,6 +59,12 @@ logic = [
 infrastructure = [
   "PhoenixReplay.Application",
   "PhoenixReplay.Capture.*",
+  # Video export's outside processes: the endpoint and Chromium, and ffmpeg.
+  "PhoenixReplay.Export.Encoder",
+  "PhoenixReplay.Export.FFmpeg",
+  "PhoenixReplay.Export.FFmpeg.Output",
+  "PhoenixReplay.Export.Runtime",
+  "PhoenixReplay.Export.Screenshots",
   "PhoenixReplay.Session.Buffer",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",

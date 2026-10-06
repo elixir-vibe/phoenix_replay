@@ -21,6 +21,19 @@ defmodule PhoenixReplay.Recording.PointerTrack do
 
   @empty %{moves: [], presses: [], scrolls: []}
 
+  # How long the overlay draws the path behind the cursor, and a press's
+  # ripple. The overlay reads them from its element's data attributes.
+  @trail_ms 500
+  @ripple_ms 600
+
+  @doc "How long the overlay draws the path behind the cursor, in milliseconds."
+  @spec trail_ms() :: pos_integer()
+  def trail_ms, do: @trail_ms
+
+  @doc "How long a press's ripple lasts in the overlay, in milliseconds."
+  @spec ripple_ms() :: pos_integer()
+  def ripple_ms, do: @ripple_ms
+
   @doc "A track with nothing in it."
   @spec empty() :: t()
   def empty, do: @empty

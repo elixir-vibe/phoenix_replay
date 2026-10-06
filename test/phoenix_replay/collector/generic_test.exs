@@ -30,6 +30,11 @@ defmodule PhoenixReplay.Collector.GenericTest do
     assert Generic.capture(@event, %{}, %{query: ""}, opts) == :skip
   end
 
+  test "marks moments with :mark" do
+    assert {:ok, %{mark: false}} = Generic.capture(@event, %{}, %{}, event: @event)
+    assert {:ok, %{mark: true}} = Generic.capture(@event, %{}, %{}, event: @event, mark: true)
+  end
+
   test "records :exception events as errors" do
     event = [:my_app, :search, :exception]
     metadata = %{kind: :error, reason: %RuntimeError{message: "boom"}}

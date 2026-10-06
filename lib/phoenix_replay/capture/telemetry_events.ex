@@ -66,9 +66,11 @@ defmodule PhoenixReplay.Capture.TelemetryEvents do
       data = %{
         event: event,
         summary: captured.summary,
+        language: captured.language,
         measurements: captured.measurements,
         metadata: sanitizer.sanitize_params(captured.metadata),
-        error: captured.error
+        error: captured.error,
+        mark: captured.mark
       }
 
       Buffer.collect(session, :telemetry, data, Collector.name(event), limit)

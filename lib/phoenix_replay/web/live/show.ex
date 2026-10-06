@@ -17,25 +17,33 @@ defmodule PhoenixReplay.Web.Live.Show do
   Collected telemetry and log events follow the LiveView event that caused
   them, indented, and can be hidden by kind. They leave the replayed state
   as it was, so selecting one shows its details next to the assigns.
+
+  A saved recording can be exported as a video when `PhoenixReplay.Export`
+  is available, with the options its dialog offers. The export runs under
+  `PhoenixReplay.Export.Queue`, and the player follows its progress and
+  links the video when it is ready.
   """
 
   use Phoenix.LiveView
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.{Core, Player}
+  import PhoenixReplay.Web.Components.{Export, Layout, State}
+  import PhoenixReplay.Web.Components.Player.{EventList, Frame, Header, Playback, Visit}
 
-  alias PhoenixReplay.Recording.{Filter, PointerTrack, Timeline}
-  alias PhoenixReplay.Catalog
-  alias PhoenixReplay.Web.{Context, Layouts, Params}
-  alias PhoenixReplay.Web.Player.{Channel, Events}
+  alias PhoenixReplay.Recording.{Event, Filter, PointerTrack, Timeline}
+  alias PhoenixReplay.{Catalog, Export}
+  alias PhoenixReplay.Export.Options
+  alias PhoenixReplay.Web.{Context, Highlight, Layouts, Params}
+  alias PhoenixReplay.Web.Export.Download
+  alias PhoenixReplay.Web.Player.{Channel, Events, Journey, Shortcuts}
 
   @speeds [1, 2, 5, 10]
   # The most sessions of one browser tab the player links between.
-  @journey_limit 200
   @progress_every 25
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
+    :ok = Highlight.warm()
     context = Context.fetch(socket)
     channel = Channel.new()
     if connected?(socket), do: Channel.subscribe(channel)
@@ -47,11 +55,13 @@ defmodule PhoenixReplay.Web.Live.Show do
         context: context,
         id: id,
         recording: nil,
+        first_render: 0,
         live?: Catalog.live?(id),
         frame_ready?: false,
         progress: nil,
         load_error?: false,
         channel: channel,
+        connected?: connected?(socket),
         speed: 1,
         playing: nil,
         speeds: @speeds,
@@ -60,15 +70,61 @@ defmodule PhoenixReplay.Web.Live.Show do
         errors_only: false,
         tab: "events",
         frame_mode: "fit",
+        # Shows the replay turned to the other orientation than recorded.
+        rotated?: false,
+        # Holds the frame where the user had scrolled; off, it scrolls freely.
+        follow_scroll?: true,
+        export: nil,
+        exportable?: false,
+        # The event the details pane holds while playback goes on, if pinned.
+        pinned: nil,
+        # The export dialog's params and error while it is open.
+        export_dialog: nil,
+        # The keyboard shortcut sheet, opened with ?.
+        shortcuts?: false,
         # A link to a moment opens the player there.
-        start_at: Params.integer(params["at"], nil)
+        start_at: Params.integer(params["at"], nil),
+        # And the time there, which may fall between that event and the next.
+        start_time: params["t"]
       )
 
     cond do
-      not socket.assigns.live? -> {:ok, loaded(socket, Context.fetch_recording!(socket, id))}
-      connected?(socket) -> {:ok, load_live(socket)}
-      true -> {:ok, socket}
+      not socket.assigns.live? ->
+        {:ok, socket |> loaded(Context.fetch_recording!(socket, id)) |> follow_export()}
+
+      connected?(socket) ->
+        {:ok, load_live(socket)}
+
+      true ->
+        {:ok, socket}
     end
+  end
+
+  defp details_event(%{timeline: %{events: events}, index: index, pinned: pinned})
+       when tuple_size(events) > 0 do
+    shown = pinned || index
+    {elem(events, shown), shown}
+  end
+
+  defp details_event(_assigns), do: nil
+
+  defp start_export(socket, options) do
+    case Export.start(socket.assigns.id, socket.assigns.context.config, options) do
+      {:ok, job} -> assign(socket, :export, job)
+      {:error, reason} -> put_flash(socket, :error, Export.describe(reason))
+    end
+  end
+
+  # Only saved recordings are exported.
+  defp follow_export(socket) do
+    %{context: context, id: id} = socket.assigns
+    exportable? = Export.available?(context.config)
+    if connected?(socket) and exportable?, do: Export.subscribe(id)
+
+    assign(socket,
+      exportable?: exportable?,
+      export: if(connected?(socket) and exportable?, do: Export.latest(id))
+    )
   end
 
   defp load_live(socket) do
@@ -102,16 +158,21 @@ defmodule PhoenixReplay.Web.Live.Show do
       # The pointer can move on after the last LiveView event.
       duration_ms: max(Timeline.duration_ms(recording), PointerTrack.end_at(pointer)),
       error_count: Events.error_count(recording),
-      interactions: Events.interactions(recording.events),
+      interactions: Timeline.interactions(recording.events),
       kinds: Events.kinds(recording),
       kind_counts: Events.kind_counts(recording),
       first_error: Events.first_error_index(recording),
+      # Events before the first render have no assigns to render the view
+      # with, so the player never goes before it.
+      first_render: Timeline.first_render_index(recording),
+      marks: Events.marks(recording),
       dropped: Events.dropped_count(recording),
-      journey: journey(socket, recording)
+      journey: Journey.of(socket, recording)
     )
     |> hand_over()
     |> filter_events()
-    |> seek(socket.assigns.start_at || Timeline.first_render_index(recording))
+    |> seek(socket.assigns.start_at || 0)
+    |> at_time(socket.assigns.start_time)
   end
 
   # A live session's frame waits for the redacted recording from the player.
@@ -143,8 +204,11 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   @impl true
-  def handle_event("seek", %{"index" => index}, socket) do
-    {:noreply, socket |> pause() |> seek(Params.integer(index, socket.assigns.index))}
+  # The scrubber also sends the time it was let go at, which may fall
+  # between the event and the next one.
+  def handle_event("seek", %{"index" => index} = params, socket) do
+    socket = socket |> pause() |> seek(Params.integer(index, socket.assigns.index))
+    {:noreply, at_time(socket, params["at"])}
   end
 
   def handle_event("previous", _params, socket) do
@@ -172,6 +236,50 @@ defmodule PhoenixReplay.Web.Live.Show do
     {:noreply, assign(socket, :frame_mode, mode)}
   end
 
+  def handle_event("toggle_frame_mode", _params, socket),
+    do: {:noreply, update(socket, :frame_mode, &if(&1 == "fit", do: "actual", else: "fit"))}
+
+  # Moves by time, landing between events as the scrubber can.
+  def handle_event("skip", %{"by" => by}, %{assigns: %{recording: %{}}} = socket)
+      when is_integer(by) do
+    time = (socket.assigns.at + by) |> max(0) |> min(socket.assigns.duration_ms)
+
+    {:noreply,
+     socket |> pause() |> seek(Timeline.index_at(socket.assigns.recording, time)) |> at_time(time)}
+  end
+
+  def handle_event("jump", %{"to" => "start"}, %{assigns: %{recording: %{}}} = socket),
+    do: {:noreply, socket |> pause() |> seek(0)}
+
+  def handle_event("jump", %{"to" => "end"}, %{assigns: %{recording: %{}}} = socket) do
+    %{timeline: timeline, duration_ms: duration} = socket.assigns
+    {:noreply, socket |> pause() |> seek(Timeline.last_index(timeline)) |> at_time(duration)}
+  end
+
+  # Jumps to the next or previous error, or mark.
+  def handle_event(to, %{"direction" => direction}, %{assigns: %{recording: %{}}} = socket)
+      when to in ~w(error mark) and direction in ~w(next previous) do
+    %{recording: recording, index: index} = socket.assigns
+    found? = if to == "error", do: &Event.error?/1, else: &Event.mark?/1
+
+    case Events.nearest_index(recording, index, String.to_existing_atom(direction), found?) do
+      nil -> {:noreply, socket}
+      found -> {:noreply, socket |> pause() |> seek(found)}
+    end
+  end
+
+  def handle_event("shortcuts", _params, socket),
+    do: {:noreply, update(socket, :shortcuts?, &not/1)}
+
+  def handle_event("close_shortcuts", _params, socket),
+    do: {:noreply, assign(socket, :shortcuts?, false)}
+
+  def handle_event("rotate", _params, socket),
+    do: {:noreply, update(socket, :rotated?, &not/1)}
+
+  def handle_event("follow_scroll", _params, socket),
+    do: {:noreply, update(socket, :follow_scroll?, &not/1)}
+
   def handle_event("tab", %{"value" => tab}, socket) when tab in ~w(events state visit) do
     {:noreply, assign(socket, :tab, tab)}
   end
@@ -191,6 +299,69 @@ defmodule PhoenixReplay.Web.Live.Show do
     end
   end
 
+  def handle_event("pin_details", _params, %{assigns: %{pinned: nil}} = socket),
+    do: {:noreply, assign(socket, :pinned, socket.assigns.index)}
+
+  def handle_event("pin_details", _params, socket), do: {:noreply, assign(socket, :pinned, nil)}
+
+  def handle_event("export_dialog", _params, %{assigns: %{exportable?: true}} = socket) do
+    options = Options.new(socket.assigns.context.config.export)
+
+    params = %{
+      "from" => "",
+      "to" => "",
+      "skip_idle" => to_string(options.skip_idle),
+      "pointer" => "true",
+      "rotated" => to_string(socket.assigns.rotated?),
+      "size" => "recorded",
+      "fps" => to_string(options.fps),
+      "quality" => "balanced"
+    }
+
+    {:noreply, assign(socket, :export_dialog, %{params: params, error: nil})}
+  end
+
+  def handle_event(
+        "export_form",
+        %{"export" => params},
+        %{assigns: %{export_dialog: %{}}} = socket
+      ),
+      do: {:noreply, update(socket, :export_dialog, &%{&1 | params: params})}
+
+  # Fills From or To with the moment the player is at.
+  def handle_event("export_at", %{"field" => field}, %{assigns: %{export_dialog: %{}}} = socket)
+      when field in ~w(from to) do
+    seconds = :erlang.float_to_binary(socket.assigns.at / 1_000, decimals: 2)
+    {:noreply, update(socket, :export_dialog, &put_in(&1, [:params, field], seconds))}
+  end
+
+  def handle_event("close_export_dialog", _params, socket),
+    do: {:noreply, assign(socket, :export_dialog, nil)}
+
+  def handle_event("export", %{"export" => params}, %{assigns: %{exportable?: true}} = socket) do
+    case Options.parse(params, socket.assigns.context.config.export) do
+      {:ok, options} ->
+        {:noreply, socket |> assign(:export_dialog, nil) |> start_export(options)}
+
+      {:error, message} ->
+        {:noreply, assign(socket, :export_dialog, %{params: params, error: message})}
+    end
+  end
+
+  # Trying again after a failure uses the options that failed.
+  def handle_event("export", _params, %{assigns: %{exportable?: true}} = socket),
+    do: {:noreply, start_export(socket, socket.assigns.export && socket.assigns.export.options)}
+
+  def handle_event("cancel_export", _params, %{assigns: %{export: %{id: id}}} = socket) do
+    :ok = Export.cancel(id)
+    {:noreply, socket}
+  end
+
+  def handle_event("cancel_export", _params, socket), do: {:noreply, socket}
+
+  def handle_event("dismiss_export", _params, socket),
+    do: {:noreply, assign(socket, :export, nil)}
+
   def handle_event("delete", _params, socket) do
     %{context: context, recording: recording} = socket.assigns
 
@@ -209,7 +380,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   @impl true
   # Steps to the next event; after the last one, plays on to the end of
   # the pointer track, then stops.
-  def handle_info({:advance, ref}, %{assigns: %{playing: {_timer, ref}}} = socket) do
+  def handle_info({:advance, ref}, %{assigns: %{playing: %{ref: ref}}} = socket) do
     %{index: index, timeline: timeline} = socket.assigns
 
     socket =
@@ -242,8 +413,13 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   def handle_info({:redaction_progress, _done, _total}, socket), do: {:noreply, socket}
 
+  def handle_info({Export, %{recording_id: id} = job}, %{assigns: %{id: id}} = socket),
+    do: {:noreply, assign(socket, :export, job)}
+
+  def handle_info({Export, _other_recording}, socket), do: {:noreply, socket}
+
   defp seek(socket, index) do
-    timeline = Timeline.seek(socket.assigns.timeline, index)
+    timeline = Timeline.seek(socket.assigns.timeline, max(index, socket.assigns.first_render))
     :ok = Channel.seek(socket.assigns.channel, timeline.index)
 
     assign(socket,
@@ -254,7 +430,8 @@ defmodule PhoenixReplay.Web.Live.Show do
       viewport: timeline.viewport,
       url: timeline.url,
       replayed: shown_assigns(timeline.assigns),
-      changed: Events.changed_keys(timeline.event)
+      before: timeline.before,
+      changed: Event.changed_keys(timeline.event)
     )
   end
 
@@ -267,11 +444,11 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   defp play(socket) do
-    %{recording: recording, index: index} = socket.assigns
+    %{index: index} = socket.assigns
 
     if index >= Timeline.last_index(socket.assigns.timeline) and
          socket.assigns.at >= socket.assigns.duration_ms,
-       do: socket |> seek(Timeline.first_render_index(recording)) |> schedule(),
+       do: socket |> seek(0) |> schedule(),
        else: schedule(socket)
   end
 
@@ -279,12 +456,16 @@ defmodule PhoenixReplay.Web.Live.Show do
     %{at: at, next_at: next_at, speed: speed} = socket.assigns
     ref = make_ref()
     timer = Process.send_after(self(), {:advance, ref}, div(next_at - at, speed))
-    assign(socket, :playing, {timer, ref})
+    assign(socket, :playing, %{timer: timer, ref: ref, since: now()})
   end
 
-  defp pause(%{assigns: %{playing: {timer, _ref}}} = socket) do
+  # The scrubber and the pointer moved on between events while playing, so
+  # pausing keeps the time playback reached rather than the last event's.
+  defp pause(%{assigns: %{playing: %{timer: timer, since: since}}} = socket) do
     Process.cancel_timer(timer)
-    assign(socket, :playing, nil)
+    %{at: at, next_at: next_at, speed: speed} = socket.assigns
+    reached = min(at + (now() - since) * speed, next_at)
+    assign(socket, at: reached, playing: nil)
   end
 
   defp pause(socket), do: socket
@@ -298,133 +479,11 @@ defmodule PhoenixReplay.Web.Live.Show do
   defp redaction_percent({done, total}) when total > 0, do: Float.round(done / total * 100, 1)
   defp redaction_percent(_progress), do: 0.0
 
-  # The sessions of the recording's browser tab, oldest first, when it has more than one.
-  defp journey(socket, %{id: id, client: %{tab: tab}}) when is_binary(tab) do
-    %{config: config} = socket.assigns.context
-    filter = %Filter{tab: tab}
-    now = System.system_time(:millisecond)
-    allowed? = &Context.allowed?(socket, :list, &1)
-    {stored, _total} = Catalog.query(config, filter, now: now, limit: @journey_limit)
-
-    sessions =
-      (Catalog.live(filter, now) ++ stored)
-      |> Enum.uniq_by(& &1.id)
-      |> Enum.filter(allowed?)
-      |> Enum.sort_by(& &1.connected_at)
-
-    case {Enum.find_index(sessions, &(&1.id == id)), sessions} do
-      {index, [_first, _second | _rest]} when is_integer(index) ->
-        context = socket.assigns.context
-
-        %{
-          tab_path: Context.path(context, []) <> "?" <> URI.encode_query(%{"tab" => tab}),
-          position: index + 1,
-          total: length(sessions),
-          previous: index > 0 && Context.path(context, [Enum.at(sessions, index - 1).id]),
-          next: (next = Enum.at(sessions, index + 1)) && Context.path(context, [next.id])
-        }
-
-      _alone ->
-        nil
-    end
-  end
-
-  defp journey(_socket, _recording), do: nil
-
-  @impl true
-  def render(%{recording: nil} = assigns) do
-    ~H"""
-    <.app_bar>
-      <:mark><.icon name="lucide:circle-play" class="size-5 text-accent" /></:mark>
-      <:crumb>
-        <.link navigate={Context.path(@context, [])} class="hover:text-accent">PhoenixReplay</.link>
-      </:crumb>
-      <:crumb>Live session</:crumb>
-    </.app_bar>
-    <main class="flex flex-col gap-4 p-4 sm:p-5">
-      <.flash flash={@flash} />
-      <p :if={@load_error?} role="alert" class="text-sm text-error">
-        Could not redact this session, so it is not shown.
-      </p>
-      <div :if={!@load_error?} id="replay-redaction" role="status" class="max-w-md text-sm text-muted">
-        <p class="mb-2">{redaction_label(@progress)}</p>
-        <.progress label="Redaction" value={redaction_percent(@progress)} />
-      </div>
-      <.replay_frame :if={!@load_error?} src={frame_src(assigns)} />
-    </main>
-    """
-  end
-
-  def render(assigns) do
-    ~H"""
-    <.player_header
-      recording={@recording}
-      back={Context.path(@context, [])}
-      duration_ms={@duration_ms}
-      error_count={@error_count}
-      first_error={@first_error}
-      dropped={@dropped}
-      at={@at}
-      link={Context.path(@context, [@recording.id]) <> "?at=#{@index}"}
-    />
-    <div class="flex flex-wrap items-stretch">
-      <main class="flex min-w-0 flex-[999_1_40rem] flex-col gap-4 p-4 sm:p-5">
-        <.flash flash={@flash} />
-        <.replay_frame
-          src={frame_src(assigns)}
-          url={@url}
-          viewport={@viewport}
-          mode={@frame_mode}
-          below="replay-playback"
-          pointer={@pointer}
-        />
-        <.playback
-          id="replay-playback"
-          recording={@recording}
-          index={@index}
-          at={@at}
-          next_at={@next_at}
-          duration_ms={@duration_ms}
-          playing={@playing != nil}
-          speed={@speed}
-          speeds={@speeds}
-        />
-      </main>
-      <aside
-        aria-label="Session"
-        class="flex max-w-full min-w-0 flex-[1_1_24rem] flex-col border-l border-line bg-surface"
-      >
-        <.tabs
-          id="replay-tabs"
-          label="Session details"
-          tabs={[{"events", "Events"}, {"state", "State"}, {"visit", "Visit"}]}
-          value={@tab}
-          event="tab"
-        />
-        <div id="replay-tabs-panel" role="tabpanel" class="flex min-h-0 flex-1 flex-col">
-          <.event_list
-            :if={@tab == "events"}
-            groups={@event_groups}
-            kinds={@kinds}
-            counts={@kind_counts}
-            error_count={@error_count}
-            index={@index}
-            hidden={@hidden}
-            query={@query}
-            errors_only={@errors_only}
-          />
-          <.state :if={@tab == "state"} assigns={@replayed} changed={@changed} at={@at} />
-          <.visit
-            :if={@tab == "visit"}
-            recording={@recording}
-            viewport={@viewport}
-            journey={@journey}
-          />
-        </div>
-      </aside>
-    </div>
-    """
-  end
+  # The channel is made at each mount, and the page's first render is not
+  # connected, so the frame gets its address only once the player is: an
+  # address in that first render would load the frame, then load it again
+  # with the connected player's channel.
+  defp frame_src(%{connected?: false}), do: nil
 
   defp frame_src(%{context: context, id: id, channel: channel}),
     do: Context.path(context, [id, "frame"]) <> "?channel=#{channel}"
@@ -444,4 +503,17 @@ defmodule PhoenixReplay.Web.Live.Show do
     do: Map.delete(assigns, :phoenix_replay_state)
 
   defp shown_assigns(assigns), do: assigns
+
+  defp now, do: System.monotonic_time(:millisecond)
+
+  defp at_time(socket, nil), do: socket
+
+  defp at_time(%{assigns: %{at: at, next_at: next_at}} = socket, requested),
+    do: assign(socket, :at, requested |> Params.integer(at) |> max(at) |> min(next_at))
+
+  # The recording list filtered by `criteria`, such as where a visit came from.
+  defp filtered_list(context, criteria) do
+    Context.path(context, []) <>
+      "?" <> URI.encode_query(Filter.to_params(struct!(Filter, criteria)))
+  end
 end

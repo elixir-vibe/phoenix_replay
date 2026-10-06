@@ -7,6 +7,7 @@ import { LiveSocket } from 'phoenix_live_view'
 import { replayMetadata, replayParams, replayRecorder } from 'phoenix_replay'
 
 import topbar from '../vendor/topbar'
+import { ClientSearch } from './client_search'
 
 const csrfToken = document
   .querySelector<HTMLMetaElement>("meta[name='csrf-token']")
@@ -16,7 +17,7 @@ const liveSocket = new LiveSocket('/live', Socket, {
   longPollFallbackMs: 2500,
   params: () => ({ _csrf_token: csrfToken, ...replayParams() }),
   metadata: replayMetadata,
-  hooks: { ...colocatedHooks }
+  hooks: { ...colocatedHooks, ClientSearch }
 })
 
 // Show progress bar on live navigation and form submits

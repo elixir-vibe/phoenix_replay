@@ -113,3 +113,49 @@ test('keeps the element named by data-below free under the frame', () => {
   expect(alone - withControls).toBeGreaterThan(260)
   expect(alone - withControls).toBeLessThan(340)
 })
+
+test('scrolls the box back when it goes from 100% to fit', () => {
+  const el = section({ width: 1200, height: 800 })
+  const { hook } = mountHook(FrameViewport, el)
+  const box = el.querySelector('#viewport-box') as HTMLElement
+
+  el.dataset.mode = 'actual'
+  hook.updated?.()
+  box.scrollTo(300, 200)
+  expect(box.scrollLeft).toBe(300)
+
+  el.dataset.mode = 'fit'
+  hook.updated?.()
+  expect([box.scrollLeft, box.scrollTop]).toEqual([0, 0])
+})
+
+test('holds the scrolled view, then eases from it into the fitted frame', () => {
+  const el = section({ width: 1200, height: 800 })
+  const { hook } = mountHook(FrameViewport, el)
+  const box = el.querySelector('#viewport-box') as HTMLElement
+  const style = el.querySelector('style') as HTMLStyleElement
+
+  el.dataset.mode = 'actual'
+  hook.updated?.()
+  box.scrollTo(300, 200)
+
+  // Every stylesheet the hook writes, in order.
+  const written: string[] = []
+  const property = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent')
+  Object.defineProperty(style, 'textContent', {
+    get: () => property?.get?.call(style),
+    set: (text: string) => {
+      written.push(text)
+      property?.set?.call(style, text)
+    }
+  })
+
+  el.dataset.mode = 'fit'
+  hook.updated?.()
+
+  const [held, fitted] = written
+  expect(held).toContain('transform:translate(-300px,-200px) scale(1)')
+  expect(held).toContain('transition:none')
+  expect(fitted).toContain('transform:translate(0px,0px) scale(0.5)')
+  expect(measure(el).frame.transform).toBe('matrix(0.5, 0, 0, 0.5, 0, 0)')
+})

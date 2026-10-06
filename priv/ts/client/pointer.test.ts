@@ -1,12 +1,20 @@
-import { afterEach, expect, test } from 'volt:test'
+import { afterEach, beforeEach, expect, test } from 'volt:test'
 
+import { type Clock, fakeClock } from '../test/clock'
 import type { PointerSettings } from './pointer'
 import type { Batch } from './pointer_track'
 import { replayRecorder } from './recorder'
 
 let stop = (): void => {}
+let clock: Clock
+
+// Sampling runs on the clock the test ticks.
+beforeEach(() => {
+  clock = fakeClock()
+})
 
 afterEach(() => {
+  clock.uninstall()
   stop()
   document.body.replaceChildren()
 })
@@ -61,7 +69,15 @@ const pointer = (type: string, x: number, y: number, init: PointerEventInit = {}
   )
 }
 
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+// Dispatches a touch event in which `changed` fingers, `[id, x, y]`, changed.
+const touch = (type: string, changed: [number, number, number][]): void => {
+  const target =
+    document.elementFromPoint(changed[0]?.[1] ?? 0, changed[0]?.[2] ?? 0) ?? document.body
+  const touches = changed.map(
+    ([identifier, clientX, clientY]) => new Touch({ identifier, target, clientX, clientY })
+  )
+  target.dispatchEvent(new TouchEvent(type, { changedTouches: touches, touches, bubbles: true }))
+}
 
 const leave = (kind: string): void => {
   window.dispatchEvent(new CustomEvent('phx:page-loading-start', { detail: { kind } }))
@@ -74,14 +90,14 @@ test('records nothing until a LiveView asks', () => {
   expect(batches).toEqual([])
 })
 
-test('samples moves at most every sample ms, keeping where the pointer came to rest', async () => {
+test('samples moves at most every sample ms, keeping where the pointer came to rest', () => {
   const batches = setup()
   announce()
 
   pointer('pointermove', 10, 10)
   pointer('pointermove', 11, 11)
   pointer('pointermove', 12, 12)
-  await wait(80)
+  clock.tick(80)
   leave('redirect')
 
   const [batch] = batches
@@ -120,12 +136,64 @@ test('gives each finger its own slot, and sends a full batch early', () => {
   // The scroll offset taken on starting counts too.
   announce({ max_points: 3 })
 
-  pointer('pointerdown', 20, 20, { pointerType: 'touch', pointerId: 7 })
-  pointer('pointerdown', 40, 40, { pointerType: 'touch', pointerId: 9 })
+  // Safari's identifiers are addresses, not 0, 1, 2.
+  touch('touchstart', [[1_947_211_840, 20, 20]])
+  touch('touchstart', [[1_947_212_096, 40, 40]])
 
   expect(batches.length).toBe(1)
-  const slots = batches[0]?.p.map(([, , , , slot]) => slot)
-  expect(slots).toEqual([1, 2])
+  const slots = batches[0]?.p.map(([, , , , slot, type]) => [slot, type])
+  expect(slots).toEqual([
+    [1, 1],
+    [2, 1]
+  ])
+})
+
+test('follows both fingers of a pinch, which the browser cancels as pointer events', () => {
+  const batches = setup()
+  announce({ sample: 10 })
+
+  touch('touchstart', [
+    [5, 100, 100],
+    [6, 200, 200]
+  ])
+  // The browser takes the gesture over: its pointer events stop here.
+  pointer('pointercancel', 100, 100, { pointerType: 'touch', pointerId: 5 })
+  pointer('pointercancel', 200, 200, { pointerType: 'touch', pointerId: 6 })
+
+  for (const step of [10, 20, 30]) {
+    touch('touchmove', [
+      [5, 100 - step, 100 - step],
+      [6, 200 + step, 200 + step]
+    ])
+    clock.tick(15)
+  }
+
+  touch('touchend', [
+    [5, 70, 70],
+    [6, 230, 230]
+  ])
+  leave('redirect')
+
+  const [batch] = batches
+  const moves = batch?.m ?? []
+  const bySlot = (slot: number): number[][] => {
+    const points: number[][] = []
+    for (let i = 0; i < moves.length; i += 4)
+      if (moves[i + 3] === slot) points.push([moves[i + 1] ?? 0, moves[i + 2] ?? 0])
+    return points
+  }
+
+  // Each finger moved apart, to where it was lifted.
+  expect(bySlot(1).at(-1)).toEqual([70, 70])
+  expect(bySlot(2).at(-1)).toEqual([230, 230])
+
+  // Only the touches' own down and up: no presses from the cancelled pointers.
+  expect(batch?.p.map(([, kind, , , slot]) => [kind, slot])).toEqual([
+    [0, 1],
+    [0, 2],
+    [1, 1],
+    [1, 2]
+  ])
 })
 
 test('keeps recording through a patch, and stops when leaving the LiveView', () => {

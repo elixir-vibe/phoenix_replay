@@ -42,17 +42,7 @@ defmodule PhoenixReplay.Redactor do
 
   # As PhoenixReplay.Sanitizer.Default keeps them, but for URI: its path,
   # query and user info hold whatever was typed into them.
-  @opaque_structs [
-    Date,
-    DateTime,
-    Decimal,
-    MapSet,
-    NaiveDateTime,
-    Range,
-    Regex,
-    Time,
-    Version
-  ]
+  @opaque_structs PhoenixReplay.Recording.Value.opaque_structs() -- [URI]
 
   @doc """
   Redacts every part of `recording` that holds recorded values: its URL,

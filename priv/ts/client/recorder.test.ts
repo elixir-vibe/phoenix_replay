@@ -7,7 +7,7 @@ import {
   type StartDetail,
   STOP_EVENT
 } from './recorder'
-import type { StateBatch, StateSettings } from './state'
+import { type StateBatch, type StateSettings, replayState } from './state'
 
 let stop = (): void => {}
 
@@ -21,7 +21,9 @@ const settings: StateSettings = {
   max_entries: 3,
   max_key: 8,
   max_entry_bytes: 40,
-  max_bytes: 1_000
+  max_bytes: 1_000,
+  inputs: false,
+  debounce: 50
 }
 
 // A LiveView's root element and a socket that collects what is pushed to it.
@@ -189,4 +191,43 @@ test('marks the page while recording, for code that loads later', () => {
 
   record(null)
   expect(html.getAttribute(RECORDING_ATTRIBUTE)).toBe('{"state":null}')
+})
+
+test('starts with state reported before recording, without the reporter knowing', () => {
+  const pushed = setup()
+
+  replayState('search', { query: 'sh' })
+  replayState('search', { page: 2 })
+  record()
+  leave()
+
+  const [batch] = states(pushed)
+  expect(batch?.e.map(([, key, change]) => [key, change])).toEqual([
+    ['search', { query: 'sh', page: 2 }]
+  ])
+})
+
+test('forgets reported state when the page navigates to another LiveView', () => {
+  const pushed = setup()
+
+  replayState('search', { query: 'sh' })
+  record()
+  leave()
+  record()
+  leave()
+
+  expect(states(pushed).length).toBe(1)
+})
+
+test("puts back the form values a replay frame pushes, in the app's own layout", () => {
+  setup()
+  const note = document.createElement('textarea')
+  note.id = 'note'
+  document.body.append(note)
+
+  window.dispatchEvent(
+    new CustomEvent('phx:phx_replay:inputs', { detail: { values: { '#note': { note: 'typed' } } } })
+  )
+
+  expect(note.value).toBe('typed')
 })

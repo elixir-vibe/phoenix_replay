@@ -11,25 +11,35 @@ defmodule PhoenixReplay.Web.Live.Index do
   Saved recordings are listed as of a moment, `until`, taken when the list
   opens or its filter changes, so pages stay put while sessions end. Newer
   ones are counted in a banner that brings the list up to date.
+
+  Filters beyond the search, the time window and errors are added and
+  changed in a value picker, which offers the values recordings have
+  with how many have each; see `PhoenixReplay.Web.FilterFields`.
   """
 
   use Phoenix.LiveView
 
   import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.Core
+  import PhoenixReplay.Web.Components.Layout
+  import PhoenixReplay.Web.Components.Filters, only: [filter_bar: 1]
   import PhoenixReplay.Web.Components.RecordingList
 
   alias PhoenixReplay.Catalog
   alias PhoenixReplay.Recording.Filter
-  alias PhoenixReplay.Web.{Context, Format, Layouts, Params}
+  alias PhoenixReplay.Web.{Context, FilterFields, Format, Highlight, Layouts, Params}
 
   @per_page 25
+  # How many values the value picker offers, the most common first.
+  @values 50
   @live_refresh_ms 2_000
   @reload_window_ms 1_000
 
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket), do: Catalog.subscribe()
+    # The player highlights code; the list warms the grammars for it.
+    :ok = Highlight.warm()
     context = Context.fetch(socket)
 
     {:ok,
@@ -42,7 +52,11 @@ defmodule PhoenixReplay.Web.Live.Index do
        until: nil,
        refresh_timer: nil,
        reload_window: nil,
-       reload?: false
+       reload?: false,
+       editing: nil,
+       values: [],
+       typed: "",
+       utc_offset: utc_offset(socket)
      )}
   end
 
@@ -58,6 +72,7 @@ defmodule PhoenixReplay.Web.Live.Index do
     {:noreply,
      socket
      |> assign(page: max(Params.integer(params["page"], 1), 1), filter: filter, until: until)
+     |> close_filter()
      |> load()}
   end
 
@@ -84,10 +99,34 @@ defmodule PhoenixReplay.Web.Live.Index do
     end
   end
 
-  def handle_event("filter", params, socket) do
-    path = index_path(socket.assigns.context, Filter.from_params(params), 1)
-    {:noreply, push_patch(socket, to: path, replace: true)}
+  # The search; chips keep the other criteria.
+  def handle_event("filter", params, socket),
+    do: {:noreply, patch_filter(socket, ~w(q), Map.take(params, ~w(q)), replace: true)}
+
+  def handle_event("edit_time", _params, socket),
+    do: {:noreply, assign(socket, editing: :time, values: [], typed: "")}
+
+  # A range of start times, in UTC, from the browser.
+  def handle_event("time_range", params, socket),
+    do: {:noreply, patch_filter(socket, ~w(within from to), Map.take(params, ~w(from to)), [])}
+
+  def handle_event("edit_filter", %{"field" => name}, socket) do
+    case FilterFields.parse(name) do
+      {:ok, field} -> {:noreply, edit_filter(socket, field)}
+      :error -> {:noreply, socket}
+    end
   end
+
+  def handle_event("type_value", %{"value" => typed}, socket),
+    do: {:noreply, assign(socket, :typed, typed)}
+
+  def handle_event("apply_filter", %{"value" => value}, %{assigns: %{editing: %{}}} = socket) do
+    %{context: context, filter: filter, editing: field} = socket.assigns
+    path = index_path(context, FilterFields.put(filter, field, value), 1)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  def handle_event("close_filter", _params, socket), do: {:noreply, close_filter(socket)}
 
   def handle_event("show_new", _params, socket) do
     %{context: context, filter: filter} = socket.assigns
@@ -115,6 +154,38 @@ defmodule PhoenixReplay.Web.Live.Index do
     end
   end
 
+  # The list filtered by `params` in place of the criteria `keys`.
+  defp patch_filter(socket, keys, params, opts) do
+    filter =
+      socket.assigns.filter
+      |> Filter.to_params()
+      |> Map.drop(keys)
+      |> Map.merge(params)
+      |> Filter.from_params()
+
+    push_patch(socket, [to: index_path(socket.assigns.context, filter, 1)] ++ opts)
+  end
+
+  # Opens the value picker for `field`, with the values recordings
+  # matching the other criteria have.
+  defp edit_filter(socket, field) do
+    %{context: %{config: config}, filter: filter} = socket.assigns
+
+    values =
+      if field.control == :choice,
+        do:
+          Catalog.values(config, field.key, filter,
+            now: System.system_time(:millisecond),
+            limit: @values,
+            allow: allow(socket)
+          ),
+        else: []
+
+    assign(socket, editing: field, values: values, typed: "")
+  end
+
+  defp close_filter(socket), do: assign(socket, editing: nil, values: [], typed: "")
+
   defp reload(socket) do
     window = Process.send_after(self(), :reload_window, @reload_window_ms)
     socket |> assign(reload_window: window, reload?: false) |> load()
@@ -135,7 +206,13 @@ defmodule PhoenixReplay.Web.Live.Index do
       page: page,
       stored: %{saved: saved, total: total, all: all, errors: count.(%Filter{errors: true})},
       newer: newer(socket, now, allow),
-      facets: Catalog.facets(config, allow),
+      activity:
+        Catalog.activity(config, socket.assigns.filter,
+          now: now,
+          allow: allow,
+          utc_offset: socket.assigns.utc_offset
+        ),
+      sampling: Format.sampling(config.sample_rate, config.keep),
       can_clear?: all > 0 and Context.allowed?(socket, :clear, nil)
     )
   end
@@ -223,6 +300,19 @@ defmodule PhoenixReplay.Web.Live.Index do
     assign(socket, :refresh_timer, timer)
   end
 
+  # How far the viewer's time zone is ahead of UTC, in milliseconds, as
+  # the browser said when it connected; UTC before then.
+  defp utc_offset(socket) do
+    case connected?(socket) && get_connect_params(socket)["utc_offset"] do
+      minutes when is_integer(minutes) and abs(minutes) <= 14 * 60 -> :timer.minutes(minutes)
+      _unknown -> 0
+    end
+  end
+
+  # The list narrowed to sessions started from `from` to `to`.
+  defp range_path(context, %Filter{} = filter, {from, to}),
+    do: index_path(context, %Filter{filter | within: nil, from: from, to: to}, 1)
+
   defp index_path(context, filter, page) do
     params = Filter.to_params(filter)
     params = if page > 1, do: Map.put(params, "page", Integer.to_string(page)), else: params
@@ -247,6 +337,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         >
           Docs
         </a>
+        <.theme_toggle id="theme-toggle" />
         <.menu :if={@can_clear?} id="recordings-menu" label="More actions">
           <:trigger><.icon name="lucide:ellipsis" class="size-4" /></:trigger>
           <:item tone="danger">
@@ -265,14 +356,28 @@ defmodule PhoenixReplay.Web.Live.Index do
         <p :if={@any?} class="mt-1.5 text-sm text-muted">
           {Format.count(@counts.all, "session")} · {@counts.live} live · {@counts.errors} with errors
         </p>
+        <p
+          :if={@any? and @sampling}
+          id="recordings-sampling"
+          class="mt-1 flex items-center gap-1.5 text-xs text-muted"
+        >
+          <.icon name="lucide:info" class="size-3.5 shrink-0" /> {@sampling}
+        </p>
       </header>
 
       <.filter_bar
         :if={@any?}
         filter={@filter}
-        views={@facets.views}
-        event_names={@facets.event_names}
         path={&index_path(@context, &1, 1)}
+        editing={@editing}
+        values={@values}
+        typed={@typed}
+      />
+
+      <.activity_chart
+        :if={@any?}
+        activity={@activity}
+        path={&range_path(@context, @filter, &1)}
       />
 
       <.empty_state :if={@any? and @total == 0} title="No recordings match these filters.">
@@ -295,11 +400,18 @@ defmodule PhoenixReplay.Web.Live.Index do
       </.empty_state>
 
       <.new_recordings count={@newer} />
-      <.recording_list live recordings={@live} now={@now} path={&Context.path(@context, [&1.id])} />
+      <.recording_list
+        live
+        recordings={@live}
+        now={@now}
+        path={&Context.path(@context, [&1.id])}
+        filter_path={&index_path(@context, Map.put(@filter, &1, &2), 1)}
+      />
       <.recording_list
         recordings={@saved}
         now={@now}
         path={&Context.path(@context, [&1.id])}
+        filter_path={&index_path(@context, Map.put(@filter, &1, &2), 1)}
         delete="delete"
       />
 

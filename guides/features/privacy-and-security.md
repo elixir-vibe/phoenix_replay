@@ -21,7 +21,8 @@ Everything recorded passes through a `PhoenixReplay.Sanitizer` before it is stor
 
 `PhoenixReplay.Sanitizer.Default`:
 
-- replaces the values of keys containing `password`, `token`, `secret`, `api_key`, `apikey`, `private_key` or `credential`, in any case, with `"[FILTERED]"`; keys are kept so templates still render,
+- replaces the values of keys containing `password`, `token`, `secret`, `api_key`, `apikey`, `private_key`, `credential`, `card_number`, `credit_card` or `one_time`, in any case, with `"[FILTERED]"`; keys are kept so templates still render,
+- in params and form values, also filters keys with `cvv`, `cvc`, `csc`, `ssn`, `pin` or `otp` as a word of their own (`card_cvv`, `pinCode`, but not `shipping`); assigns keep those, since an assign such as `:pin` is rarely a secret and a filtered one can break the replay,
 - recurses into maps, lists, tuples and structs, including Ecto schemas,
 - compacts `Ecto.Changeset` and `Phoenix.HTML.Form` runtime metadata,
 - drops LiveView internals that cannot be replayed.
@@ -82,11 +83,38 @@ Sessions still running are redacted when the dashboard opens them, so they show 
 
 Ecto query parameters and URL query strings are left out of collected events unless you enable them.
 
+## Form controls and client state
+
+When the client module's `replayRecorder` runs, what users type and choose in form controls is recorded by default, with or without `phx-change`, and so is state your code reports with `replayState`. Both pass through `sanitize_params/1` under the control's name or the reported key, like event params.
+
+These are never read in the browser at all, so they never leave it:
+
+- password inputs, including one a "show password" toggle turned into text,
+- fields whose `autocomplete` names a card (`cc-number`, `cc-csc`…), a password (`current-password`, `new-password`) or a one-time code (`one-time-code`),
+- hidden and file inputs, and buttons,
+- anything inside an element with `data-phx-replay-ignore`.
+
+Mark anything else private with that attribute, such as a free-text field that may hold health or financial details:
+
+```heex
+<div data-phx-replay-ignore>
+  <.input field={@form[:notes]} type="textarea" />
+</div>
+```
+
+Turn form controls off with `state: [inputs: false]`, or all client state with `state: false`.
+
 ## What is never recorded
 
 - `handle_info/2` message contents; only the message tag is kept,
 - the contents of streams and uploads,
-- anything that happens only in the browser.
+- the controls listed above, and what happens in the browser that neither a form control nor `replayState` reports.
+
+## Video export
+
+An exported video shows what the player shows, so the sanitizer and redactor have already applied. The export browser loads the replay from a private endpoint PhoenixReplay starts on 127.0.0.1 and a free port, with a secret made at that moment; its pages need a token signed with that secret.
+
+Any other request the replayed page makes, such as a stylesheet, script, font or image, is passed to your endpoint in the same VM, as a request from 127.0.0.1 without your proxy's headers. If your app trusts requests by their loopback address, or by headers such as `X-Forwarded-For` that a proxy normally sets, keep that in mind: a page rendered in an export can reach the routes it links to the same way.
 
 ## Retention
 

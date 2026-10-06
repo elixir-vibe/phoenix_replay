@@ -65,7 +65,7 @@ defmodule PhoenixReplay.Recording.StateTest do
   end
 
   test "counts as interaction once a key changes, not when first reported" do
-    keep = %{rate: 1.0, errors: false, slower_than: nil}
+    keep = %{rate: 1.0, errors: false, marks: false, slower_than: nil}
     first = recording([@mount, batch(10, 0, [[0, "a", %{"x" => 1}], [0, "b", %{}]])])
 
     again =
@@ -77,6 +77,10 @@ defmodule PhoenixReplay.Recording.StateTest do
 
     assert TailSampling.decide(first, keep, 0.5) == {:discard, :not_interactive}
     assert TailSampling.decide(again, keep, 0.5) == :keep
+
+    # The browser reports a form control only once the user changed it.
+    typed = recording([@mount, batch(10, 0, [[0, State.inputs_key(), %{"#q" => %{"q" => "a"}}]])])
+    assert TailSampling.decide(typed, keep, 0.5) == :keep
   end
 
   test "is not counted as events in summaries" do

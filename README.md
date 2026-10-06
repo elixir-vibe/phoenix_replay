@@ -115,6 +115,14 @@ phoenix_replay "/replay",
 
 The dashboard ships its own assets and loads your app's own Phoenix and LiveView clients, so it needs nothing from your asset pipeline. See the [Dashboard guide](https://hexdocs.pm/phoenix_replay/dashboard.html).
 
+Export a recording as an MP4 of the page and the pointer, from the player's menu or with `mix phoenix_replay.export <id>`. A headless Chromium films the replay through [`playwright_ex`](https://hexdocs.pm/playwright_ex) and `ffmpeg`, run by [MuonTrap](https://hexdocs.pm/muontrap), encodes it; see [Exporting videos](https://hexdocs.pm/phoenix_replay/dashboard.html#exporting-videos).
+
+## For coding agents
+
+`PhoenixReplay.Trace` reads recordings as plain data, for IEx, scripts and agents: `find/1` by view, event, errors or time, `events/1` as the player lists them, and `state/2` with the assigns at a moment and what changed. `mix phoenix_replay.list` and `mix phoenix_replay.show` print the same from a shell.
+
+The package ships two agent skills, `phoenix-replay-setup` and `phoenix-replay-debugging`, as `SKILL.md` files in `deps/phoenix_replay/skills/`. Point your agent at them, or copy them to wherever it reads skills from.
+
 ## Storage
 
 Recordings are kept in compressed files by default, or in your database:
@@ -150,6 +158,8 @@ npx playwright install chromium
 mix assets.build
 mix ci
 ```
+
+`mix ci` runs every check, including the video export tests, which film real replays with Chromium and need `ffmpeg`. A plain `mix test` leaves those out; set `PHOENIX_REPLAY_EXPORT_TESTS=1` to run them with it.
 
 The Ecto storage tests run on SQLite, on DuckDB through [QuackDB](https://hexdocs.pm/quackdb) (Elixir 1.19+; install its binary once with `MIX_ENV=test mix quackdb.install`), and on PostgreSQL when `PHOENIX_REPLAY_POSTGRES_URL` names a database. Any PostgreSQL works; without Docker or Homebrew, [theseus-rs/postgresql-binaries](https://github.com/theseus-rs/postgresql-binaries) has plain builds:
 

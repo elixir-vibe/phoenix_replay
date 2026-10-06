@@ -20,6 +20,10 @@ defmodule PhoenixReplay.Collector.Generic do
       event, as in `Telemetry.Metrics`
     * `:summary` — a function of the metadata returning the line shown in
       the replay. Defaults to the event name.
+    * `:mark` — `true` for an event that marks a moment, such as a signup
+      or a completed checkout, as an analytics event would, or the mark's
+      name, such as `"Checkout completed"`; see
+      `PhoenixReplay.Collector.Captured`. Defaults to `false`.
 
   Measurements are kept, with times converted to milliseconds by
   `PhoenixReplay.Collector.milliseconds/1`. An event whose name ends in
@@ -43,7 +47,8 @@ defmodule PhoenixReplay.Collector.Generic do
          summary: summary(opts[:summary], event, metadata),
          measurements: Collector.milliseconds(measurements),
          metadata: Map.take(metadata, Keyword.get(opts, :metadata, [])),
-         error: error(event, metadata)
+         error: error(event, metadata),
+         mark: Keyword.get(opts, :mark, false)
        }}
     else
       :skip

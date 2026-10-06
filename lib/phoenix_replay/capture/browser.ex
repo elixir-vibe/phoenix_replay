@@ -15,10 +15,12 @@ defmodule PhoenixReplay.Capture.Browser do
       })
 
   The connect params give the viewport and tab when the LiveView connects.
-  The metadata adds the viewport to each click and key press as a
-  `"_replay"` param, so a resize is recorded, as a `:viewport` event, with
-  the user's next interaction. The host's `handle_event/3` sees the extra
-  param; it is left out of recorded params.
+  While the page is recorded, `replayRecorder/1` sends the viewport as it
+  changes, a resized window or a rotated phone, once it settles, and it is
+  recorded as a `:viewport` event; see `viewport/1`. The metadata also adds
+  the viewport to each click and key press as a `"_replay"` param, which
+  catches changes when `replayRecorder/1` does not run. The host's
+  `handle_event/3` sees the extra param; it is left out of recorded params.
 
   The last viewport seen is kept in the LiveView's process dictionary,
   since both the recorder's hooks and LiveComponent telemetry run there.
@@ -75,18 +77,33 @@ defmodule PhoenixReplay.Capture.Browser do
 
   defp landing(_landing), do: nil
 
+  @doc "The event name the browser sends viewport changes as, while it is recorded."
+  @spec viewport_event() :: String.t()
+  def viewport_event, do: "phx_replay:viewport"
+
+  @doc """
+  Records a `:viewport` event when the browser reports a viewport that
+  differs from the last one seen: sent on its own as the window is resized
+  or the phone rotated, or with a click or key press as a fallback.
+  """
+  @spec viewport(map()) :: :ok
+  def viewport(params) do
+    with %{} = viewport <- parse(params),
+         true <- viewport != Process.get(@key) do
+      Process.put(@key, viewport)
+      Buffer.record(self(), :viewport, viewport)
+    end
+
+    :ok
+  end
+
   @doc """
   Records a `:viewport` event when an event's params carry a viewport that
   differs from the last one seen, and returns the params without it.
   """
   @spec observe(map()) :: map()
   def observe(%{"_replay" => replay} = params) do
-    with %{} = viewport <- parse(replay),
-         true <- viewport != Process.get(@key) do
-      Process.put(@key, viewport)
-      Buffer.record(self(), :viewport, viewport)
-    end
-
+    :ok = viewport(replay)
     Map.delete(params, "_replay")
   end
 

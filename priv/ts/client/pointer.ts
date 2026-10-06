@@ -41,6 +41,7 @@ export class PointerRecorder {
   private started = 0
   private readonly sampled = new Map<string, number>()
   private readonly trailing = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly pending = new Map<string, () => void>()
   private readonly slots = new Map<number, number>()
   private readonly timer: ReturnType<typeof setInterval>
   private readonly listeners: [EventTarget, string, EventListener][]
@@ -53,10 +54,16 @@ export class PointerRecorder {
     const document = target.document
 
     this.listeners = [
-      [document, 'pointermove', (event) => this.move(event as PointerEvent)],
-      [document, 'pointerdown', (event) => this.press(event as PointerEvent, DOWN)],
-      [document, 'pointerup', (event) => this.press(event as PointerEvent, UP)],
-      [document, 'pointercancel', (event) => this.press(event as PointerEvent, UP)],
+      [document, 'pointermove', (event) => this.pointerMove(event as PointerEvent)],
+      [document, 'pointerdown', (event) => this.pointerPress(event as PointerEvent, DOWN)],
+      [document, 'pointerup', (event) => this.pointerPress(event as PointerEvent, UP)],
+      [document, 'pointercancel', (event) => this.pointerPress(event as PointerEvent, UP)],
+      // Touches are followed with touch events, which keep coming while the
+      // browser scrolls or zooms, where pointer events are cancelled.
+      [document, 'touchstart', (event) => this.touch(event as TouchEvent, DOWN)],
+      [document, 'touchmove', (event) => this.touch(event as TouchEvent, null)],
+      [document, 'touchend', (event) => this.touch(event as TouchEvent, UP)],
+      [document, 'touchcancel', (event) => this.touch(event as TouchEvent, UP)],
       [target, 'scroll', () => this.throttle('scroll', settings.scroll, () => this.scroll())],
       [document, 'visibilitychange', () => document.hidden && this.flush()]
     ]
@@ -79,23 +86,52 @@ export class PointerRecorder {
     }
   }
 
-  private move(event: PointerEvent): void {
-    const slot = this.slot(event)
-    const { clientX, clientY } = event
+  // The mouse and pen share slot 0.
+  private pointerMove(event: PointerEvent): void {
+    if (event.pointerType !== 'touch') this.move(0, event.clientX, event.clientY)
+  }
 
+  private pointerPress(event: PointerEvent, kind: PressKind): void {
+    if (event.pointerType === 'touch') return
+    const kindOfPointer = event.pointerType === 'pen' ? PEN : MOUSE
+    this.press(0, kind, event.clientX, event.clientY, kindOfPointer, event.target)
+  }
+
+  // Every finger that changed, each in a slot of its own while it is down.
+  private touch(event: TouchEvent, kind: PressKind | null): void {
+    for (const touch of Array.from(event.changedTouches)) {
+      const slot = this.slot(touch.identifier)
+
+      if (kind === null) {
+        this.move(slot, touch.clientX, touch.clientY)
+      } else {
+        this.press(slot, kind, touch.clientX, touch.clientY, TOUCH, touch.target)
+        if (kind === UP) this.slots.delete(touch.identifier)
+      }
+    }
+  }
+
+  private move(slot: number, x: number, y: number): void {
     this.throttle(`move:${slot}`, this.settings.sample, () =>
-      this.add(() => this.moves.push(this.dt(), Math.round(clientX), Math.round(clientY), slot))
+      this.add(() => this.moves.push(this.dt(), Math.round(x), Math.round(y), slot))
     )
   }
 
-  private press(event: PointerEvent, kind: PressKind): void {
-    const slot = this.slot(event)
-    const x = Math.round(event.clientX)
-    const y = Math.round(event.clientY)
-    const [target, fx, fy] = kind === DOWN ? anchor(event) : [null, 0, 0]
+  private press(
+    slot: number,
+    kind: PressKind,
+    clientX: number,
+    clientY: number,
+    pointer: PointerKind,
+    pressed: EventTarget | null
+  ): void {
+    const x = Math.round(clientX)
+    const y = Math.round(clientY)
+    const [target, fx, fy] = kind === DOWN ? anchor(pressed, clientX, clientY) : [null, 0, 0]
 
-    this.add(() => this.presses.push([this.dt(), kind, x, y, slot, type(event), target, fx, fy]))
-    if (kind === UP && event.pointerType === 'touch') this.slots.delete(event.pointerId)
+    // A finger's last position, so a swipe ends where it was lifted.
+    if (kind === UP && slot > 0) this.flushMove(slot)
+    this.add(() => this.presses.push([this.dt(), kind, x, y, slot, pointer, target, fx, fy]))
   }
 
   private scroll(): void {
@@ -103,18 +139,29 @@ export class PointerRecorder {
     this.add(() => this.scrolls.push(this.dt(), Math.round(scrollX), Math.round(scrollY)))
   }
 
-  // The mouse and pen share slot 0; each finger gets the lowest free one.
-  private slot(event: PointerEvent): number {
-    if (event.pointerType !== 'touch') return 0
-
-    const known = this.slots.get(event.pointerId)
+  // Each finger gets the lowest free slot from 1. Its identifier can be any
+  // number: Safari uses the address of the touch it tracks.
+  private slot(identifier: number): number {
+    const known = this.slots.get(identifier)
     if (known !== undefined) return known
 
     const taken = new Set(this.slots.values())
     let slot = 1
     while (taken.has(slot)) slot++
-    this.slots.set(event.pointerId, slot)
+    this.slots.set(identifier, slot)
     return slot
+  }
+
+  // Runs a move waiting for the end of its sampling interval now.
+  private flushMove(slot: number): void {
+    const key = `move:${slot}`
+    const pending = this.pending.get(key)
+    if (!pending) return
+
+    clearTimeout(this.trailing.get(key))
+    this.trailing.delete(key)
+    this.pending.delete(key)
+    pending()
   }
 
   // At most one sample per `interval`, plus a last one when things settle,
@@ -125,19 +172,18 @@ export class PointerRecorder {
     clearTimeout(this.trailing.get(key))
 
     if (now - last >= interval) {
+      this.pending.delete(key)
       this.sampled.set(key, now)
       sample()
     } else {
-      this.trailing.set(
-        key,
-        setTimeout(
-          () => {
-            this.sampled.set(key, performance.now())
-            sample()
-          },
-          interval - (now - last)
-        )
-      )
+      const later = (): void => {
+        this.pending.delete(key)
+        this.sampled.set(key, performance.now())
+        sample()
+      }
+
+      this.pending.set(key, later)
+      this.trailing.set(key, setTimeout(later, interval - (now - last)))
     }
   }
 
@@ -172,14 +218,14 @@ export class PointerRecorder {
   }
 }
 
-const type = (event: PointerEvent): PointerKind =>
-  event.pointerType === 'touch' ? TOUCH : event.pointerType === 'pen' ? PEN : MOUSE
-
 /** The nearest pressed element with a lasting id, and the point within it in thousandths. */
-const anchor = (event: PointerEvent): [string | null, number, number] => {
+const anchor = (
+  pressed: EventTarget | null,
+  clientX: number,
+  clientY: number
+): [string | null, number, number] => {
   // LiveView's own ids, phx-…, change with every mount, so the replay never has them.
-  const element =
-    event.target instanceof Element ? event.target.closest('[id]:not([id^="phx-"])') : null
+  const element = pressed instanceof Element ? pressed.closest('[id]:not([id^="phx-"])') : null
   if (!element) return [null, 0, 0]
 
   const rect = element.getBoundingClientRect()
@@ -188,7 +234,7 @@ const anchor = (event: PointerEvent): [string | null, number, number] => {
 
   return [
     element.id,
-    share(event.clientX - rect.left, rect.width),
-    share(event.clientY - rect.top, rect.height)
+    share(clientX - rect.left, rect.width),
+    share(clientY - rect.top, rect.height)
   ]
 }

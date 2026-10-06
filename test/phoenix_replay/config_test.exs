@@ -55,11 +55,12 @@ defmodule PhoenixReplay.ConfigTest do
   end
 
   test "validates tail sampling, logs, redaction and memory" do
-    assert Config.new([]).keep == %{rate: 1.0, errors: false, slower_than: nil}
+    assert Config.new([]).keep == %{rate: 1.0, errors: false, marks: false, slower_than: nil}
 
-    assert Config.new(keep: [rate: 0, errors: true]).keep == %{
+    assert Config.new(keep: [rate: 0, errors: true, marks: true]).keep == %{
              rate: 0.0,
              errors: true,
+             marks: true,
              slower_than: nil
            }
 
@@ -120,6 +121,28 @@ defmodule PhoenixReplay.ConfigTest do
 
     assert_raise ArgumentError, ~r/:attribution/, fn ->
       Config.new(context: [landing: [attribution: :middle]])
+    end
+  end
+
+  test "records form controls with client state unless told not to" do
+    assert %{inputs: true, debounce: 300} = Config.new([]).state
+    assert %{inputs: false, flush: 1_000} = Config.new(state: [inputs: false]).state
+    assert_raise ArgumentError, ~r/:inputs/, fn -> Config.new(state: [inputs: :yes]) end
+    assert_raise ArgumentError, ~r/:debounce/, fn -> Config.new(state: [debounce: 0]) end
+  end
+
+  test "exports videos only once configured, with an endpoint" do
+    assert Config.new([]).export == nil
+
+    assert %{endpoint: MyAppWeb.Endpoint, fps: 30, idle: 3_000, max_concurrency: 1, hold: 1_000} =
+             Config.new(export: [endpoint: MyAppWeb.Endpoint]).export
+
+    assert Config.new(export: [endpoint: MyAppWeb.Endpoint, idle: nil]).export.idle == nil
+    assert Config.new(export: false).export == nil
+    assert_raise ArgumentError, ~r/:fps/, fn -> Config.new(export: [fps: 0]) end
+
+    assert_raise ArgumentError, ~r/:frame_layout/, fn ->
+      Config.new(export: [frame_layout: "x"])
     end
   end
 

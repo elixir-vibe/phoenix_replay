@@ -13,15 +13,21 @@ defmodule PhoenixReplay.Web.Context do
   alias PhoenixReplay.{Authorization, Catalog, Config, Recording}
   alias PhoenixReplay.Web.NotFoundError
 
+  @typedoc """
+  The dashboard's path, authorization and socket path from the router,
+  the configuration, and the `endpoint` whose static paths the replay
+  frame loads the stylesheet from, when it is not the socket's own.
+  """
   @type t :: %__MODULE__{
           base_path: String.t(),
           authorize: module() | nil,
           live_socket_path: String.t(),
-          config: Config.t()
+          config: Config.t(),
+          endpoint: module() | nil
         }
 
   @enforce_keys [:base_path, :live_socket_path, :config]
-  defstruct [:base_path, :authorize, :live_socket_path, :config]
+  defstruct [:base_path, :authorize, :live_socket_path, :config, :endpoint]
 
   @private :phoenix_replay_context
 
@@ -32,6 +38,11 @@ defmodule PhoenixReplay.Web.Context do
     context = struct!(__MODULE__, Map.put(options, :config, Config.load()))
     {:cont, put_private(socket, @private, context)}
   end
+
+  @doc "Sets the endpoint the frame's stylesheet is served by."
+  @spec put_endpoint(Phoenix.LiveView.Socket.t(), module()) :: Phoenix.LiveView.Socket.t()
+  def put_endpoint(socket, endpoint),
+    do: put_private(socket, @private, %{fetch(socket) | endpoint: endpoint})
 
   @doc "Returns the context stored by `on_mount/4`."
   @spec fetch(Phoenix.LiveView.Socket.t()) :: t()

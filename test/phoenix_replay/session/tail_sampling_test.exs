@@ -5,7 +5,7 @@ defmodule PhoenixReplay.Session.TailSamplingTest do
   alias PhoenixReplay.Session.TailSampling
   alias PhoenixReplay.Test.Fixtures
 
-  @keep %{rate: 1.0, errors: false, slower_than: nil}
+  @keep %{rate: 1.0, errors: false, marks: false, slower_than: nil}
 
   defp with_event(recording, type, data),
     do: %{recording | events: [%Event{at: 9_000, type: type, data: data} | recording.events]}
@@ -81,6 +81,15 @@ defmodule PhoenixReplay.Session.TailSamplingTest do
 
     assert TailSampling.decide(with_event(quiet, :exit, %{reason: "boom"}), @keep, 1.0) ==
              {:discard, :not_interactive}
+  end
+
+  test "always keeps sessions with marks when asked" do
+    quiet = Fixtures.counter_recording(clicks: 0)
+    marked = with_event(quiet, :telemetry, Map.put(query(nil), :mark, true))
+
+    assert TailSampling.decide(marked, @keep, 0.0) == {:discard, :not_interactive}
+    assert TailSampling.decide(marked, %{@keep | marks: true}, 0.0) == :keep
+    assert TailSampling.decide(quiet, %{@keep | marks: true}, 0.0) == {:discard, :not_interactive}
   end
 
   test "always keeps sessions with slow events when asked" do

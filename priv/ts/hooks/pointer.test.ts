@@ -28,7 +28,7 @@ const overlay = (): HTMLElement => {
   const box = html(`
     <div>
       <iframe srcdoc="<body style='height: 3000px'></body>" style="width: 200px; height: 200px"></iframe>
-      <div data-frame-overlay data-width="200" data-height="200" data-track='${JSON.stringify(track)}'></div>
+      <div data-frame-overlay data-follow-scroll data-width="200" data-height="200" data-trail="500" data-ripple="600" data-track='${JSON.stringify(track)}'></div>
     </div>
   `)
   document.body.append(box)
@@ -95,5 +95,34 @@ test('scrolls the replayed page as recorded', async () => {
   mountHook(Pointer, el)
 
   at(500)
+  expect(frame.contentWindow?.scrollY).toBe(120)
+
+  // Scrolled by hand, the page goes back where the user was on the next draw.
+  frame.contentWindow?.scrollTo(0, 600)
+  at(510)
+  expect(frame.contentWindow?.scrollY).toBe(120)
+
+  // Not following, the page stays where it was scrolled to.
+  delete el.dataset.followScroll
+  frame.contentWindow?.scrollTo(0, 600)
+  at(520)
+  expect(frame.contentWindow?.scrollY).toBe(600)
+})
+
+test('draws nothing and leaves the page unscrolled while the frame is rotated', async () => {
+  const el = overlay()
+  const frame = el.parentElement?.querySelector('iframe') as HTMLIFrameElement
+  await new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }))
+  el.dataset.rotated = ''
+  const { hook } = mountHook(Pointer, el)
+
+  at(600)
+  expect(el.querySelector('svg')?.childElementCount).toBe(0)
+  expect(frame.contentWindow?.scrollY).toBe(0)
+
+  // Turned back, it draws and scrolls the moment it is at.
+  delete el.dataset.rotated
+  hook.updated()
+  expect(el.querySelector('circle')).not.toBe(null)
   expect(frame.contentWindow?.scrollY).toBe(120)
 })

@@ -17,14 +17,18 @@ defmodule PhoenixReplay.Recording.Event do
     * `:component_destroyed` — `%{module: module, id: term}`, a
       LiveComponent removed from the page
     * `:telemetry` — `%{event: [atom], summary: String.t() | nil,
-      measurements: map, metadata: map, error: String.t() | nil}`, a
-      telemetry event captured by a `PhoenixReplay.Collector`
+      language: :sql | nil, measurements: map, metadata: map,
+      error: String.t() | nil, mark: boolean | String.t()}`, a telemetry
+      event captured by a `PhoenixReplay.Collector`; `language` is what the
+      summary is written in, and `mark` whether it marks a moment, or the
+      mark's name, both absent from events recorded before 0.6
     * `:log` — `%{level: Logger.level(), message: String.t(), metadata: map}`,
       a log message, see `PhoenixReplay.Capture.Logs`
     * `:exit` — `%{reason: String.t()}`, the LiveView process exited
       abnormally
     * `:viewport` — `%{width: integer, height: integer, dpr: number}`, the
-      browser's viewport changed, as seen with the user's next interaction
+      browser's viewport changed: once a resize or rotation settled, or
+      with the user's next interaction when `replayRecorder` does not run
     * `:pointer` — a batch of pointer moves, presses and scroll offsets,
       when `:pointer` is configured; see `PhoenixReplay.Capture.Pointer` and
       `PhoenixReplay.Recording.PointerTrack`
@@ -66,6 +70,43 @@ defmodule PhoenixReplay.Recording.Event do
   def error?(%__MODULE__{type: :log, data: %{level: level}}), do: level in @error_levels
   def error?(%__MODULE__{type: :telemetry, data: %{error: error}}), do: error != nil
   def error?(%__MODULE__{}), do: false
+
+  @doc """
+  Returns true for a telemetry event that marks a moment, such as a signup,
+  rather than measuring work; see `PhoenixReplay.Collector.Captured`.
+  """
+  @spec mark?(t()) :: boolean()
+  def mark?(%__MODULE__{} = event), do: mark_name(event) != nil
+
+  @doc """
+  The name of the moment an event marks: the name its collector gave it,
+  or else its telemetry event's name joined with dots, such as
+  `"my_app.checkout.completed"`. `nil` for events that mark nothing.
+  """
+  @spec mark_name(t()) :: String.t() | nil
+  def mark_name(%__MODULE__{type: :telemetry, data: %{mark: name}}) when is_binary(name),
+    do: name
+
+  def mark_name(%__MODULE__{type: :telemetry, data: %{mark: true, event: event}}),
+    do: Enum.map_join(event, ".", &Atom.to_string/1)
+
+  def mark_name(%__MODULE__{}), do: nil
+
+  @doc "One line describing the event; see `PhoenixReplay.Recording.Label`."
+  @spec label(t()) :: String.t()
+  defdelegate label(event), to: PhoenixReplay.Recording.Label, as: :of
+
+  @doc """
+  The assigns an event set: a mount's or render's, or the client state an
+  entry reported.
+  """
+  @spec changed_keys(t() | nil) :: [atom()]
+  def changed_keys(%__MODULE__{type: type, data: %{assigns: assigns}})
+      when type in [:mount, :render],
+      do: Map.keys(assigns)
+
+  def changed_keys(%__MODULE__{type: :state}), do: [PhoenixReplay.Recording.State.assign()]
+  def changed_keys(_event), do: []
 
   @doc "Duration in milliseconds of a telemetry event, if it has one."
   @spec duration(t()) :: number() | nil

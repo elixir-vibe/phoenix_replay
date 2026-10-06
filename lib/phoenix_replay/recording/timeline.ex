@@ -22,6 +22,8 @@ defmodule PhoenixReplay.Recording.Timeline do
     * `:assigns` — the view's assigns after it, with the client state
       reported up to it merged into the reserved
       `PhoenixReplay.Recording.State.assign/0`
+    * `:before` — the view's assigns before it, which the event changed
+      into `:assigns`
     * `:components` — LiveComponent assigns after it, keyed by
       `{module, id}`
     * `:url` — the page URL: the last navigation up to it, or the URL the
@@ -35,6 +37,7 @@ defmodule PhoenixReplay.Recording.Timeline do
           index: integer(),
           event: Event.t() | nil,
           assigns: map(),
+          before: map(),
           components: %{{module(), term()} => map()},
           url: String.t() | nil,
           viewport: Recording.viewport() | nil
@@ -49,6 +52,7 @@ defmodule PhoenixReplay.Recording.Timeline do
     :viewport,
     index: -1,
     assigns: %{@state => %{}},
+    before: %{@state => %{}},
     components: %{}
   ]
 
@@ -64,6 +68,42 @@ defmodule PhoenixReplay.Recording.Timeline do
     {recording, track} = PointerTrack.split(recording)
     {State.spread(recording), track}
   end
+
+  # Events that start an interaction; the rest follow the one before them.
+  @starts [:mount, :event, :params, :info]
+
+  @typedoc "An event with its index in the recording."
+  @type indexed :: {Event.t(), non_neg_integer()}
+
+  @typedoc "An event that starts an interaction, and the events it caused."
+  @type interaction :: {indexed(), [indexed()]}
+
+  @doc """
+  Groups events into interactions: a mount, user event, navigation or
+  message, followed by the renders, component updates and collected events
+  it caused. Events before the first one form an interaction of their own.
+  """
+  @spec interactions([Event.t()]) :: [interaction()]
+  def interactions(events) do
+    events
+    |> Enum.with_index()
+    |> Enum.chunk_while(nil, &interaction/2, &close_interaction/1)
+  end
+
+  defp interaction({%Event{type: type}, _index} = item, acc) when type in @starts do
+    case acc do
+      nil -> {:cont, {item, []}}
+      acc -> {:cont, close(acc), {item, []}}
+    end
+  end
+
+  defp interaction(item, nil), do: {:cont, {item, []}}
+  defp interaction(item, {head, rows}), do: {:cont, {head, [item | rows]}}
+
+  defp close_interaction(nil), do: {:cont, nil}
+  defp close_interaction(acc), do: {:cont, close(acc), nil}
+
+  defp close({head, rows}), do: {head, Enum.reverse(rows)}
 
   @doc "A timeline of `recording`, before its first event."
   @spec new(Recording.t()) :: t()
@@ -114,12 +154,24 @@ defmodule PhoenixReplay.Recording.Timeline do
     Enum.find_index(events, &(&1.type == :render)) || 0
   end
 
+  @doc """
+  Index of the last event at or before `time`, in milliseconds, but not
+  before the first render: where the player stands at that moment.
+  """
+  @spec index_at(Recording.t(), non_neg_integer()) :: non_neg_integer()
+  def index_at(%Recording{events: events} = recording, time) do
+    first = first_render_index(recording)
+    later = Enum.find_index(events, &(&1.at > time)) || length(events)
+    max(later - 1, first)
+  end
+
   defp rewind(%__MODULE__{start: start} = timeline) do
     %{
       timeline
       | index: -1,
         event: nil,
         assigns: %{@state => %{}},
+        before: %{@state => %{}},
         components: %{},
         url: start.url,
         viewport: start.viewport
@@ -127,7 +179,7 @@ defmodule PhoenixReplay.Recording.Timeline do
   end
 
   defp apply_event(timeline, %Event{} = event) do
-    timeline = %{timeline | index: timeline.index + 1, event: event}
+    timeline = %{timeline | index: timeline.index + 1, event: event, before: timeline.assigns}
 
     case event do
       %Event{type: :mount, data: %{assigns: assigns}} ->

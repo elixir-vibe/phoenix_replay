@@ -11,12 +11,17 @@ defmodule PhoenixReplay.Recording.State do
   merges each entry's changes into the `#{inspect(:phoenix_replay_state)}`
   assign, `%{key => merged changes}`, which a view's `replay_render/1`
   reads. See `assign/0`.
+
+  The values of form controls the browser records on its own are kept
+  under `inputs_key/0`, `%{selector => %{name => value}}`; the replay
+  frame puts them back into the replayed page after each render.
   """
 
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.Event
 
   @assign :phoenix_replay_state
+  @inputs_key "phx_replay:inputs"
 
   @doc """
   The reserved assign the replayed state is merged into: a map of each
@@ -24,6 +29,18 @@ defmodule PhoenixReplay.Recording.State do
   """
   @spec assign() :: atom()
   def assign, do: @assign
+
+  @doc """
+  The key form control values are recorded under: a map of each control's
+  selector to `%{name => value}`, where the value is its text, whether it
+  is checked, or the options chosen.
+  """
+  @spec inputs_key() :: String.t()
+  def inputs_key, do: @inputs_key
+
+  @doc "The form control values in replayed `state`, as `inputs_key/0` describes."
+  @spec inputs(map()) :: map()
+  def inputs(state), do: Map.get(state, @inputs_key, %{})
 
   @doc """
   Places each entry of the recording's `:state` batches on its timeline as

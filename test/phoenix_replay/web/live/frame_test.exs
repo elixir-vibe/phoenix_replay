@@ -25,14 +25,15 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     Channel.seek(channel, index)
   end
 
-  test "replays client state through replay_render/1, under change tracking" do
+  test "replays client state through replay_render/1, back and forth" do
     save(%PhoenixReplay.Recording{
       id: "client",
       view: PhoenixReplay.Test.Live.ClientSearch,
       connected_at: 0,
       events: [
         %Event{at: 0, type: :mount, data: %{assigns: %{}}},
-        %Event{at: 5, type: :render, data: %{assigns: %{title: "Shop"}}},
+        # The live view renders without a query: the browser holds it.
+        %Event{at: 5, type: :render, data: %{assigns: %{title: "Shop", query: nil}}},
         %Event{
           at: 300,
           type: :state,
@@ -65,6 +66,56 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
 
     seek("c-state", 1)
     refute render(view) =~ "value="
+  end
+
+  test "hands the frame's script the form values recorded up to each position" do
+    inputs = PhoenixReplay.Recording.State.inputs_key()
+
+    recording = Fixtures.counter_recording(id: "typed", clicks: 1)
+
+    typed = %Event{
+      at: 3_000,
+      type: :state,
+      data: %{span: 0, entries: [[0, inputs, %{"#q" => %{"q" => "shoes"}}]]}
+    }
+
+    # The replay places state by its time, after the click at 1 s.
+    save(%{recording | events: [typed | recording.events]})
+
+    # Before anything was typed there is nothing to put back.
+    {:ok, view, _html} = live(build_conn(), "/replay/typed/frame?channel=c-inputs")
+    refute_push_event(view, "phx_replay:inputs", %{})
+
+    seek("c-inputs", 4)
+    render(view)
+    assert_push_event(view, "phx_replay:inputs", %{values: %{"#q" => %{"q" => "shoes"}}})
+
+    # Nothing new to put back: the frame's script is not told again.
+    seek("c-inputs", 4)
+    render(view)
+    refute_push_event(view, "phx_replay:inputs", %{})
+
+    seek("c-inputs", 1)
+    render(view)
+    assert_push_event(view, "phx_replay:inputs", %{values: values})
+    assert values == %{}
+  end
+
+  test "tells an export's stage when each position has rendered" do
+    save(Fixtures.counter_recording(id: "staged", clicks: 1))
+
+    {:ok, view, _html} = live(build_conn(), "/replay/staged/frame?channel=c-stage&stage=1")
+    assert_push_event(view, "phx_replay:shown", %{index: 1})
+
+    seek("c-stage", 3)
+    render(view)
+    assert_push_event(view, "phx_replay:shown", %{index: 3})
+
+    # The player's frame is not told.
+    {:ok, view, _html} = live(build_conn(), "/replay/staged/frame?channel=c-player")
+    seek("c-player", 3)
+    render(view)
+    refute_push_event(view, "phx_replay:shown", %{})
   end
 
   test "renders the recorded view at each position" do

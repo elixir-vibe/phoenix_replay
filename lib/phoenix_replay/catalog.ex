@@ -52,18 +52,94 @@ defmodule PhoenixReplay.Catalog do
   end
 
   @doc """
-  The views and event names of recordings, for suggesting filter values.
-  `allow` limits them to the summaries the reader may see.
+  The values of a filter's `field` among buffered and stored recordings
+  matching the rest of `filter`, with how many recordings have each, the
+  most common first, for suggesting filter values. Takes `:now`, `:limit`
+  and `:allow` as `query/3` does.
   """
-  @spec facets(Config.t(), (Summary.t() -> boolean()) | nil) :: Storage.facets()
-  def facets(%Config{storage: storage}, nil) do
-    live = Storage.facets_of(Buffer.summaries())
-    stored = Storage.facets(storage)
-    Map.merge(live, stored, fn _key, a, b -> Enum.sort(Enum.uniq(a ++ b)) end)
+  @spec values(Config.t(), Filter.field(), Filter.t(), keyword()) ::
+          [{String.t(), pos_integer()}]
+  def values(%Config{storage: storage} = config, field, %Filter{} = filter, opts) do
+    {now, limit} = {Keyword.fetch!(opts, :now), Keyword.fetch!(opts, :limit)}
+
+    case Keyword.pop(opts, :allow) do
+      {nil, page_opts} ->
+        live = Buffer.summaries() |> Filter.count_values(field, filter, now, limit)
+        stored = Storage.values(storage, field, filter, page_opts)
+
+        live
+        |> Map.new()
+        |> Map.merge(Map.new(stored), fn _value, a, b -> a + b end)
+        |> Filter.top(limit)
+
+      {allow, _page_opts} ->
+        config |> list() |> Enum.filter(allow) |> Filter.count_values(field, filter, now, limit)
+    end
   end
 
-  def facets(%Config{} = config, allow),
-    do: config |> list() |> Enum.filter(allow) |> Storage.facets_of()
+  @typedoc """
+  How many sessions started in each stretch of a time range, for a chart:
+  `buckets` are `{start, sessions, with_errors}`, every `size`
+  milliseconds from `from` to `to`, empty ones included.
+  """
+  @type activity :: %{
+          from: integer(),
+          to: integer(),
+          size: pos_integer(),
+          buckets: [Filter.bucket() | {integer(), 0, 0}]
+        }
+
+  # Stretch lengths a chart picks from: the shortest that leaves at most
+  # this many bars.
+  @bucket_sizes Enum.map([1, 5, 15, 30, 60, 180, 360, 720, 1_440], &:timer.minutes/1)
+  @longest_bucket :timer.hours(24 * 7)
+  @max_buckets 40
+
+  @doc """
+  Counts the buffered and stored sessions matching `filter` by when they
+  started, over the stretch of time it covers; see
+  `PhoenixReplay.Recording.Filter.time_range/2`. Takes `:now` and
+  `:allow` as `query/3` does, and `:utc_offset`, how far the viewer's
+  time zone is ahead of UTC in milliseconds, so stretches begin at its
+  midnights and hours.
+  """
+  @spec activity(Config.t(), Filter.t(), keyword()) :: activity()
+  def activity(%Config{storage: storage} = config, %Filter{} = filter, opts) do
+    now = Keyword.fetch!(opts, :now)
+    {from, to} = Filter.time_range(filter, now)
+
+    size =
+      Enum.find(@bucket_sizes, @longest_bucket, &(div(to - from, &1) < @max_buckets))
+
+    ranged = %{filter | within: nil, from: from, to: to}
+    utc_offset = Keyword.get(opts, :utc_offset, 0)
+    histogram_opts = [now: now, utc_offset: utc_offset]
+
+    counts =
+      case Keyword.get(opts, :allow) do
+        nil ->
+          Buffer.summaries()
+          |> Filter.histogram(ranged, size, histogram_opts)
+          |> Enum.concat(Storage.histogram(storage, ranged, size, histogram_opts))
+
+        allow ->
+          config |> list() |> Enum.filter(allow) |> Filter.histogram(ranged, size, histogram_opts)
+      end
+
+    by_start =
+      Enum.reduce(counts, %{}, fn {start, sessions, errors}, acc ->
+        Map.update(acc, start, {sessions, errors}, fn {s, e} -> {s + sessions, e + errors} end)
+      end)
+
+    buckets =
+      for start <-
+            Filter.bucket(from, size, utc_offset)..Filter.bucket(to, size, utc_offset)//size do
+        {sessions, errors} = Map.get(by_start, start, {0, 0})
+        {start, sessions, errors}
+      end
+
+    %{from: from, to: to, size: size, buckets: buckets}
+  end
 
   @doc """
   Fetches a recording from the buffer or storage.

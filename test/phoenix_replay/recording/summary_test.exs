@@ -40,4 +40,38 @@ defmodule PhoenixReplay.Recording.SummaryTest do
     assert Summary.totals(events).event_names == ~w(delete inc save)
     assert Summary.totals(events, Summary.totals(events)).event_count == 8
   end
+
+  test "counts the marks reached, by name, apart from event names" do
+    telemetry = fn event, mark ->
+      %Event{at: 0, type: :telemetry, data: %{event: event, measurements: %{}, mark: mark}}
+    end
+
+    events = [
+      telemetry.([:shop, :checkout, :done], true),
+      telemetry.([:shop, :checkout, :done], true),
+      telemetry.([:shop, :signup], "Signed up"),
+      telemetry.([:repo, :query], false)
+    ]
+
+    assert %{event_names: [], marks: %{"shop.checkout.done" => 2, "Signed up" => 1}} =
+             Summary.totals(events)
+  end
+
+  test "reads where a visit came from as an earlier version saved it" do
+    old = &Summary.upgrade(%Summary{id: "a", view: "V", connected_at: 0, source: &1})
+
+    assert %{source: "google", medium: "cpc", campaign: "spring"} = old.("google / cpc / spring")
+    assert %{source: "google", medium: "cpc", campaign: nil} = old.("google / cpc")
+    assert %{source: "news.ycombinator.com", medium: "referral"} = old.("news.ycombinator.com")
+    assert %{source: "hn", medium: "(none)"} = old.("hn")
+    assert %{source: nil, medium: nil} = old.(nil)
+
+    assert %{device_type: "phone"} =
+             Summary.upgrade(%Summary{
+               id: "a",
+               view: "V",
+               connected_at: 0,
+               viewport: %{width: 390, height: 844, dpr: 3}
+             })
+  end
 end

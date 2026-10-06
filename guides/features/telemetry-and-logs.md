@@ -66,6 +66,30 @@ end
 
 `capture/4` runs in the process that emitted the event, so keep it cheap and keep only the metadata a reader needs. Metadata often holds whole sockets, connections and structs.
 
+### Marking moments
+
+Analytics tools have custom events: "signed up", "checkout completed". In PhoenixReplay they are telemetry events too. Emit one where the moment happens:
+
+```elixir
+:telemetry.execute([:my_app, :checkout, :completed], %{amount: order.total}, %{plan: order.plan})
+```
+
+and collect it with `mark:` and the mark's name:
+
+```elixir
+config :phoenix_replay,
+  collect: [
+    {[:my_app, :checkout, :completed],
+     metadata: [:plan], summary: &"checkout #{&1.plan}", mark: "Checkout completed"}
+  ]
+```
+
+`mark: true` names the mark after the event, `"my_app.checkout.completed"`.
+
+A mark is a moment, not work that took time. The recording list flags the marks each session reached next to its view. In the player, marks have a lane of their own, their name in their row, and a menu in the header that jumps to each; `M` and `Shift` + `M` jump between them. The recording list's **Mark** filter, and `PhoenixReplay.Trace.find(mark: "Checkout completed")`, find the sessions that reached one, with how many reached each. `keep: [marks: true]` saves every session with a mark; see [Keeping the sessions that matter](#keeping-the-sessions-that-matter).
+
+Telemetry keeps your code free of PhoenixReplay: the same event can feed metrics, traces or an analytics handler. Like any collected event, a mark belongs to a session only when it is emitted in the LiveView's process or a task it started; see [Which session an event belongs to](#which-session-an-event-belongs-to). A collector module marks its events with `mark:` in `PhoenixReplay.Collector.Captured`.
+
 ## Collecting logs
 
 ```elixir
@@ -108,6 +132,7 @@ config :phoenix_replay,
 
 - `errors: true` always saves a session with an error log, a failed query or request, a telemetry `:exception` event, or a crash. A LiveView that exits abnormally gets an `:exit` event with the formatted reason.
 - `slower_than: 1_000` always saves a session with a collected event that took at least a second.
+- `marks: true` always saves a session with a [mark](#marking-moments), such as a completed checkout.
 - `rate: 0.05` saves 5% of the remaining sessions with user interaction.
 
 Each session is buffered until it ends, so set `:max_memory`. While the buffer is larger, new sessions are not recorded. `:keep` can be set per live session too:

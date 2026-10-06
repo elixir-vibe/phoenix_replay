@@ -110,6 +110,12 @@ defmodule PhoenixReplay.Session.BufferTest do
     assert summary.duration_ms == events |> Enum.map(& &1.at) |> Enum.max()
     assert summary.duration_ms >= 5
 
+    # A session row whose key sorts before the others does not hide the
+    # latest event.
+    :ets.insert(Buffer, {{id, :aardvark}, nil})
+    assert Enum.find(Buffer.summaries(), &(&1.id == id)).duration_ms == summary.duration_ms
+    :ets.delete(Buffer, {id, :aardvark})
+
     :ok = Buffer.close(id)
     assert :ets.match(Buffer, {{:event_name, id, :_}}) == []
     assert :ets.match(Buffer, {{id, :_}, :_}) == []
@@ -132,15 +138,17 @@ defmodule PhoenixReplay.Session.BufferTest do
   end
 
   test "counts large binaries in memory, until they are flushed", %{recording: %{id: id}} do
-    before = Buffer.memory()
     message = String.duplicate("x", 2_000_000)
     :ok = Buffer.record(self(), :log, %{level: :info, message: message, metadata: %{}})
 
-    # ETS alone counts the binary by reference, a few bytes.
-    assert Buffer.memory() - before >= 2_000_000
+    # ETS alone counts the binary by reference, a few bytes. The total
+    # covers every session, and other tests' sessions come and go, so it is
+    # compared with the binary, not with a reading taken before it.
+    holding = Buffer.memory()
+    assert holding >= 2_000_000
 
     :ok = Buffer.remove_flushed(id, Buffer.pending(id))
-    assert Buffer.memory() - before < 100_000
+    assert holding - Buffer.memory() >= 1_900_000
   end
 
   test "a collector writing as its session closes leaves nothing behind", %{

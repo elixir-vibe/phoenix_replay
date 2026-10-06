@@ -73,6 +73,12 @@ export class FrameViewport extends ViewHook {
           Math.floor(Math.min(1, containerWidth / width, available / height) * 100) / 100
         )
 
+    // A fitted frame does not scroll; a box scrolled at 100% would keep the
+    // page shifted out of view once it stops scrolling. The page is held
+    // where it was seen, then eases into its fitted place.
+    if (!actual && (box.scrollLeft || box.scrollTop))
+      this.unscroll(style, frame, box, width, height)
+
     const inset = Math.max(0, Math.round((containerWidth - width * scale) / 2))
     const boxHeight = actual ? Math.min(height, available) : Math.round(height * scale)
 
@@ -80,12 +86,31 @@ export class FrameViewport extends ViewHook {
     style.textContent =
       `#${box.id}{height:${boxHeight}px;overflow:${actual ? 'auto' : 'hidden'}}` +
       `#${frame.id},#${box.id}>[data-frame-overlay]{width:${width}px;height:${height}px;margin-left:${inset}px;` +
-      `transform:scale(${scale});transform-origin:top left}` +
+      `transform:translate(0px,0px) scale(${scale});transform-origin:top left}` +
       `@media (prefers-reduced-motion:no-preference){` +
       `#${box.id}{transition:height .2s ease}` +
       `#${frame.id},#${box.id}>[data-frame-overlay]{transition:transform .2s ease,margin-left .2s ease}}`
 
     if (label) label.textContent = `${width} × ${height} · ${Math.round(scale * 100)}%`
+  }
+
+  private unscroll(
+    style: HTMLStyleElement,
+    frame: HTMLIFrameElement,
+    box: HTMLElement,
+    width: number,
+    height: number
+  ): void {
+    const { scrollLeft: x, scrollTop: y, clientHeight } = box
+
+    style.textContent =
+      `#${box.id}{height:${clientHeight}px;overflow:hidden}` +
+      `#${frame.id},#${box.id}>[data-frame-overlay]{width:${width}px;height:${height}px;margin-left:0;` +
+      `transform:translate(${-x}px,${-y}px) scale(1);transform-origin:top left;transition:none}`
+
+    box.scrollTo(0, 0)
+    // Applies the held position before the fitted one replaces it.
+    frame.getBoundingClientRect()
   }
 
   private availableHeight(box: HTMLElement): number {

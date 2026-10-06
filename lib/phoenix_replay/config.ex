@@ -20,6 +20,8 @@ defmodule PhoenixReplay.Config do
       when they end, as described in "Tail sampling" below:
       * `:rate` — share of interactive sessions to save (default `1.0`)
       * `:errors` — always save sessions with an error (default `false`)
+      * `:marks` — always save sessions with a telemetry event collected
+        with `mark: true`, such as a completed checkout (default `false`)
       * `:slower_than` — always save sessions with a collected event
         lasting at least this many milliseconds (default `nil`)
     * `:collect` — telemetry events to record alongside LiveView events.
@@ -55,11 +57,17 @@ defmodule PhoenixReplay.Config do
         (default `500`)
       * `:limit` — batches recorded per session (default `3_600`, an hour
         of movement at the default `:flush`)
-    * `:state` — records state that lives only in the browser, which other
-      libraries report with a `phx_replay:state` window event, when
-      `replayRecorder/1` runs in the browser; see
+    * `:state` — records state that lives only in the browser, when the
+      client module's `replayRecorder/1` runs: what is typed and chosen in
+      form controls, and what app code reports with `replayState/2`; see
       `PhoenixReplay.Capture.State`. On by default; `false` records none,
       and a keyword list sets any of:
+      * `:inputs` — whether form controls are recorded (default `true`).
+        Passwords, hidden inputs, card fields and one-time codes are never read; see
+        "Client state" in the recording guide
+      * `:debounce` — milliseconds a form control must stay unchanged
+        before its value is recorded, so typing a sentence is one entry
+        (default `300`)
       * `:flush` — milliseconds between the batches the browser sends
         (default `1_000`)
       * `:max_entries` — entries a batch may hold; a fuller batch is sent
@@ -91,6 +99,40 @@ defmodule PhoenixReplay.Config do
       * `:max_age` — milliseconds after which recordings are deleted
       * `:max_count` — number of most recent recordings to keep
       * `:interval` — milliseconds between pruning runs (default `60_000`)
+    * `:export` — video export with `PhoenixReplay.Export`, off by default.
+      A keyword list turns it on; `:endpoint` is required:
+      * `:endpoint` — your endpoint, which serves the stylesheets and
+        scripts the replayed pages load
+      * `:frame_layout` — `{module, function}` root layout for exported
+        replays, as the router's option of that name (default the
+        dashboard's frame layout)
+      * `:dir` — where finished videos are kept (default
+        `phoenix_replay/exports` in the system's temporary directory)
+      * `:ttl` — milliseconds a finished video is kept (default `3_600_000`)
+      * `:max_concurrency` — videos exported at once; more wait their turn
+        (default `1`). `PhoenixReplay.Export.Queue.Oban` takes its limit
+        from its Oban queue instead.
+      * `:queue` — where exports wait and run, a
+        `PhoenixReplay.Export.Queue`: a module or `{module, opts}`
+        (default `PhoenixReplay.Export.Queue.Local`)
+      * `:fps` — frames per second (default `30`)
+      * `:max_dpr` — the highest device pixel ratio to render at, which
+        bounds the video's size (default `2`)
+      * `:idle` — milliseconds a stretch without activity is shortened to,
+        or `nil` to keep it whole (default `3_000`)
+      * `:hold` — milliseconds the last moment is held at the end
+        (default `1_000`)
+      * `:crf` — the H.264 quality, lower is better (default `23`)
+      * `:preset` — the x264 speed preset (default `"veryfast"`)
+      * `:ffmpeg` — the `ffmpeg` executable (default `"ffmpeg"`)
+      * `:playwright` — options for `PlaywrightEx.Supervisor`, such as
+        `:executable` or `:ws_endpoint` (default `[]`)
+      * `:max_shots` — the most screenshots an export may take, as files
+        until the video is encoded; longer exports fail with a message to
+        choose a shorter range (default `3_600`, two minutes of pointer
+        movement at 30 fps)
+      * `:timeout` — milliseconds a browser step may take, and ffmpeg may
+        go without reporting progress (default `30_000`)
     * `:persist` — keyword list controlling `PhoenixReplay.Session.Finalizer`:
       * `:attempts` — save attempts before giving up (default `3`)
       * `:backoff` — base delay in milliseconds, multiplied by the attempt
@@ -98,10 +140,11 @@ defmodule PhoenixReplay.Config do
 
   ## Switching options off and overriding them
 
-  `:flush`, `:logs`, `:pointer`, `:state`, `:redact`, `:max_memory` and
-  the context's `:landing` can be switched off with `nil` or `false`.
+  `:flush`, `:logs`, `:pointer`, `:state`, `:export`, `:redact`,
+  `:max_memory` and the context's `:landing` can be switched off with `nil`
+  or `false`.
 
-  For `:flush`, `:logs`, `:pointer`, `:state` and `:landing`, `true` turns
+  For `:flush`, `:logs`, `:pointer`, `:state`, `:export` and `:landing`, `true` turns
   one on with whatever is already set, or its defaults, and a keyword list
   sets some of its settings onto that, as `:keep`, `:retention` and
   `:persist` do. So a live session's `{PhoenixReplay.Recorder, flush:
@@ -112,8 +155,8 @@ defmodule PhoenixReplay.Config do
 
   `:sample_rate` decides when a session mounts whether it is recorded.
   `:keep` decides when it ends whether it is saved: a session with an
-  error or a slow event matching `:errors` or `:slower_than` is always
-  saved, a session without user interaction is discarded, and `:rate` of
+  error, a mark or a slow event matching `:errors`, `:marks` or
+  `:slower_than` is always saved, a session without user interaction is discarded, and `:rate` of
   the rest are saved.
 
   To save every failing session but only a few others, record every session
@@ -139,9 +182,29 @@ defmodule PhoenixReplay.Config do
     max_key: 64,
     max_entry_bytes: 8_192,
     max_bytes: 65_536,
-    limit: 3_600
+    limit: 3_600,
+    inputs: true,
+    debounce: 300
   }
   @landing %{params: [], referrer: true, attribution: :first}
+  @export %{
+    endpoint: nil,
+    frame_layout: nil,
+    dir: nil,
+    ttl: 3_600_000,
+    max_concurrency: 1,
+    queue: nil,
+    fps: 30,
+    max_dpr: 2,
+    idle: 3_000,
+    hold: 1_000,
+    crf: 23,
+    preset: "veryfast",
+    ffmpeg: "ffmpeg",
+    playwright: [],
+    max_shots: 3_600,
+    timeout: 30_000
+  }
   @off [nil, false]
 
   @secret_headers ~w(cookie authorization proxy-authorization)
@@ -158,7 +221,12 @@ defmodule PhoenixReplay.Config do
 
   @type persist :: %{attempts: pos_integer(), backoff: non_neg_integer()}
 
-  @type keep :: %{rate: float(), errors: boolean(), slower_than: pos_integer() | nil}
+  @type keep :: %{
+          rate: float(),
+          errors: boolean(),
+          marks: boolean(),
+          slower_than: pos_integer() | nil
+        }
 
   @typedoc "A `PhoenixReplay.Collector` and its options."
   @type collector :: {module(), keyword()}
@@ -182,7 +250,9 @@ defmodule PhoenixReplay.Config do
           max_key: pos_integer(),
           max_entry_bytes: pos_integer(),
           max_bytes: pos_integer(),
-          limit: pos_integer()
+          limit: pos_integer(),
+          inputs: boolean(),
+          debounce: pos_integer()
         }
 
   @type landing :: %{
@@ -192,6 +262,25 @@ defmodule PhoenixReplay.Config do
         }
 
   @type context :: %{headers: [String.t()], landing: landing() | nil}
+
+  @type export :: %{
+          endpoint: module() | nil,
+          frame_layout: {module(), atom()} | nil,
+          dir: Path.t() | nil,
+          ttl: pos_integer(),
+          max_concurrency: pos_integer(),
+          queue: module() | {module(), keyword()} | nil,
+          fps: pos_integer(),
+          max_dpr: pos_integer(),
+          idle: pos_integer() | nil,
+          hold: non_neg_integer(),
+          crf: non_neg_integer(),
+          preset: String.t(),
+          ffmpeg: String.t(),
+          playwright: keyword(),
+          max_shots: pos_integer(),
+          timeout: pos_integer()
+        }
 
   @type logs :: %{level: Logger.level(), metadata: [atom()], limit: pos_integer()}
 
@@ -212,6 +301,7 @@ defmodule PhoenixReplay.Config do
           pointer: pointer() | nil,
           state: state() | nil,
           context: context(),
+          export: export() | nil,
           retention: retention(),
           persist: persist()
         }
@@ -220,7 +310,7 @@ defmodule PhoenixReplay.Config do
             sanitizer: PhoenixReplay.Sanitizer.Default,
             max_events: 10_000,
             sample_rate: 1.0,
-            keep: %{rate: 1.0, errors: false, slower_than: nil},
+            keep: %{rate: 1.0, errors: false, marks: false, slower_than: nil},
             collect: [],
             logs: nil,
             redact: nil,
@@ -229,6 +319,7 @@ defmodule PhoenixReplay.Config do
             pointer: nil,
             state: @state,
             context: %{headers: [], landing: nil},
+            export: nil,
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
 
@@ -335,10 +426,13 @@ defmodule PhoenixReplay.Config do
     do: %{config | pointer: switch(:pointer, value, config.pointer, @pointer, &positive?/2)}
 
   defp put({:state, value}, config),
-    do: %{config | state: switch(:state, value, config.state, @state, &positive?/2)}
+    do: %{config | state: switch(:state, value, config.state, @state, &valid_state?/2)}
 
   defp put({:flush, value}, config),
     do: %{config | flush: switch(:flush, value, config.flush, @flush, &positive?/2)}
+
+  defp put({:export, value}, config),
+    do: %{config | export: switch(:export, value, config.export, @export, &valid_export?/2)}
 
   defp put({:retention, opts}, config) when is_list(opts),
     do: %{config | retention: merge(config.retention, opts, &valid_retention?/2)}
@@ -384,6 +478,7 @@ defmodule PhoenixReplay.Config do
 
   defp valid_keep?(:rate, value), do: is_number(value) and value >= 0 and value <= 1
   defp valid_keep?(:errors, value), do: is_boolean(value)
+  defp valid_keep?(:marks, value), do: is_boolean(value)
   defp valid_keep?(:slower_than, value), do: is_nil(value) or pos_integer?(value)
 
   defp valid_logs?(:level, value), do: value in Logger.levels()
@@ -391,6 +486,9 @@ defmodule PhoenixReplay.Config do
   defp valid_logs?(:limit, value), do: pos_integer?(value)
 
   defp positive?(_key, value), do: pos_integer?(value)
+
+  defp valid_state?(:inputs, value), do: is_boolean(value)
+  defp valid_state?(key, value), do: positive?(key, value)
 
   defp header(name) when is_binary(name) or is_atom(name) do
     name = name |> to_string() |> String.downcase()
@@ -421,6 +519,18 @@ defmodule PhoenixReplay.Config do
     raise ArgumentError,
           "invalid :phoenix_replay configuration #{inspect(key)}: #{inspect(value)}"
   end
+
+  defp valid_export?(:endpoint, value), do: is_atom(value)
+  defp valid_export?(:frame_layout, nil), do: true
+  defp valid_export?(:frame_layout, {module, fun}), do: is_atom(module) and is_atom(fun)
+  defp valid_export?(:dir, value), do: is_nil(value) or is_binary(value)
+  defp valid_export?(:idle, value), do: is_nil(value) or pos_integer?(value)
+  defp valid_export?(key, value) when key in [:crf, :hold], do: non_neg_integer?(value)
+  defp valid_export?(key, value) when key in [:preset, :ffmpeg], do: is_binary(value)
+  defp valid_export?(:playwright, value), do: Keyword.keyword?(value)
+  defp valid_export?(:queue, {module, opts}), do: is_atom(module) and Keyword.keyword?(opts)
+  defp valid_export?(:queue, value), do: is_atom(value)
+  defp valid_export?(_key, value), do: pos_integer?(value)
 
   defp valid_retention?(:max_age, value), do: is_nil(value) or pos_integer?(value)
   defp valid_retention?(:max_count, value), do: is_nil(value) or non_neg_integer?(value)

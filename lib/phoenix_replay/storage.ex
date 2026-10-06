@@ -30,9 +30,11 @@ defmodule PhoenixReplay.Storage do
   argument. `list/1` must return summaries without decoding full recordings,
   ordered most recent first.
 
-  The dashboard reads pages through the optional `query/3`, and the views
-  and event names its filters suggest through the optional `facets/1`.
-  Without them, both are worked out from `list/1`. A backend that needs a
+  The dashboard reads pages through the optional `query/3`, and the values
+  its filters suggest, with how many recordings have each, through the
+  optional `values/4`, and counts them by when they started for its chart
+  through the optional `histogram/4`. Without them, all are worked out
+  from `list/1`. A backend that needs a
   process, such as a cache, returns it from the optional `child_spec/1`.
   """
 
@@ -62,7 +64,11 @@ defmodule PhoenixReplay.Storage do
   """
   @callback fetch_partial(Recording.id(), keyword()) :: {:ok, Recording.t()} | {:error, term()}
 
-  @doc "Lists the ids of sessions with appended chunks this node did not finish."
+  @doc """
+  Lists the ids of sessions with appended chunks this node did not finish,
+  leaving out those of another instance still running, such as a Mix task
+  started next to the server.
+  """
   @callback partials(keyword()) :: [Recording.id()]
 
   @doc """
@@ -72,14 +78,25 @@ defmodule PhoenixReplay.Storage do
   @callback query(Filter.t(), Filter.page_opts(), keyword()) ::
               {[Summary.t()], non_neg_integer()}
 
-  @typedoc "Values the dashboard's filters suggest."
-  @type facets :: %{views: [String.t()], event_names: [String.t()]}
+  @doc """
+  The values of a filter's `field` among the recordings matching the rest
+  of `filter`, with how many recordings have each, the most common first.
+  See `PhoenixReplay.Recording.Filter.count_values/5`, which this must
+  agree with; `page_opts` has `:now` and `:limit`. A backend may count
+  values it cannot query, such as event names, among recent recordings
+  only.
+  """
+  @callback values(Filter.field(), Filter.t(), Filter.page_opts(), keyword()) ::
+              [{String.t(), pos_integer()}]
 
   @doc """
-  Suggestions for the dashboard's view and event filters, sorted. A
-  backend may draw them from recent recordings only.
+  Counts the recordings matching `filter` by when they started, in
+  stretches of a number of milliseconds; see
+  `PhoenixReplay.Recording.Filter.histogram/4`, which this must agree
+  with. `page_opts` has `:now` and `:utc_offset`.
   """
-  @callback facets(keyword()) :: facets()
+  @callback histogram(Filter.t(), pos_integer(), Filter.page_opts(), keyword()) ::
+              [Filter.bucket()]
 
   @doc """
   A process the backend needs while the application runs, started under
@@ -91,7 +108,8 @@ defmodule PhoenixReplay.Storage do
                       fetch_partial: 2,
                       partials: 1,
                       query: 3,
-                      facets: 1,
+                      values: 4,
+                      histogram: 4,
                       child_spec: 1
 
   @doc "Persists a finished recording."
@@ -114,21 +132,25 @@ defmodule PhoenixReplay.Storage do
       else: storage |> list() |> Filter.page(filter, page_opts)
   end
 
-  @doc "The views and event names filters suggest. See `c:facets/1`."
-  @spec facets(t()) :: facets()
-  def facets({module, opts} = storage) do
-    if exports?(module, :facets, 1),
-      do: module.facets(opts),
-      else: storage |> list() |> facets_of()
+  @doc "Counts the values of a filter's field. See `c:values/4`."
+  @spec values(t(), Filter.field(), Filter.t(), Filter.page_opts()) ::
+          [{String.t(), pos_integer()}]
+  def values({module, opts} = storage, field, %Filter{} = filter, page_opts) do
+    if exports?(module, :values, 4) do
+      module.values(field, filter, page_opts, opts)
+    else
+      storage
+      |> list()
+      |> Filter.count_values(field, filter, page_opts[:now], page_opts[:limit])
+    end
   end
 
-  @doc "The views and event names of `summaries`, sorted."
-  @spec facets_of([Summary.t()]) :: facets()
-  def facets_of(summaries) do
-    %{
-      views: summaries |> Enum.map(& &1.view) |> Enum.uniq() |> Enum.sort(),
-      event_names: summaries |> Enum.flat_map(& &1.event_names) |> Enum.uniq() |> Enum.sort()
-    }
+  @doc "Counts recordings by when they started. See `c:histogram/4`."
+  @spec histogram(t(), Filter.t(), pos_integer(), Filter.page_opts()) :: [Filter.bucket()]
+  def histogram({module, opts} = storage, %Filter{} = filter, size, page_opts) do
+    if exports?(module, :histogram, 4),
+      do: module.histogram(filter, size, page_opts, opts),
+      else: storage |> list() |> Filter.histogram(filter, size, page_opts)
   end
 
   @doc "Deletes a recording by id."

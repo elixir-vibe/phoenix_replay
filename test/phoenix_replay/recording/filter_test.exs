@@ -37,7 +37,16 @@ defmodule PhoenixReplay.Recording.FilterTest do
       query: "a",
       view: "V",
       event: "e",
+      mark: "Paid",
+      source: "google",
+      medium: "cpc",
+      campaign: "spring",
+      device_type: "phone",
+      browser: "Firefox",
       within: "7d",
+      from: 1_791_274_440_000,
+      to: 1_791_278_040_000,
+      longer_than: 60,
       min_events: 3,
       errors: true,
       tab: "t1"
@@ -68,6 +77,73 @@ defmodule PhoenixReplay.Recording.FilterTest do
 
     assert ids(%{"min_events" => "30", "within" => "7d", "event" => "save"}, summaries) ==
              ~w(checkout-1)
+  end
+
+  test "counts sessions by when they started, over the time it covers" do
+    summaries = [
+      summary("a", connected_at: 1_000),
+      summary("b", connected_at: 1_500, error_count: 1),
+      summary("c", connected_at: 2_100)
+    ]
+
+    assert Filter.histogram(summaries, %Filter{}, 1_000, now: @now) == [
+             {1_000, 2, 1},
+             {2_000, 1, 0}
+           ]
+
+    assert Filter.histogram(summaries, %Filter{errors: true}, 1_000, now: @now) == [{1_000, 1, 1}]
+
+    # Stretches begin at the viewer's hours: here 600 ms ahead of UTC.
+    assert Filter.histogram(summaries, %Filter{}, 1_000, now: @now, utc_offset: 600) ==
+             [{400, 1, 0}, {1_400, 2, 1}]
+
+    assert Filter.time_range(%Filter{within: "1h"}, @now) == {@now - 3_600_000, @now}
+    assert Filter.time_range(%Filter{from: 5, to: 9}, @now) == {5, 9}
+    assert Filter.time_range(%Filter{from: 5}, @now) == {5, @now}
+    assert Filter.time_range(%Filter{}, @now) == {@now - :timer.hours(24 * 30), @now}
+  end
+
+  test "matches where a visit came from, its device, marks and duration" do
+    summaries = [
+      summary("paid",
+        source: "google",
+        medium: "cpc",
+        campaign: "spring",
+        marks: %{"Paid" => 2},
+        duration_ms: 90_000
+      ),
+      summary("phone",
+        source: "(direct)",
+        medium: "(none)",
+        device_type: "phone",
+        browser: "Firefox"
+      )
+    ]
+
+    assert ids(%{"source" => "google", "medium" => "cpc"}, summaries) == ~w(paid)
+    assert ids(%{"campaign" => "spring"}, summaries) == ~w(paid)
+    assert ids(%{"source" => "(direct)"}, summaries) == ~w(phone)
+    assert ids(%{"mark" => "Paid"}, summaries) == ~w(paid)
+    assert ids(%{"device_type" => "phone", "browser" => "Firefox"}, summaries) == ~w(phone)
+    assert ids(%{"device_type" => "watch"}, summaries) == ~w(paid phone)
+    assert ids(%{"longer_than" => "60"}, summaries) == ~w(paid)
+    assert ids(%{"q" => "SPRING"}, summaries) == ~w(paid)
+
+    # A range of start times, in any offset.
+    assert ids(%{"from" => "1970-01-01T02:46:40+00:00"}, summaries) == ~w(paid phone)
+    assert ids(%{"from" => "1970-01-01T05:46:41+03:00"}, summaries) == []
+    assert ids(%{"to" => "1970-01-01T02:46:39Z"}, summaries) == []
+    assert ids(%{"from" => "yesterday"}, summaries) == ~w(paid phone)
+
+    # A field's own criterion leaves its other values on offer.
+    filter = Filter.from_params(%{"source" => "google"})
+
+    assert Filter.count_values(summaries, :source, filter, @now, 10) == [
+             {"(direct)", 1},
+             {"google", 1}
+           ]
+
+    assert Filter.count_values(summaries, :mark, filter, @now, 10) == [{"Paid", 1}]
   end
 
   test "pages matches within a time range and counts them all" do

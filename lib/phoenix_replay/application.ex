@@ -7,6 +7,8 @@ defmodule PhoenixReplay.Application do
   own process, if it has one, starts first; see
   `c:PhoenixReplay.Storage.child_spec/1`. Changing `:storage` to a backend
   with a process takes an application restart.
+  `PhoenixReplay.Export.Supervisor` runs video exports, starting what
+  they need only with the first one.
   `PhoenixReplay.Capture.Handlers` attaches the telemetry and log handlers
   from the `:collect` and `:logs` configuration, so changing them takes an
   application restart.
@@ -24,6 +26,7 @@ defmodule PhoenixReplay.Application do
         [
           {Phoenix.PubSub, name: PhoenixReplay.PubSub},
           {Task.Supervisor, name: PhoenixReplay.TaskSupervisor},
+          PhoenixReplay.Export.Supervisor,
           {PhoenixReplay.Capture.Handlers, config},
           PhoenixReplay.Session.Monitor,
           {Task, &PhoenixReplay.Session.Recovery.run/0},

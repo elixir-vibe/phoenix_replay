@@ -68,6 +68,20 @@
     </button>
   </nav>
 
+  <%!-- A note the server never hears about: no phx-change and no JavaScript.
+       PhoenixReplay records what is typed and puts it back in the replay.
+       LiveView leaves the box alone when it re-renders the page. --%>
+  <label id="scratchpad-box" phx-update="ignore" class="mb-6 block">
+    <span class="text-xs font-medium tracking-wide text-gray-500 uppercase">Scratchpad</span>
+    <textarea
+      id="scratchpad"
+      name="scratchpad"
+      rows="2"
+      placeholder="Notes stay in your browser…"
+      class="mt-1.5 block w-full resize-none rounded-md border border-gray-200 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+    ></textarea>
+  </label>
+
   <%!-- The version changes whenever the tasks do, so the component recounts. --%>
   <.live_component
     module={ExampleWeb.TaskLive.StatsComponent}

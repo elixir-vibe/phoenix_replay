@@ -9,8 +9,8 @@ if Code.ensure_loaded?(Ecto.Migration) do
         defmodule MyApp.Repo.Migrations.AddPhoenixReplay do
           use Ecto.Migration
 
-          def up, do: PhoenixReplay.Storage.Ecto.Migration.up(version: 2)
-          def down, do: PhoenixReplay.Storage.Ecto.Migration.down(version: 2)
+          def up, do: PhoenixReplay.Storage.Ecto.Migration.up(version: 3)
+          def down, do: PhoenixReplay.Storage.Ecto.Migration.down(version: 3)
         end
 
     Pin the version, so the migration does the same thing after later
@@ -21,13 +21,18 @@ if Code.ensure_loaded?(Ecto.Migration) do
       2. `error_count`, `tab`, `viewport`, `device` and `source`, which
          the dashboard lists and filters by, and `saved_at`, which keeps its
          pages in place
+      3. `medium`, `campaign`, `device_type` and `browser`, and the
+         `phoenix_replay_marks` table of the moments each session reached,
+         all of which the dashboard filters by, and an index on `view`. Rows saved earlier get their
+         source split into source, medium and campaign, and their device
+         type from their viewport; their browser stays empty.
 
     `up/1` runs every version after `:from` (default `0`), up to
     `:version` (default the latest); `down/1` reverses them. A table made by
     an earlier release is upgraded with a new migration:
 
-        def up, do: PhoenixReplay.Storage.Ecto.Migration.up(from: 1, version: 2)
-        def down, do: PhoenixReplay.Storage.Ecto.Migration.down(from: 1, version: 2)
+        def up, do: PhoenixReplay.Storage.Ecto.Migration.up(from: 2, version: 3)
+        def down, do: PhoenixReplay.Storage.Ecto.Migration.down(from: 2, version: 3)
 
     The module is a migration itself, creating the latest table, so tools
     such as `Ecto.Migrator.run/4` can run it directly.
@@ -35,8 +40,11 @@ if Code.ensure_loaded?(Ecto.Migration) do
 
     use Ecto.Migration
 
+    import Ecto.Query, only: [from: 2]
+
     @table :phoenix_replay_recordings
-    @latest 2
+    @marks :phoenix_replay_marks
+    @latest 3
 
     @doc "The latest version of the table."
     @spec latest() :: pos_integer()
@@ -97,6 +105,104 @@ if Code.ensure_loaded?(Ecto.Migration) do
         remove :device
         remove :source
         remove :saved_at
+      end
+    end
+
+    defp change(3, :up) do
+      alter table(@table) do
+        add :medium, :string
+        add :campaign, :string
+        add :device_type, :string
+        add :browser, :string
+      end
+
+      create table(@marks, primary_key: false) do
+        add :recording_id, :string, primary_key: true
+        add :name, :string, primary_key: true
+        add :count, :integer, null: false
+      end
+
+      create index(@marks, [:name])
+      # Each filter's value picker groups by its column; views are the most
+      # common filter.
+      create index(@table, [:view])
+      flush()
+      execute(&backfill/0, fn -> :ok end)
+    end
+
+    defp change(3, :down) do
+      drop(index(@table, [:view]))
+      drop(table(@marks))
+
+      alter table(@table) do
+        remove :medium
+        remove :campaign
+        remove :device_type
+        remove :browser
+      end
+    end
+
+    # Fills the new columns of rows saved earlier, once per distinct value:
+    # the source they held as "google / cpc / spring", and the device type
+    # their viewport tells. The rules are written out here, rather than
+    # called from the library, so a pinned version does the same thing
+    # after later releases change how summaries are read.
+    defp backfill do
+      table = Atom.to_string(@table)
+
+      for source <-
+            repo().all(
+              from(r in table,
+                where: not is_nil(r.source) and is_nil(r.medium),
+                distinct: true,
+                select: r.source
+              )
+            ) do
+        {split, medium, campaign} = split_source(source)
+
+        repo().update_all(from(r in table, where: r.source == ^source and is_nil(r.medium)),
+          set: [source: split, medium: medium, campaign: campaign]
+        )
+      end
+
+      for viewport <-
+            repo().all(
+              from(r in table,
+                where: not is_nil(r.viewport) and is_nil(r.device_type),
+                distinct: true,
+                select: r.viewport
+              )
+            ) do
+        repo().update_all(from(r in table, where: r.viewport == ^viewport),
+          set: [device_type: device_type(viewport)]
+        )
+      end
+    end
+
+    # "google / cpc / spring", or a lone referrer host or utm_source.
+    defp split_source(source) do
+      case String.split(source, " / ", parts: 3) do
+        [source, medium | campaign] ->
+          {source, medium, List.first(campaign)}
+
+        [one] ->
+          {one, if(String.contains?(one, "."), do: "referral", else: "(none)"), nil}
+      end
+    end
+
+    # The kind of device a viewport stored as "390x844@3" belongs to, by
+    # its width in CSS pixels.
+    defp device_type(viewport) do
+      with [size | _dpr] <- String.split(viewport, "@"),
+           [width | _height] <- String.split(size, "x"),
+           {width, ""} <- Integer.parse(width) do
+        cond do
+          width < 640 -> "phone"
+          width < 1024 -> "tablet"
+          true -> "desktop"
+        end
+      else
+        _invalid -> nil
       end
     end
   end
