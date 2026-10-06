@@ -28,6 +28,11 @@ if Code.ensure_loaded?(MuonTrap) do
     # The last lines of output kept, to log when ffmpeg fails.
     @kept_lines 20
 
+    # What `-progress` reports, a `key=value` line each, about ten times a
+    # report: none of it explains a failure.
+    @progress_keys ~w(frame fps bitrate total_size out_time_us out_time_ms out_time
+                      dup_frames drop_frames speed progress)
+
     @doc """
     Runs the `ffmpeg` at `executable` with `args`, calling `progress` as
     it encodes. Returns once it exits, is cancelled, or goes quiet for
@@ -82,7 +87,8 @@ if Code.ensure_loaded?(MuonTrap) do
     end
 
     # Progress comes as `key=value` lines; the time encoded so far is
-    # `out_time_us`. Anything else is kept in case ffmpeg fails.
+    # `out_time_us`, and the rest is dropped. Anything else is what ffmpeg
+    # says about its work, kept in case it fails.
     defp line("out_time_us=" <> microseconds, run) do
       case Integer.parse(microseconds) do
         {done, ""} -> run.progress.(div(done, 1_000))
@@ -93,7 +99,20 @@ if Code.ensure_loaded?(MuonTrap) do
     end
 
     # Kept newest first.
-    defp line(line, run), do: %{run | lines: [line | Enum.take(run.lines, @kept_lines - 1)]}
+    defp line(line, run) do
+      if progress?(line),
+        do: run,
+        else: %{run | lines: [line | Enum.take(run.lines, @kept_lines - 1)]}
+    end
+
+    # A report's own keys, and the quantizer of each video stream, such as
+    # `stream_0_0_q`.
+    defp progress?(line) do
+      case String.split(line, "=", parts: 2) do
+        [key, _value] -> key in @progress_keys or Regex.match?(~r/\Astream_\d+_\d+_q\z/, key)
+        [_line] -> false
+      end
+    end
 
     # Ending the task closes MuonTrap's port, and MuonTrap stops ffmpeg.
     defp stop(run), do: Task.shutdown(run.task, :brutal_kill)
