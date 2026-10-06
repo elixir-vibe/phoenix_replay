@@ -107,7 +107,13 @@ defmodule PhoenixReplay.Test.Repos do
     adapter = repo.__adapter__()
     config = repo.config()
     _ = adapter.storage_down(config)
-    :ok = adapter.storage_up(config)
+
+    # A database another test run still holds, as `mix ci`'s run across
+    # nodes may find, is kept; migrating skips what is already there.
+    case adapter.storage_up(config) do
+      :ok -> :ok
+      {:error, :already_up} -> :ok
+    end
 
     {:ok, _result, _apps} =
       Ecto.Migrator.with_repo(repo, &migrate/1, pool: DBConnection.ConnectionPool)

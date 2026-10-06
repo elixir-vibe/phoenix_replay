@@ -68,7 +68,6 @@ defmodule PhoenixReplay.MixProject do
         {:muontrap, "~> 1.6 or ~> 2.0", optional: true},
         # Keeps video exports in the app's Oban queue; see PhoenixReplay.Export.Queue.Oban.
         {:oban, "~> 2.20", optional: true},
-        {:oban_quackdb, "~> 0.1", only: :test},
         {:bandit, "~> 1.5", only: :test},
         {:volt, "~> 0.20", only: [:dev, :test], runtime: false},
         {:ex_doc, "~> 0.35", only: :dev, runtime: false},
@@ -80,11 +79,12 @@ defmodule PhoenixReplay.MixProject do
       ]
   end
 
-  # The Ecto storage tests also run on DuckDB through QuackDB, which needs
-  # Elixir 1.19; the minimum-version CI job skips them.
+  # The Ecto storage and Oban export queue tests also run on DuckDB through
+  # QuackDB and oban_quackdb, which need Elixir 1.19; the minimum-version CI
+  # job skips them.
   defp duckdb do
     if Version.match?(System.version(), "~> 1.19"),
-      do: [{:quackdb, "~> 0.5.28", only: :test}],
+      do: [{:quackdb, "~> 0.5.28", only: :test}, {:oban_quackdb, "~> 0.1", only: :test}],
       else: []
   end
 
