@@ -167,7 +167,9 @@ if Code.ensure_loaded?(Ecto.Query) do
 
     # The criteria SQL can check: all but text and the event name.
     defp matching(filter, page_opts) do
-      Enum.map(@columns, &{&1, Map.fetch!(filter, &1)})
+      columns = Enum.map(@columns, &{&1, Map.fetch!(filter, &1)})
+
+      columns
       |> Enum.concat(
         mark: filter.mark,
         started_after: Filter.started_after(filter, Keyword.fetch!(page_opts, :now)),
