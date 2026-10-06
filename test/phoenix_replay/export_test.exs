@@ -112,10 +112,14 @@ defmodule PhoenixReplay.ExportTest do
     for path <- [old, fresh, other], do: File.write!(path, "")
     for path <- [old, old_shots, other], do: File.touch!(path, two_hours_ago)
 
-    :ok = Supervisor.terminate_child(PhoenixReplay.Export.Supervisor, PhoenixReplay.Export.Server)
+    :ok =
+      Supervisor.terminate_child(
+        PhoenixReplay.Export.Supervisor,
+        PhoenixReplay.Export.Queue.Local
+      )
 
     {:ok, _pid} =
-      Supervisor.restart_child(PhoenixReplay.Export.Supervisor, PhoenixReplay.Export.Server)
+      Supervisor.restart_child(PhoenixReplay.Export.Supervisor, PhoenixReplay.Export.Queue.Local)
 
     refute File.exists?(old)
     refute File.exists?(old_shots)

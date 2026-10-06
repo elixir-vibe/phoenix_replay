@@ -1,7 +1,7 @@
 defmodule PhoenixReplay.Export.Supervisor do
   @moduledoc """
   Supervises video export: `PhoenixReplay.Export.Runtime`, which starts
-  the endpoint and Playwright on demand, `PhoenixReplay.Export.Server`,
+  the endpoint and Playwright on demand, `PhoenixReplay.Export.Queue.Local`,
   which queues jobs, and the task supervisor jobs run under.
 
   The tasks start after the server, so a server that restarts takes its
@@ -19,7 +19,7 @@ defmodule PhoenixReplay.Export.Supervisor do
     Supervisor.init(
       [
         PhoenixReplay.Export.Runtime,
-        PhoenixReplay.Export.Server,
+        PhoenixReplay.Export.Queue.Local,
         {Task.Supervisor, name: PhoenixReplay.Export.TaskSupervisor}
       ],
       strategy: :rest_for_one

@@ -110,7 +110,11 @@ defmodule PhoenixReplay.Config do
         `phoenix_replay/exports` in the system's temporary directory)
       * `:ttl` — milliseconds a finished video is kept (default `3_600_000`)
       * `:max_concurrency` — videos exported at once; more wait their turn
-        (default `1`)
+        (default `1`). `PhoenixReplay.Export.Queue.Oban` takes its limit
+        from its Oban queue instead.
+      * `:queue` — where exports wait and run, a
+        `PhoenixReplay.Export.Queue`: a module or `{module, opts}`
+        (default `PhoenixReplay.Export.Queue.Local`)
       * `:fps` — frames per second (default `30`)
       * `:max_dpr` — the highest device pixel ratio to render at, which
         bounds the video's size (default `2`)
@@ -189,6 +193,7 @@ defmodule PhoenixReplay.Config do
     dir: nil,
     ttl: 3_600_000,
     max_concurrency: 1,
+    queue: nil,
     fps: 30,
     max_dpr: 2,
     idle: 3_000,
@@ -264,6 +269,7 @@ defmodule PhoenixReplay.Config do
           dir: Path.t() | nil,
           ttl: pos_integer(),
           max_concurrency: pos_integer(),
+          queue: module() | {module(), keyword()} | nil,
           fps: pos_integer(),
           max_dpr: pos_integer(),
           idle: pos_integer() | nil,
@@ -522,6 +528,8 @@ defmodule PhoenixReplay.Config do
   defp valid_export?(key, value) when key in [:crf, :hold], do: non_neg_integer?(value)
   defp valid_export?(key, value) when key in [:preset, :ffmpeg], do: is_binary(value)
   defp valid_export?(:playwright, value), do: Keyword.keyword?(value)
+  defp valid_export?(:queue, {module, opts}), do: is_atom(module) and Keyword.keyword?(opts)
+  defp valid_export?(:queue, value), do: is_atom(value)
   defp valid_export?(_key, value), do: pos_integer?(value)
 
   defp valid_retention?(:max_age, value), do: is_nil(value) or pos_integer?(value)

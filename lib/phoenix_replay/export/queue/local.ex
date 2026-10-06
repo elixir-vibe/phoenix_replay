@@ -1,7 +1,9 @@
-defmodule PhoenixReplay.Export.Server do
+defmodule PhoenixReplay.Export.Queue.Local do
   @moduledoc """
-  Queues video exports and runs them under `PhoenixReplay.Export.TaskSupervisor`,
-  `:max_concurrency` at a time.
+  The default `PhoenixReplay.Export.Queue`: keeps video exports in memory
+  and runs them under `PhoenixReplay.Export.TaskSupervisor`,
+  `:max_concurrency` at a time, on the node that asked for them. They are
+  lost when the node stops; `PhoenixReplay.Export.Queue.Oban` keeps them.
 
   It keeps every job until its video is `:ttl` old, broadcasts each change
   to a job on the recording's topic, and deletes expired videos. A job
@@ -19,40 +21,30 @@ defmodule PhoenixReplay.Export.Server do
 
   require Logger
 
-  alias PhoenixReplay.Config
-  alias PhoenixReplay.Export.{Job, Options, Video}
+  alias PhoenixReplay.Export.{Job, Queue, Video}
 
-  @topic "phoenix_replay:export:"
+  @behaviour Queue
 
   @doc "Starts the export queue, registered under this module's name."
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
-  @doc "Queues an export of a recording, unless one is queued or running."
-  @spec start(PhoenixReplay.Recording.id(), Config.t(), Options.t()) :: {:ok, Job.t()}
-  def start(recording_id, config, options),
+  @impl Queue
+  def start(recording_id, config, options, _opts),
     do: GenServer.call(__MODULE__, {:start, recording_id, config, options})
 
-  @doc "Cancels the job with `id`, if it is queued or running."
-  @spec cancel(Job.id()) :: :ok
-  def cancel(id), do: GenServer.call(__MODULE__, {:cancel, id})
+  @impl Queue
+  def cancel(id, _opts), do: GenServer.call(__MODULE__, {:cancel, id})
 
-  @doc "The job with `id`."
-  @spec get(Job.id()) :: Job.t() | nil
-  def get(id), do: GenServer.call(__MODULE__, {:get, id})
+  @impl Queue
+  def get(id, _opts), do: GenServer.call(__MODULE__, {:get, id})
 
-  @doc "The latest job for a recording."
-  @spec latest(PhoenixReplay.Recording.id()) :: Job.t() | nil
-  def latest(recording_id), do: GenServer.call(__MODULE__, {:latest, recording_id})
+  @impl Queue
+  def latest(recording_id, _opts), do: GenServer.call(__MODULE__, {:latest, recording_id})
 
-  @doc "Subscribes the caller to a recording's jobs."
-  @spec subscribe(PhoenixReplay.Recording.id()) :: :ok | {:error, term()}
-  def subscribe(recording_id),
-    do: Phoenix.PubSub.subscribe(PhoenixReplay.PubSub, @topic <> recording_id)
-
-  @impl true
+  @impl GenServer
   def init(nil) do
-    with %{} = export <- Config.load().export, do: sweep_dir(export)
+    with %{} = export <- PhoenixReplay.Config.load().export, do: sweep_dir(export)
     {:ok, %{jobs: %{}, order: [], queue: :queue.new(), running: %{}}}
   end
 
@@ -72,7 +64,7 @@ defmodule PhoenixReplay.Export.Server do
     end
   end
 
-  @impl true
+  @impl GenServer
   def handle_call({:start, recording_id, config, options}, _from, state) do
     case Enum.find(active(state), &(&1.recording_id == recording_id)) do
       %Job{} = job ->
@@ -126,7 +118,7 @@ defmodule PhoenixReplay.Export.Server do
     {:reply, job, state}
   end
 
-  @impl true
+  @impl GenServer
   def handle_cast({:progress, id, fraction}, state) do
     progress = fraction |> Kernel.*(100) |> trunc() |> min(99) |> max(0)
 
@@ -139,7 +131,7 @@ defmodule PhoenixReplay.Export.Server do
     end
   end
 
-  @impl true
+  @impl GenServer
   def handle_info({ref, result}, %{running: running} = state) when is_map_key(running, ref) do
     Process.demonitor(ref, [:flush])
     {{id, config, _pid}, running} = Map.pop(running, ref)
@@ -218,12 +210,7 @@ defmodule PhoenixReplay.Export.Server do
   end
 
   defp put(state, job) do
-    Phoenix.PubSub.broadcast(
-      PhoenixReplay.PubSub,
-      @topic <> job.recording_id,
-      {PhoenixReplay.Export, job}
-    )
-
+    Queue.broadcast(job)
     %{state | jobs: Map.put(state.jobs, job.id, job)}
   end
 end

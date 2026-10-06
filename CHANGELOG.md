@@ -26,6 +26,7 @@ Pointer, touch and form recording, client state, and a richer player.
 
 ### Changed
 
+- Video exports wait in a `PhoenixReplay.Export.Queue`, chosen with the new `:queue` export option. The in-memory queue is now `PhoenixReplay.Export.Queue.Local`, the default. `PhoenixReplay.Export.cancel/2`, `get/2` and `latest/2` take the configuration too.
 - The recording list filters by **Source**, **Medium** and **Campaign**, as analytics tools tell where a visit came from: the landing's UTM parameters, else the referring site and `referral`, else `(direct)` and `(none)`. Also by **Device** (phone, tablet or desktop), **Browser** and **Duration**. Each part of a row's "from google / cpc / spring", and the campaign and referrer in the player's Visit tab, link to the list filtered by it. `PhoenixReplay.Trace.find/2` and `mix phoenix_replay.list` take the same criteria, and the search also finds sources, campaigns and mark names.
 - The recording list charts the matching sessions over time, in bars that begin at the viewer's own hours and midnights, with those that had an error in red and a baseline where none started; a bar narrows the list to its stretch. When sampling leaves sessions out, a note says which are saved. `PhoenixReplay.Storage` has an optional `histogram/4` for the chart, which `PhoenixReplay.Storage.Ecto` counts in SQL.
 - The recording list flags the marks each session reached next to its view, each a link to the sessions that reached it.

@@ -20,7 +20,7 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   A saved recording can be exported as a video when `PhoenixReplay.Export`
   is available, with the options its dialog offers. The export runs under
-  `PhoenixReplay.Export.Server`, and the player follows its progress and
+  `PhoenixReplay.Export.Queue`, and the player follows its progress and
   links the video when it is ready.
   """
 

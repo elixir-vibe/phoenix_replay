@@ -28,7 +28,8 @@ orchestrator = [
   "PhoenixReplay.Session.Monitor",
   "PhoenixReplay.Session.Recovery",
   # Video export: the queue and the render of one video.
-  "PhoenixReplay.Export.Server",
+  "PhoenixReplay.Export.Queue",
+  "PhoenixReplay.Export.Queue.Local",
   "PhoenixReplay.Export.Supervisor",
   "PhoenixReplay.Export.Video"
 ]

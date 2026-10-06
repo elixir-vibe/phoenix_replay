@@ -20,10 +20,12 @@ defmodule PhoenixReplay.Export do
   private endpoint on 127.0.0.1 started with the first export, so it
   needs no route or login in your app.
 
-  Exports run one at a time, or `:max_concurrency` at once, under
-  `PhoenixReplay.Export.Server`, which broadcasts each job's progress;
-  the player's **Export video** and `mix phoenix_replay.export` both use
-  it. Finished videos are deleted after `:ttl`.
+  Exports wait their turn in a `PhoenixReplay.Export.Queue`: by default
+  `PhoenixReplay.Export.Queue.Local`, in memory, one at a time or
+  `:max_concurrency` at once; or `PhoenixReplay.Export.Queue.Oban`, in
+  your Oban queue. Each job's progress is broadcast; the player's **Export
+  video** and `mix phoenix_replay.export` both follow it. Finished videos
+  are deleted after `:ttl`.
 
   ## Setup
 
@@ -38,7 +40,7 @@ defmodule PhoenixReplay.Export do
   """
 
   alias PhoenixReplay.Config
-  alias PhoenixReplay.Export.{Job, Options, Server}
+  alias PhoenixReplay.Export.{Job, Options, Queue}
   alias PhoenixReplay.Recording
 
   @typedoc "Why exporting is not possible."
@@ -81,29 +83,40 @@ defmodule PhoenixReplay.Export do
   @spec start(Recording.id(), Config.t(), Options.t() | nil) ::
           {:ok, Job.t()} | {:error, unavailable()}
   def start(recording_id, config \\ Config.load(), options \\ nil) do
-    with :ok <- available(config),
-         do: Server.start(recording_id, config, options || Options.new(config.export))
+    with :ok <- available(config) do
+      {queue, opts} = Queue.of(config)
+      queue.start(recording_id, config, options || Options.new(config.export), opts)
+    end
   end
 
   @doc """
   Cancels an export that is queued or running. A running one closes its
   browser and stops encoding first, and ends `:cancelled`.
   """
-  @spec cancel(Job.id()) :: :ok
-  defdelegate cancel(id), to: Server
+  @spec cancel(Job.id(), Config.t()) :: :ok
+  def cancel(id, config \\ Config.load()) do
+    {queue, opts} = Queue.of(config)
+    queue.cancel(id, opts)
+  end
 
   @doc "The export with `id`, if it is still kept."
-  @spec get(Job.id()) :: Job.t() | nil
-  defdelegate get(id), to: Server
+  @spec get(Job.id(), Config.t()) :: Job.t() | nil
+  def get(id, config \\ Config.load()) do
+    {queue, opts} = Queue.of(config)
+    queue.get(id, opts)
+  end
 
   @doc "The latest export of a recording, if one is kept."
-  @spec latest(Recording.id()) :: Job.t() | nil
-  defdelegate latest(recording_id), to: Server
+  @spec latest(Recording.id(), Config.t()) :: Job.t() | nil
+  def latest(recording_id, config \\ Config.load()) do
+    {queue, opts} = Queue.of(config)
+    queue.latest(recording_id, opts)
+  end
 
   @doc """
   Subscribes the caller to the exports of a recording: each change to one
   arrives as `{PhoenixReplay.Export, %PhoenixReplay.Export.Job{}}`.
   """
   @spec subscribe(Recording.id()) :: :ok | {:error, term()}
-  defdelegate subscribe(recording_id), to: Server
+  defdelegate subscribe(recording_id), to: Queue
 end
