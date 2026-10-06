@@ -213,6 +213,7 @@ defmodule PhoenixReplay.MixProject do
         "format --check-formatted",
         "volt.js.check --type-aware --type-check",
         "test",
+        "cmd elixir --sname phoenix_replay_ci -S mix test --only cluster",
         "credo --strict",
         "ex_dna --min-mass 20",
         "reach.check --arch --dead-code --smells --strict",

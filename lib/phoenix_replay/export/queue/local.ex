@@ -200,7 +200,7 @@ defmodule PhoenixReplay.Export.Queue.Local do
       end)
 
     %{state | running: Map.put(state.running, task.ref, {job.id, config, task.pid})}
-    |> put(%{job | status: :running})
+    |> put(%{job | status: :running, node: node()})
   end
 
   # A finished video is deleted once it is `:ttl` old.

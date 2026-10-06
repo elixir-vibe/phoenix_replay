@@ -136,6 +136,8 @@ Until all three are there, the menu has no **Export video**. The browser loads t
 
 Only saved recordings are exported, not sessions still running. An export that would take more than `:max_shots` screenshots, 3,600 by default, fails with a message to choose a shorter range or a lower frame rate, since each screenshot is a file until the video is encoded. Videos left by a server that stopped are deleted when the next one starts, once they are older than `:ttl`.
 
+Exports wait in memory on the node that started them, `:max_concurrency` at a time. In a cluster, the link to a video works on any node: the node it reaches asks the one that queued the export for it, and streams the video from the node that rendered it, over the cluster's connection.
+
 ## Light and dark
 
 The dashboard follows the system's light or dark appearance. The sun and moon button in its header switches to the other one, and the browser remembers the choice. It ships its own fonts, Geist and Geist Mono, and icons, so it looks the same in every app.

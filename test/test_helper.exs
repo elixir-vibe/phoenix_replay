@@ -20,6 +20,10 @@ export_tests? =
 
 exclude = if export_tests?, do: exclude, else: [:export | exclude]
 
+# Tests across nodes start a peer, which needs a distributed VM: `mix ci`
+# runs them with `elixir --sname ... -S mix test --only cluster`.
+exclude = if Node.alive?(), do: exclude, else: [:cluster | exclude]
+
 ExUnit.start(exclude: exclude)
 
 # Dashboard TypeScript tests from priv/ts run as ExUnit tests: pure modules in

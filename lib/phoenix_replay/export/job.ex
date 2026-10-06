@@ -5,7 +5,8 @@ defmodule PhoenixReplay.Export.Job do
   `status` moves from `:queued` to `:running`, then to `:done` with the
   video at `path`, or to `:failed` with an `error` to show. A cancelled
   job is `:cancelled`, after `:cancelling` while a running one stops.
-  `progress` is a percentage.
+  `progress` is a percentage. `node` is the node that renders the video,
+  whose disk it is on.
   """
 
   alias PhoenixReplay.Export.Options
@@ -21,6 +22,7 @@ defmodule PhoenixReplay.Export.Job do
           status: status(),
           progress: 0..100,
           path: Path.t() | nil,
+          node: node() | nil,
           error: String.t() | nil,
           finished_at: integer() | nil
         }
@@ -31,6 +33,7 @@ defmodule PhoenixReplay.Export.Job do
     :recording_id,
     :options,
     :path,
+    :node,
     :error,
     :finished_at,
     status: :queued,
