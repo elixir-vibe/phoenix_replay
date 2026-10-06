@@ -180,9 +180,10 @@ defmodule PhoenixReplay.Web.Components.Filters do
 
   @doc """
   Chooses when the sessions shown started, under the filter bar: a recent
-  window, which links to the list filtered by it, or a range. The
-  `TimeRange` hook reads the range in the viewer's time zone and sends it
-  as `time_range` with `from` and `to` in UTC, either blank. Escape or a
+  window, which links to the list filtered by it, or a range of days on a
+  [Cally](https://wicky.nillia.ms/cally/) calendar with the times they
+  start and end. The `TimeRange` hook reads the range in the viewer's time
+  zone and sends it as `time_range` with `from` and `to` in UTC. Escape or a
   click outside sends `close_filter`.
   """
   attr :filter, Filter, required: true
@@ -211,9 +212,9 @@ defmodule PhoenixReplay.Web.Components.Filters do
       phx-hook="Floating"
       data-anchor="recording-filter-time"
       data-placement="bottom-start"
-      class="fixed top-0 left-0 z-40 w-[min(20rem,calc(100vw-1rem))] rounded-lg border border-line bg-surface p-1.5 shadow-lg"
+      class="fixed top-0 left-0 z-40 flex w-[min(46rem,calc(100vw-1rem))] flex-col gap-1.5 rounded-lg border border-line bg-surface p-1.5 shadow-lg sm:flex-row"
     >
-      <ul aria-label="Recent">
+      <ul aria-label="Recent" class="shrink-0 sm:w-40">
         <li :for={{window, filter} <- @windows}>
           <.link
             patch={@path.(filter)}
@@ -233,35 +234,54 @@ defmodule PhoenixReplay.Web.Components.Filters do
         phx-hook="TimeRange"
         data-from={@iso.(@filter.from)}
         data-to={@iso.(@filter.to)}
-        class="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-t border-line px-2.5 pt-3 pb-1"
+        class="min-w-0 flex-1 border-t border-line px-2.5 pt-3 pb-1 sm:border-t-0 sm:border-l sm:pt-1"
       >
-        <label for="recording-filter-range-from" class="text-muted">From</label>
-        <input
-          id="recording-filter-range-from"
-          type="datetime-local"
-          name="from"
-          class="h-9 min-w-0 rounded-md border border-line bg-canvas px-2 [color-scheme:inherit]"
-        />
-        <label for="recording-filter-range-to" class="text-muted">To</label>
-        <input
-          id="recording-filter-range-to"
-          type="datetime-local"
-          name="to"
-          class="h-9 min-w-0 rounded-md border border-line bg-canvas px-2 [color-scheme:inherit]"
-        />
-        <p class="col-span-2 text-xs text-muted">
-          In your time zone<span id="recording-filter-zone" phx-update="ignore" data-time-zone></span>.
+        <%!-- Cally draws the months; LiveView leaves them to it. --%>
+        <div id="recording-filter-calendar" phx-update="ignore" data-calendar>
+          <calendar-range months="2" page-by="single" class="block">
+            <span slot="previous" aria-label="Previous month">
+              <.icon name="lucide:chevron-left" class="size-4" />
+            </span>
+            <span slot="next" aria-label="Next month">
+              <.icon name="lucide:chevron-right" class="size-4" />
+            </span>
+            <div class="flex justify-center gap-6">
+              <calendar-month></calendar-month>
+              <calendar-month offset="1" class="hidden sm:block"></calendar-month>
+            </div>
+          </calendar-range>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <label class="flex items-center gap-2">
+            <span class="text-muted">From</span>
+            <input type="time" name="from_time" value="00:00" class={time_input()} />
+          </label>
+          <label class="flex items-center gap-2">
+            <span class="text-muted">to</span>
+            <input type="time" name="to_time" value="23:59" class={time_input()} />
+          </label>
+          <span class="flex-1"></span>
+          <button
+            type="submit"
+            class="h-9 rounded-md bg-ink px-3 font-medium text-on-ink hover:bg-ink/85"
+          >
+            Show this range
+          </button>
+        </div>
+        <p class="mt-2 text-xs text-muted">
+          Pick a day, or a first and a last day. In your time zone<span
+            id="recording-filter-zone"
+            phx-update="ignore"
+            data-time-zone
+          ></span>.
         </p>
-        <button
-          type="submit"
-          class="col-span-2 h-9 rounded-md bg-ink font-medium text-on-ink hover:bg-ink/85"
-        >
-          Show this range
-        </button>
       </form>
     </div>
     """
   end
+
+  defp time_input,
+    do: "h-9 rounded-md border border-line bg-canvas px-2 tabular-nums [color-scheme:inherit]"
 
   defp chip_class,
     do:

@@ -1,5 +1,7 @@
 import { Socket } from 'phoenix'
 import { LiveSocket } from 'phoenix_live_view'
+// Registers Cally's <calendar-range> and <calendar-month> for the time picker.
+import 'cally'
 
 import { confirmClicks } from './dom/confirm'
 import { copyLinks } from './dom/copy'

@@ -58,7 +58,7 @@ The filter bar always has a search, by URL, recording id, event or mark name, so
 - **Browser**, such as Chrome or Mobile Safari,
 - **Duration**, longer than 10 seconds, a minute, five minutes or a number of seconds you type.
 
-**Started** picks the last 15 minutes, hour, 24 hours, 7 days or 30 days, or a range from one time to another. Times are in your browser's time zone, which the picker names; hover any time to see it in UTC too.
+**Started** picks the last 15 minutes, hour, 24 hours, 7 days or 30 days, or a range: pick a day, or a first and a last day, on the calendar, and the times the range starts and ends. Times are in your browser's time zone, which the picker names; hover any time to see it in UTC too.
 
 Choosing a field from **+ Filter** opens a picker listing the values recordings have, with how many have each, counting only the recordings that match your other filters. Type to narrow the list, or press Enter to filter by what you typed. A filter in use is a chip, such as **View is MyAppWeb.CheckoutLive**: click it to change the value, or × to remove it.
 

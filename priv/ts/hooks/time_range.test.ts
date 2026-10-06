@@ -1,22 +1,29 @@
 import { afterEach, expect, test } from 'volt:test'
 
 import { html } from '../test/hooks'
-import { fromLocalInput, TimeRange, toLocalInput, zoneLabel } from './time_range'
+import { fromLocalParts, TimeRange, toLocalParts, zoneLabel } from './time_range'
 
 afterEach(() => document.body.replaceChildren())
 
-test('reads and writes datetime-local values in the viewer’s zone', () => {
+test('reads and writes days and times in the viewer’s zone', () => {
   const iso = '2026-10-06T09:14:00.000Z'
-  expect(fromLocalInput(toLocalInput(iso))).toBe(iso)
-  expect(toLocalInput(undefined)).toBe('')
-  expect(fromLocalInput('')).toBe('')
+  expect(fromLocalParts(toLocalParts(iso)!)).toBe(iso)
+  expect(toLocalParts(undefined)).toBeNull()
+
+  // A range's end runs to the end of its minute; days alone span whole days.
+  const end = new Date(fromLocalParts({ date: '2026-10-06', time: '' }, true))
+  expect([end.getHours(), end.getMinutes(), end.getSeconds()]).toEqual([23, 59, 59])
+  expect(new Date(fromLocalParts({ date: '2026-10-06', time: '' })).getHours()).toBe(0)
+
   expect(zoneLabel(new Date(iso))).toMatch(/\(UTC([+−]\d+(:\d\d)?)?\)$/)
 })
 
-test('fills the range, names the zone and sends the range in UTC', () => {
+const mount = (from?: string, to?: string): { form: HTMLElement; pushed: unknown[] } => {
   const form = html(`
-    <form data-from="2026-10-06T09:00:00Z">
-      <input name="from" type="datetime-local"><input name="to" type="datetime-local">
+    <form ${from ? `data-from="${from}" data-to="${to}"` : ''}>
+      <calendar-range></calendar-range>
+      <input name="from_time" type="time" value="00:00">
+      <input name="to_time" type="time" value="23:59">
       <span data-time-zone></span>
     </form>
   `)
@@ -28,11 +35,39 @@ test('fills the range, names the zone and sends the range in UTC', () => {
     return Promise.resolve({})
   }) as never
   hook.mounted()
+  return { form, pushed }
+}
 
-  const from = form.querySelector<HTMLInputElement>('input[name="from"]')!
-  expect(from.value).toBe(toLocalInput('2026-10-06T09:00:00Z'))
+test('fills the calendar and times from the range, and names the zone', () => {
+  const from = '2026-10-03T09:30:00Z'
+  const to = '2026-10-06T18:00:00Z'
+  const { form } = mount(from, to)
+
+  const calendar = form.querySelector('calendar-range') as HTMLElement & { value: string }
+  expect(calendar.value).toBe(`${toLocalParts(from)!.date}/${toLocalParts(to)!.date}`)
+  expect(form.querySelector<HTMLInputElement>('input[name="from_time"]')!.value).toBe(
+    toLocalParts(from)!.time
+  )
   expect(form.querySelector('[data-time-zone]')!.textContent).toContain('UTC')
+})
 
+test('sends the picked days and times in UTC, and nothing without days', () => {
+  const { form, pushed } = mount()
   form.dispatchEvent(new Event('submit', { cancelable: true }))
-  expect(pushed).toEqual([['time_range', { from: '2026-10-06T09:00:00.000Z', to: '' }]])
+  expect(pushed).toEqual([])
+
+  const calendar = form.querySelector('calendar-range') as HTMLElement & { value: string }
+  calendar.value = '2026-10-03/2026-10-06'
+  form.querySelector<HTMLInputElement>('input[name="from_time"]')!.value = '09:30'
+  form.dispatchEvent(new Event('submit', { cancelable: true }))
+
+  expect(pushed).toEqual([
+    [
+      'time_range',
+      {
+        from: new Date('2026-10-03T09:30').toISOString(),
+        to: new Date('2026-10-06T23:59:59.999').toISOString()
+      }
+    ]
+  ])
 })
