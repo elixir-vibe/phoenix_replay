@@ -39,6 +39,7 @@ Pointer, touch and form recording, client state, and a richer player.
 - Starting the application a second time on the same machine, such as `iex -S mix` or a Mix task next to a running server, no longer saves the server's running sessions as interrupted and deletes their chunks. File storage tags part files with the VM's process id and recovers only those whose VM is gone; on a system without `kill` to tell, it leaves them.
 - Scrubbing to a moment between two events keeps that moment instead of snapping back to the earlier event, and while dragging over a stretch without events the thumb stays under the pointer and the clock shows its time, instead of flicking back to the last event, such as 0:00.
 - Pausing keeps the time playback reached instead of jumping back to the last event.
+- **Copy link** links the exact moment, `?at=<index>&t=<ms>`, to the hundredth of a second as the clock shows it, instead of the event before it.
 - Switching from 100% back to Fit after scrolling the replay no longer leaves the page shifted out of view.
 - Collected details no longer break words mid-way, such as SQL table names.
 - A LiveComponent whose recording fails, such as with a raising sanitizer, is reported with `[:phoenix_replay, :collector, :exception]` instead of logged.

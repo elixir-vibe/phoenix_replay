@@ -80,7 +80,9 @@ defmodule PhoenixReplay.Web.Live.Show do
         # The export dialog's params and error while it is open.
         export_dialog: nil,
         # A link to a moment opens the player there.
-        start_at: Params.integer(params["at"], nil)
+        start_at: Params.integer(params["at"], nil),
+        # And the time there, which may fall between that event and the next.
+        start_time: params["t"]
       )
 
     cond do
@@ -163,6 +165,7 @@ defmodule PhoenixReplay.Web.Live.Show do
     |> hand_over()
     |> filter_events()
     |> seek(socket.assigns.start_at || Timeline.first_render_index(recording))
+    |> at_time(socket.assigns.start_time)
   end
 
   # A live session's frame waits for the redacted recording from the player.
@@ -498,7 +501,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       first_error={@first_error}
       dropped={@dropped}
       at={@at}
-      link={Context.path(@context, [@recording.id]) <> "?at=#{@index}"}
+      link={Context.path(@context, [@recording.id]) <> "?at=#{@index}&t=#{@at}"}
       can_export={@exportable?}
     />
     <.export_dialog

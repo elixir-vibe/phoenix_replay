@@ -59,7 +59,7 @@ Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&ev
 
 ## Player
 
-The header names the view, the page and when the session started, with its duration and event count. When the session had errors, **"2 errors · jump to first"** takes you to the first one. **Copy link to 0:07** copies a link to the current moment: `/admin/replay/<id>?at=<index>` opens the player there.
+The header names the view, the page and when the session started, with its duration and event count. When the session had errors, **"2 errors · jump to first"** takes you to the first one. **Copy link to 0:07.25** copies a link to the current moment: `/admin/replay/<id>?at=<index>&t=<ms>` opens the player at that event, and at the time `t` in milliseconds when it falls between that event and the next.
 
 The replayed page sits under a bar showing its URL at that moment. When the browser's viewport was recorded, the page renders at that size, and the bar shows its orientation, size and scale. That chip opens the **View** menu: fit the page to the window or show it at its actual size in a scrolling box, or **Rotate** it to the other orientation.
 

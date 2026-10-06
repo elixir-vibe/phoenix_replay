@@ -67,7 +67,7 @@ It returns the `assigns`, the LiveComponents' assigns by `{module, id}`, `client
 
 ## 4. Report it
 
-- Link the moment: the dashboard is where the router mounts `phoenix_replay`, `/dev/replay` by default in development, and `<dashboard>/<id>?at=<index>` opens the player there.
+- Link the moment: the dashboard is where the router mounts `phoenix_replay`, `/dev/replay` by default in development, and `<dashboard>/<id>?at=<index>` opens the player there; `&t=<ms>` adds a time between that event and the next.
 - A video for a ticket, when export is configured: `mix phoenix_replay.export ID --from 12 --to 40 --output bug.mp4`.
 
 ## 5. Reproduce it as a test

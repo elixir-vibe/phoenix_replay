@@ -117,7 +117,7 @@ defmodule PhoenixReplay.Web.Components.Player do
         <span class="flex-1"></span>
         <.button size="md" data-copy={@link} class="group">
           <.icon name="lucide:link" class="size-4" />
-          <span class="group-data-copied:hidden">Copy link to {Format.clock(@at)}</span>
+          <span class="group-data-copied:hidden">Copy link to {Format.precise_clock(@at)}</span>
           <span class="hidden group-data-copied:inline">Copied</span>
         </.button>
         <.theme_toggle id="theme-toggle" />

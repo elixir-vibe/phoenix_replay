@@ -70,10 +70,15 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   test "opens at a linked moment and links to the current one" do
     {:ok, view, _html} = live(build_conn(), "/replay/show?at=4")
     assert assigns(view).index == 4
-    assert has_element?(view, ~s(button[data-copy="/replay/show?at=4"]), "Copy link to 0:02")
+
+    assert has_element?(
+             view,
+             ~s(button[data-copy="/replay/show?at=4&t=2000"]),
+             "Copy link to 0:02.00"
+           )
 
     render_click(view, "next")
-    assert has_element?(view, ~s(button[data-copy="/replay/show?at=5"]))
+    assert has_element?(view, ~s(button[data-copy="/replay/show?at=5&t=2001"]))
   end
 
   test "groups events by interaction, filters them and marks what changed" do
@@ -195,6 +200,23 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
     {:ok, view, _html} = live(build_conn(), "/replay/show")
     assert has_element?(view, ~s(#replay-frame[src^="/replay/show/frame?channel="]))
+  end
+
+  test "links the moment it is at, between events too, to the hundredth of a second" do
+    # Between the first render at 5 ms and the click at 1000 ms.
+    {:ok, view, _html} = live(build_conn(), "/replay/show?at=1&t=500")
+
+    assert %{index: 1, at: 500} = assigns(view)
+
+    assert has_element?(
+             view,
+             ~s(button[data-copy="/replay/show?at=1&t=500"]),
+             "Copy link to 0:00.50"
+           )
+
+    # A time outside the event's span is kept within it.
+    {:ok, view, _html} = live(build_conn(), "/replay/show?at=1&t=99999")
+    assert %{index: 1, at: 1_000} = assigns(view)
   end
 
   test "jumps to the first error" do
