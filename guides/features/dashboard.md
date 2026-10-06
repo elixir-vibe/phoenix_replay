@@ -152,7 +152,9 @@ config :phoenix_replay,
 config :my_app, Oban, queues: [replay_exports: 1]
 ```
 
-The queue's limit is how many videos export at once, and every node that runs it needs Chromium and `ffmpeg`. Oban keeps one export of a recording at a time; a queued one is cancelled in Oban, and a running one is asked to stop on whichever node runs it, so it closes its browser and stops encoding. Progress is shown live, and kept in the job now and then. An export is not retried. See `PhoenixReplay.Export.Queue.Oban`.
+The queue's limit is how many videos export at once, and every node that runs it needs Chromium and `ffmpeg`. Oban keeps one export of a recording at a time; a queued one is cancelled in Oban, and a running one is asked to stop on whichever node runs it, so it closes its browser and stops encoding. Progress is shown live, and kept in the job now and then. An export is not retried, and runs for an hour at most, or the `:timeout` its queue option gives.
+
+Run Oban's `Lifeline` plugin, so an export a deploy interrupts is rescued and ends failed rather than running forever, and its `Pruner`, so finished jobs are deleted. See `PhoenixReplay.Export.Queue.Oban`.
 
 ## Light and dark
 

@@ -8,11 +8,16 @@ if Code.ensure_loaded?(Oban) do
     stops one: closing its browser and stopping encoding itself. An export
     is not retried; it fails with a message for the people who asked for
     it.
+
+    An export may run for the `:timeout` its queue was given, an hour by
+    default, kept in the job's `meta`. Past it, Oban stops the job; see
+    `timeout/1`.
     """
 
+    # One export of a recording at a time, for as long as it waits or runs.
     use Oban.Worker,
       max_attempts: 1,
-      unique: [keys: [:recording_id], states: :incomplete]
+      unique: [keys: [:recording_id], states: :incomplete, period: :infinity]
 
     alias PhoenixReplay.Config
     alias PhoenixReplay.Export.{Job, Queue, Video}
@@ -22,13 +27,31 @@ if Code.ensure_loaded?(Oban) do
     @scope PhoenixReplay.Export
     @kept_every 10
 
-    @doc "Asks the render of the job with `id` to stop, on whichever node it runs."
-    @spec cancel(Job.id()) :: :ok
-    def cancel(id) do
-      for pid <- :pg.get_members(@scope, {__MODULE__, id}),
-          do: send(pid, {PhoenixReplay.Export, :cancel})
+    # How long an export may run in all, unless its queue says otherwise.
+    @timeout :timer.hours(1)
 
-      :ok
+    @doc "How long an export may run in all, when its queue does not say."
+    @spec default_timeout() :: pos_integer()
+    def default_timeout, do: @timeout
+
+    @impl Oban.Worker
+    def timeout(%Oban.Job{meta: meta}), do: meta["timeout"] || @timeout
+
+    @doc """
+    Asks the render of the job with `id` to stop, on whichever node it runs.
+    Returns `:not_running` when no render answers, as for a job its node
+    left behind.
+    """
+    @spec cancel(Job.id()) :: :ok | :not_running
+    def cancel(id) do
+      case :pg.get_members(@scope, {__MODULE__, id}) do
+        [] ->
+          :not_running
+
+        renders ->
+          Enum.each(renders, &send(&1, {PhoenixReplay.Export, :cancel}))
+          :ok
+      end
     end
 
     @impl Oban.Worker

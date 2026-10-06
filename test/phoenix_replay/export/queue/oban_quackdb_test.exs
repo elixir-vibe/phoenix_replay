@@ -7,7 +7,6 @@ if Code.ensure_loaded?(Oban.Engines.QuackDB) do
 
     use PhoenixReplay.Test.ObanQueueCase,
       repo: PhoenixReplay.Test.DuckDBRepo,
-      engine: Oban.Engines.QuackDB,
       sandbox: false
   end
 end

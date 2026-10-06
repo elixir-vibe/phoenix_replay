@@ -3,6 +3,5 @@ defmodule PhoenixReplay.Export.Queue.ObanLiteTest do
   use ExUnit.Case, async: false
 
   use PhoenixReplay.Test.ObanQueueCase,
-    repo: PhoenixReplay.Test.SQLiteRepo,
-    engine: Oban.Engines.Lite
+    repo: PhoenixReplay.Test.SQLiteRepo
 end
