@@ -115,13 +115,14 @@ mix phoenix_replay.export <recording-id> --output checkout-bug.mp4 --from 12 --t
 
 Its flags are the dialog's options: `--from` and `--to` in seconds, `--no-skip-idle`, `--no-pointer`, `--rotated`, `--size recorded|1x|half`, `--fps 15|30|60` and `--quality small|balanced|best`.
 
-A recording holds no pixels, so an export replays it in a headless Chromium and films it, the way the player shows it: at the recorded viewport and pixel ratio, rotations included, with the cursor, touches, ripples and scrolling drawn over it. It films at 30 frames per second but screenshots only when the picture changes, and shortens stretches without activity to three seconds, so an export takes about as long as the activity it shows, not the whole session, and makes a small file. `ffmpeg` encodes it as H.264.
+A recording holds no pixels, so an export replays it in a headless Chromium and films it, the way the player shows it: at the recorded viewport and pixel ratio, rotations included, with the cursor, touches, ripples and scrolling drawn over it. It films at 30 frames per second but screenshots only when the picture changes, and shortens stretches without activity to three seconds, so an export takes about as long as the activity it shows, not the whole session, and makes a small file. `ffmpeg` encodes it as H.264, run by [MuonTrap](https://hexdocs.pm/muontrap), which stops it with the export, even when your app's VM goes down, so no `ffmpeg` is left running.
 
-It needs three things on the machine that exports: [`playwright_ex`](https://hexdocs.pm/playwright_ex) with Playwright's Chromium, `ffmpeg`, and your endpoint named in the configuration:
+It needs four things on the machine that exports: [`playwright_ex`](https://hexdocs.pm/playwright_ex) with Playwright's Chromium, MuonTrap, `ffmpeg`, and your endpoint named in the configuration. MuonTrap runs on Linux and macOS.
 
 ```elixir
 # mix.exs
-{:playwright_ex, "~> 0.14"}
+{:playwright_ex, "~> 0.14"},
+{:muontrap, "~> 1.6"}
 
 # config/config.exs
 config :phoenix_replay, export: [endpoint: MyAppWeb.Endpoint]

@@ -169,13 +169,13 @@ defmodule PhoenixReplay.ExportTest do
              )
   end
 
-  test "kills an ffmpeg that stopped reading its input" do
+  test "stops an ffmpeg that never reports progress" do
     dir = Path.join(System.tmp_dir!(), "phoenix_replay_stuck_ffmpeg")
     File.mkdir_p!(dir)
     on_exit(fn -> File.rm_rf(dir) end)
     pid_file = Path.join(dir, "pid")
     stuck = Path.join(dir, "ffmpeg")
-    # Never reads `q`, and never reports progress.
+    # Never reports progress.
     File.write!(stuck, "#!/bin/sh\necho $$ > #{pid_file}\nexec sleep 60\n")
     File.chmod!(stuck, 0o755)
 
@@ -189,7 +189,7 @@ defmodule PhoenixReplay.ExportTest do
     }
 
     # Long enough for the script to start and write its pid on a busy machine.
-    export = %{PhoenixReplay.Config.load().export | ffmpeg: stuck, timeout: 1_000}
+    export = %{PhoenixReplay.Config.load().export | ffmpeg: stuck, timeout: 3_000}
 
     assert {:error, {:ffmpeg, :timeout}} =
              PhoenixReplay.Export.Encoder.run(
@@ -200,9 +200,22 @@ defmodule PhoenixReplay.ExportTest do
                fn _progress -> :ok end
              )
 
+    # MuonTrap stops it once its port closes, a moment after.
     os_pid = pid_file |> File.read!() |> String.trim()
-    assert {_out, status} = System.cmd("kill", ["-0", os_pid], stderr_to_stdout: true)
-    assert status != 0, "ffmpeg #{os_pid} is still running"
+    assert stopped?(os_pid, 40), "ffmpeg #{os_pid} is still running"
+  end
+
+  defp stopped?(_os_pid, 0), do: false
+
+  defp stopped?(os_pid, tries) do
+    case System.cmd("kill", ["-0", os_pid], stderr_to_stdout: true) do
+      {_out, 0} ->
+        Process.sleep(50)
+        stopped?(os_pid, tries - 1)
+
+      {_out, _status} ->
+        true
+    end
   end
 
   test "fails a recording that is not saved" do

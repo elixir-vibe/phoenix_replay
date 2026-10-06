@@ -12,6 +12,9 @@ defmodule PhoenixReplay.Export.Video do
 
   alias PhoenixReplay.{Catalog, Config, Recording}
   alias PhoenixReplay.Export.{Encoder, Job, Options, Runtime, Schedule, Screenshots}
+
+  # Only called once `PhoenixReplay.Export.available/1` found Playwright.
+  @compile {:no_warn_undefined, Screenshots}
   alias PhoenixReplay.Recording.{PointerTrack, Timeline}
 
   @captured 0.9

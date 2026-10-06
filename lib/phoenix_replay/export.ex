@@ -13,7 +13,8 @@ defmodule PhoenixReplay.Export do
        viewport and pixel ratio, steps it through the plan with the
        player's own pointer overlay, and screenshots each change.
     3. `PhoenixReplay.Export.Encoder` encodes the screenshots with `ffmpeg`
-       into an H.264 MP4.
+       into an H.264 MP4, run by [MuonTrap](https://hexdocs.pm/muontrap) so it
+       never outlives the export.
 
   The browser loads the replay from `PhoenixReplay.Web.Export.Endpoint`, a
   private endpoint on 127.0.0.1 started with the first export, so it
@@ -26,9 +27,9 @@ defmodule PhoenixReplay.Export do
 
   ## Setup
 
-  Add `{:playwright_ex, "~> 0.14"}`, install Playwright's Chromium
-  (`npx playwright install chromium`) and `ffmpeg`, and name your
-  endpoint:
+  Add `{:playwright_ex, "~> 0.14"}` and `{:muontrap, "~> 1.6"}`, install
+  Playwright's Chromium (`npx playwright install chromium`) and `ffmpeg`,
+  and name your endpoint. MuonTrap runs on Linux and macOS.
 
       config :phoenix_replay, export: [endpoint: MyAppWeb.Endpoint]
 
@@ -41,7 +42,7 @@ defmodule PhoenixReplay.Export do
   alias PhoenixReplay.Recording
 
   @typedoc "Why exporting is not possible."
-  @type unavailable :: :disabled | :no_endpoint | :no_playwright | :no_ffmpeg
+  @type unavailable :: :disabled | :no_endpoint | :no_playwright | :no_muontrap | :no_ffmpeg
 
   @doc "Whether videos can be exported with `config`, or why not."
   @spec available(Config.t()) :: :ok | {:error, unavailable()}
@@ -51,6 +52,7 @@ defmodule PhoenixReplay.Export do
   def available(%Config{export: export}) do
     cond do
       not Code.ensure_loaded?(PlaywrightEx) -> {:error, :no_playwright}
+      not Code.ensure_loaded?(MuonTrap) -> {:error, :no_muontrap}
       System.find_executable(export.ffmpeg) == nil -> {:error, :no_ffmpeg}
       true -> :ok
     end
@@ -68,6 +70,7 @@ defmodule PhoenixReplay.Export do
     do: "set your endpoint in the :export config: export: [endpoint: ...]"
 
   def describe(:no_playwright), do: "add {:playwright_ex, \"~> 0.14\"} to your dependencies"
+  def describe(:no_muontrap), do: "add {:muontrap, \"~> 1.6\"} to your dependencies"
   def describe(:no_ffmpeg), do: "install ffmpeg, or set its path in the :export config"
 
   @doc """

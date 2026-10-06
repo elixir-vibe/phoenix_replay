@@ -64,6 +64,8 @@ defmodule PhoenixReplay.MixProject do
         {:lazy_html, ">= 0.1.0", only: :test},
         # Captures replays for video export; see PhoenixReplay.Export.
         {:playwright_ex, "~> 0.14", optional: true},
+        # Runs ffmpeg for video export, and stops it with the process that started it.
+        {:muontrap, "~> 1.6 or ~> 2.0", optional: true},
         {:bandit, "~> 1.5", only: :test},
         {:volt, "~> 0.20", only: [:dev, :test], runtime: false},
         {:ex_doc, "~> 0.35", only: :dev, runtime: false},

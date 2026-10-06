@@ -63,7 +63,8 @@ defmodule Example.MixProject do
       {:ecto_sqlite3, "~> 0.18"},
       {:phoenix_ecto, "~> 4.6"},
       {:phoenix_replay, path: ".."},
-      {:playwright_ex, "~> 0.14"}
+      {:playwright_ex, "~> 0.14"},
+      {:muontrap, "~> 1.6"}
     ]
   end
 

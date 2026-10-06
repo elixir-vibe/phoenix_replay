@@ -58,6 +58,8 @@ infrastructure = [
   "PhoenixReplay.Capture.*",
   # Video export's outside processes: the endpoint and Chromium, and ffmpeg.
   "PhoenixReplay.Export.Encoder",
+  "PhoenixReplay.Export.FFmpeg",
+  "PhoenixReplay.Export.FFmpeg.Output",
   "PhoenixReplay.Export.Runtime",
   "PhoenixReplay.Export.Screenshots",
   "PhoenixReplay.Session.Buffer",

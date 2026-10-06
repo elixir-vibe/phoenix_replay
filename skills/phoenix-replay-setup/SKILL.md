@@ -59,7 +59,7 @@ config :phoenix_replay,
 
 - Production storage: `storage: {PhoenixReplay.Storage.Ecto, repo: MyApp.Repo}`, with a migration whose `up` calls `PhoenixReplay.Storage.Ecto.Migration.up(version: 3)` and `down` calls `down(version: 3)`. File storage is per node.
 - Assets content-hashed by a bundler such as Volt: render the replay frame in the app's root layout, `phoenix_replay "/replay", frame_layout: {MyAppWeb.Layouts, :root}`.
-- Video export is opt-in: `export: [endpoint: MyAppWeb.Endpoint]`, with `{:playwright_ex, "~> 0.14"}`, Playwright's Chromium and `ffmpeg`.
+- Video export is opt-in: `export: [endpoint: MyAppWeb.Endpoint]`, with `{:playwright_ex, "~> 0.14"}`, `{:muontrap, "~> 1.6"}`, Playwright's Chromium and `ffmpeg`.
 
 `PhoenixReplay.Config` documents every option.
 

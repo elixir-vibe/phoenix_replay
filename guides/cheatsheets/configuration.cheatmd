@@ -143,7 +143,7 @@ config :phoenix_replay,
   ]
 ```
 
-Off by default. Needs `{:playwright_ex, "~> 0.14"}` with Playwright's Chromium and `ffmpeg`. See [Exporting videos](dashboard.md#exporting-videos).
+Off by default. Needs `{:playwright_ex, "~> 0.14"}` and `{:muontrap, "~> 1.6"}`, with Playwright's Chromium and `ffmpeg`. See [Exporting videos](dashboard.md#exporting-videos).
 
 ### Retention
 
