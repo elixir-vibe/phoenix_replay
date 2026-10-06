@@ -1,6 +1,8 @@
 defmodule PhoenixReplay.Web.Components.Core do
   @moduledoc """
   Building blocks of the dashboard that know nothing about recordings.
+  Keycaps are in `PhoenixReplay.Web.Components.Keys`, and dialogs in
+  `PhoenixReplay.Web.Components.Dialog`.
 
   Colours come only from the theme tokens in `priv/css/dashboard.css`, such
   as `bg-surface`, `border-line` and `text-muted`, so dark mode needs no
@@ -14,6 +16,7 @@ defmodule PhoenixReplay.Web.Components.Core do
   use Phoenix.Component
 
   import PhoenixIconify, only: [icon: 1]
+  import PhoenixReplay.Web.Components.Keys, only: [aria_keyshortcuts: 1, kbd: 1]
 
   alias Phoenix.LiveView.JS
 
@@ -243,74 +246,6 @@ defmodule PhoenixReplay.Web.Components.Core do
     """
   end
 
-  @key_glyphs %{
-    "ArrowLeft" => {"←", "Left arrow"},
-    "ArrowRight" => {"→", "Right arrow"},
-    "ArrowUp" => {"↑", "Up arrow"},
-    "ArrowDown" => {"↓", "Down arrow"},
-    "Escape" => {"Esc", nil},
-    "Space" => {"Space", nil}
-  }
-
-  @doc """
-  A keyboard shortcut as keycaps: one `<kbd>` per key inside one for the
-  combination, as HTML nests them. `keys` is one combination, such as
-  `["Shift", "ArrowRight"]`, in the browser's key names
-  (`KeyboardEvent.key`, with `"Space"` for the space bar). Arrows show as
-  glyphs, with their name for screen readers; letters show capitalized,
-  and named keys such as `Shift` and `Home` as words.
-  """
-  attr :keys, :list, required: true
-  attr :size, :string, values: ~w(sm md), default: "sm"
-
-  attr :tone, :string,
-    values: ~w(default inverted),
-    default: "default",
-    doc: "`inverted` on dark surfaces"
-
-  attr :class, :any, default: nil
-
-  @spec kbd(map()) :: Phoenix.LiveView.Rendered.t()
-  def kbd(assigns) do
-    ~H"""
-    <kbd class={["inline-flex items-center gap-0.5 align-baseline", @class]}>
-      <kbd
-        :for={key <- @keys}
-        class={[
-          "inline-flex items-center justify-center rounded border border-b-2 font-mono leading-none",
-          @size == "sm" && "h-[1.15rem] min-w-[1.15rem] px-1 text-[0.7rem]",
-          @size == "md" && "h-6 min-w-6 px-1.5 text-xs",
-          @tone == "default" && "border-line bg-surface text-muted",
-          @tone == "inverted" && "border-on-ink/30 bg-on-ink/10 text-on-ink"
-        ]}
-      >
-        <%= case key_glyph(key) do %>
-          <% {glyph, nil} -> %>
-            {glyph}
-          <% {glyph, name} -> %>
-            <span aria-hidden="true">{glyph}</span><span class="sr-only">{name}</span>
-          <% nil -> %>
-            {key_label(key)}
-        <% end %>
-      </kbd>
-    </kbd>
-    """
-  end
-
-  defp key_glyph(key), do: Map.get(@key_glyphs, key)
-
-  # Letters show capitalized, as on keycaps; named keys, such as Shift, as words.
-  defp key_label(key) when byte_size(key) == 1, do: String.upcase(key)
-  defp key_label(key), do: key
-
-  @doc """
-  The value of `aria-keyshortcuts` for key combinations, such as
-  `"Space K"`, each combination's keys joined with `+`.
-  """
-  @spec aria_keyshortcuts([[String.t()]]) :: String.t()
-  def aria_keyshortcuts(combinations),
-    do: Enum.map_join(combinations, " ", &Enum.join(&1, "+"))
-
   @doc """
   Shows `label`, and the first of `keys` as keycaps, in a small dark
   tooltip over the control in its slot, on hover and keyboard focus. It is
@@ -347,83 +282,6 @@ defmodule PhoenixReplay.Web.Components.Core do
         <.kbd :if={@keys} keys={hd(@keys)} tone="inverted" />
       </span>
     </span>
-    """
-  end
-
-  @dialog_sizes %{"md" => "max-w-md", "lg" => "max-w-2xl"}
-
-  @doc """
-  A modal dialog over a dimmed page: a header with its title, an optional
-  description and a close button, a body that scrolls on its own when it
-  is taller than the window, and an optional footer for its actions, which
-  stay in view. Escape, a click outside and the close button run `close`,
-  an event name or a `JS` command.
-
-  The dialog takes focus when it opens, so the keyboard starts in it; Tab
-  goes on to its controls. A footer button submits a form in the body with
-  the `form` attribute.
-  """
-  attr :id, :string, required: true
-  attr :title, :string, required: true
-  attr :description, :string, default: nil
-  attr :close, :any, required: true, doc: "an event name or a `JS` command"
-  attr :size, :string, values: Map.keys(@dialog_sizes), default: "md"
-  slot :inner_block, required: true
-  slot :footer
-
-  @spec dialog(map()) :: Phoenix.LiveView.Rendered.t()
-  def dialog(assigns) do
-    assigns = assign(assigns, :size_class, @dialog_sizes[assigns.size])
-
-    ~H"""
-    <div
-      id={@id}
-      class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
-      phx-window-keydown={@close}
-      phx-key="Escape"
-    >
-      <div
-        id={"#{@id}-panel"}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={"#{@id}-title"}
-        aria-describedby={@description && "#{@id}-description"}
-        tabindex="-1"
-        phx-click-away={@close}
-        phx-mounted={JS.focus()}
-        class={[
-          "flex max-h-full w-full flex-col rounded-xl border border-line bg-surface text-sm shadow-xl outline-none",
-          @size_class
-        ]}
-      >
-        <header class="flex items-start gap-3 px-5 pt-4 pb-3">
-          <div class="min-w-0 flex-1 pt-1">
-            <h2 id={"#{@id}-title"} class="text-base font-semibold">{@title}</h2>
-            <p :if={@description} id={"#{@id}-description"} class="mt-1 text-muted">
-              {@description}
-            </p>
-          </div>
-          <.icon_button
-            label="Close"
-            variant="ghost"
-            keys={[["Escape"]]}
-            tooltip="bottom"
-            phx-click={@close}
-          >
-            <.icon name="lucide:x" class="size-4" />
-          </.icon_button>
-        </header>
-        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5">
-          {render_slot(@inner_block)}
-        </div>
-        <footer
-          :if={@footer != []}
-          class="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3"
-        >
-          {render_slot(@footer)}
-        </footer>
-      </div>
-    </div>
     """
   end
 

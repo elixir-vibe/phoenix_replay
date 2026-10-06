@@ -13,8 +13,9 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
 
   import PhoenixIconify, only: [icon: 1]
 
-  import PhoenixReplay.Web.Components.Core,
-    only: [dialog: 1, icon_button: 1, kbd: 1, segmented: 1]
+  import PhoenixReplay.Web.Components.Core, only: [icon_button: 1, segmented: 1]
+  import PhoenixReplay.Web.Components.Dialog, only: [dialog: 1]
+  import PhoenixReplay.Web.Components.Keys, only: [kbd: 1]
 
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.Event

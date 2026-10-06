@@ -13,8 +13,8 @@ defmodule PhoenixReplay.Web.Components.Player.EventList do
 
   import PhoenixIconify, only: [icon: 1]
 
-  import PhoenixReplay.Web.Components.Core,
-    only: [aria_keyshortcuts: 1, chip: 1, data_list: 1, kbd: 1]
+  import PhoenixReplay.Web.Components.Core, only: [chip: 1, data_list: 1]
+  import PhoenixReplay.Web.Components.Keys, only: [aria_keyshortcuts: 1, kbd: 1]
 
   alias PhoenixReplay.Recording.Event
   alias PhoenixReplay.Web.Format

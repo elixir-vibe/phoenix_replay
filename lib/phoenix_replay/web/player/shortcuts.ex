@@ -6,7 +6,7 @@ defmodule PhoenixReplay.Web.Player.Shortcuts do
 
   Each shortcut has an `id`, its key combinations in the browser's key
   names (`KeyboardEvent.key`, with `"Space"` for the space bar; see
-  `PhoenixReplay.Web.Components.Core.kbd/1`), a label, and the group the
+  `PhoenixReplay.Web.Components.Keys.kbd/1`), a label, and the group the
   sheet lists it under.
   """
 

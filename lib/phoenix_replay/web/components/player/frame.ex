@@ -12,8 +12,8 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
 
   import PhoenixIconify, only: [icon: 1]
 
-  import PhoenixReplay.Web.Components.Core,
-    only: [aria_keyshortcuts: 1, close_menu: 2, kbd: 1, menu: 1, tooltip: 1]
+  import PhoenixReplay.Web.Components.Core, only: [close_menu: 2, menu: 1, tooltip: 1]
+  import PhoenixReplay.Web.Components.Keys, only: [aria_keyshortcuts: 1, kbd: 1]
 
   alias Phoenix.LiveView.JS
   alias PhoenixReplay.Recording.{Client, PointerTrack}

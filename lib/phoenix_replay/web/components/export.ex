@@ -11,7 +11,8 @@ defmodule PhoenixReplay.Web.Components.Export do
   use Phoenix.Component
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.Core, only: [button: 1, dialog: 1]
+  import PhoenixReplay.Web.Components.Core, only: [button: 1]
+  import PhoenixReplay.Web.Components.Dialog, only: [dialog: 1]
 
   @doc """
   The export dialog: the range of the recording, whether idle stretches

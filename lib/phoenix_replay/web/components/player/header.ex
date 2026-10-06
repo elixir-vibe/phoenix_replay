@@ -13,15 +13,9 @@ defmodule PhoenixReplay.Web.Components.Player.Header do
   import PhoenixIconify, only: [icon: 1]
 
   import PhoenixReplay.Web.Components.Core,
-    only: [
-      aria_keyshortcuts: 1,
-      button: 1,
-      close_menu: 2,
-      kbd: 1,
-      local_time: 1,
-      menu: 1,
-      theme_toggle: 1
-    ]
+    only: [button: 1, close_menu: 2, local_time: 1, menu: 1, theme_toggle: 1]
+
+  import PhoenixReplay.Web.Components.Keys, only: [aria_keyshortcuts: 1, kbd: 1]
 
   alias Phoenix.LiveView.JS
   alias PhoenixReplay.Recording
