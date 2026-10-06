@@ -548,7 +548,13 @@ defmodule PhoenixReplay.Web.Components.Player do
       >
         <div class="flex items-center justify-between gap-3">
           <h2 id="replay-shortcuts-title" class="text-base font-semibold">Keyboard shortcuts</h2>
-          <.icon_button phx-click="close_shortcuts" label="Close" variant="ghost" keys={[["Escape"]]}>
+          <.icon_button
+            phx-click="close_shortcuts"
+            label="Close"
+            variant="ghost"
+            keys={[["Escape"]]}
+            tooltip="bottom"
+          >
             <.icon name="lucide:x" class="size-4" />
           </.icon_button>
         </div>

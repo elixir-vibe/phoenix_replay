@@ -257,7 +257,8 @@ defmodule PhoenixReplay.Web.Components.Core do
   combination, as HTML nests them. `keys` is one combination, such as
   `["Shift", "ArrowRight"]`, in the browser's key names
   (`KeyboardEvent.key`, with `"Space"` for the space bar). Arrows show as
-  glyphs, with their name for screen readers; letters show capitalized.
+  glyphs, with their name for screen readers; letters show capitalized,
+  and named keys such as `Shift` and `Home` as words.
   """
   attr :keys, :list, required: true
   attr :size, :string, values: ~w(sm md), default: "sm"
@@ -289,7 +290,7 @@ defmodule PhoenixReplay.Web.Components.Core do
           <% {glyph, name} -> %>
             <span aria-hidden="true">{glyph}</span><span class="sr-only">{name}</span>
           <% nil -> %>
-            {String.upcase(key)}
+            {key_label(key)}
         <% end %>
       </kbd>
     </kbd>
@@ -297,6 +298,10 @@ defmodule PhoenixReplay.Web.Components.Core do
   end
 
   defp key_glyph(key), do: Map.get(@key_glyphs, key)
+
+  # Letters show capitalized, as on keycaps; named keys, such as Shift, as words.
+  defp key_label(key) when byte_size(key) == 1, do: String.upcase(key)
+  defp key_label(key), do: key
 
   @doc """
   The value of `aria-keyshortcuts` for key combinations, such as

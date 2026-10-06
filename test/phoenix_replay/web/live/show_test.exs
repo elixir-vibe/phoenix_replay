@@ -269,6 +269,9 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     view |> element("#replay-shortcuts-button") |> render_click()
     assert has_element?(view, "#replay-shortcuts h3", "Playback")
     assert has_element?(view, "#replay-shortcuts dt", "Back 5 seconds")
+    # Letters are capitals on keycaps; named keys stay words.
+    assert has_element?(view, "#replay-shortcuts kbd kbd", ~r/^\s*Shift\s*$/)
+    assert has_element?(view, "#replay-shortcuts kbd kbd", ~r/^\s*K\s*$/)
     render_hook(view, "close_shortcuts", %{})
     refute has_element?(view, "#replay-shortcuts")
   end
