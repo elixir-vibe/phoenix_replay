@@ -171,6 +171,8 @@ if Code.ensure_loaded?(Ecto.Query) do
       |> Enum.concat(
         mark: filter.mark,
         started_after: Filter.started_after(filter, Keyword.fetch!(page_opts, :now)),
+        from: filter.from,
+        to: filter.to,
         longer_than: filter.longer_than,
         min_events: filter.min_events,
         errors: filter.errors,
@@ -198,6 +200,8 @@ if Code.ensure_loaded?(Ecto.Query) do
     end
 
     defp criterion(:started_after, ms), do: dynamic([r], r.connected_at >= ^ms)
+    defp criterion(:from, ms), do: dynamic([r], r.connected_at >= ^ms)
+    defp criterion(:to, ms), do: dynamic([r], r.connected_at <= ^ms)
     defp criterion(:longer_than, seconds), do: dynamic([r], r.duration_ms >= ^(seconds * 1_000))
     defp criterion(:min_events, count), do: dynamic([r], r.event_count >= ^count)
     defp criterion(:errors, true), do: dynamic([r], r.error_count > 0)

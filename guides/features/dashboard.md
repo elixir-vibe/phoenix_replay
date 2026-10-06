@@ -46,7 +46,7 @@ The list shows sessions still running under **Live now**, then saved recordings 
 
 Saved recordings are listed as of when you opened the list or last changed its filters, so rows stay put while sessions end. Recordings saved since then are counted in a **"3 new recordings · Show"** banner; showing them brings the list up to date. The list pages with numbered links, reading one page at a time from storage.
 
-The filter bar always has a search, by URL, recording id or event name, the start time within the last hour, day or week, and **With errors**, for sessions with an error log, a failed query or a crash. **+ Filter** adds the others:
+The filter bar always has a search, by URL, recording id, event or mark name, source or campaign, **Started**, and **With errors**, for sessions with an error log, a failed query or a crash. **+ Filter** adds the others:
 
 - **View**, the LiveView module,
 - **Event**, an event the session triggered,
@@ -56,9 +56,11 @@ The filter bar always has a search, by URL, recording id or event name, the star
 - **Browser**, such as Chrome or Mobile Safari,
 - **Duration**, longer than 10 seconds, a minute, five minutes or a number of seconds you type.
 
-Choosing one opens a picker listing the values recordings have, with how many have each, counting only the recordings that match your other filters. Type to narrow the list, or press Enter to filter by what you typed. A filter in use is a chip, such as **View is MyAppWeb.CheckoutLive**: click it to change the value, or × to remove it.
+**Started** picks the last 15 minutes, hour, 24 hours, 7 days or 30 days, or a range from one time to another. Times are in your browser's time zone, which the picker names; hover any time to see it in UTC too.
 
-Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&event=pay&within=24h&errors=1`, so a filtered list can be shared or bookmarked. `?tab=` lists the sessions of one browser tab, shown as a **This browser tab** chip. `PhoenixReplay.Recording.Filter` applies the same criteria in code.
+Choosing a field from **+ Filter** opens a picker listing the values recordings have, with how many have each, counting only the recordings that match your other filters. Type to narrow the list, or press Enter to filter by what you typed. A filter in use is a chip, such as **View is MyAppWeb.CheckoutLive**: click it to change the value, or × to remove it.
+
+Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&event=pay&within=24h&errors=1`, with ranges in UTC, such as `from=2026-10-06T14:00:00Z&to=2026-10-06T15:00:00Z`, so a filtered list can be shared or bookmarked. `?tab=` lists the sessions of one browser tab, shown as a **This browser tab** chip. `PhoenixReplay.Recording.Filter` applies the same criteria in code.
 
 ## Player
 

@@ -31,6 +31,8 @@ defmodule PhoenixReplay.Trace do
     :device_type,
     :browser,
     :within,
+    :from,
+    :to,
     :longer_than,
     :min_events,
     :errors,
@@ -105,7 +107,10 @@ defmodule PhoenixReplay.Trace do
       `PhoenixReplay.Recording.Client.traffic/1`
     * `:device_type` — `"phone"`, `"tablet"` or `"desktop"`
     * `:browser` — the browser's family, such as `"Mobile Safari"`
-    * `:within` — `"1h"`, `"24h"` or `"7d"` since the session started
+    * `:within` — `"15m"`, `"1h"`, `"24h"`, `"7d"` or `"30d"` since the
+      session started
+    * `:from` and `:to` — a `DateTime` the session started at or after,
+      and at or before
     * `:longer_than` — lasting at least that many seconds
     * `:min_events` — at least that many events
     * `:errors` — `true` for sessions with an error only
@@ -236,6 +241,8 @@ defmodule PhoenixReplay.Trace do
       device_type: device_type(filters[:device_type]),
       browser: filters[:browser],
       within: within(filters[:within]),
+      from: time(:from, filters[:from]),
+      to: time(:to, filters[:to]),
       longer_than: positive(:longer_than, filters[:longer_than]),
       min_events: positive(:min_events, filters[:min_events]),
       errors: filters[:errors] == true,
@@ -262,6 +269,12 @@ defmodule PhoenixReplay.Trace do
   defp positive(name, count),
     do:
       raise(ArgumentError, "#{inspect(name)} must be a positive integer, got: #{inspect(count)}")
+
+  defp time(_name, nil), do: nil
+  defp time(_name, %DateTime{} = time), do: DateTime.to_unix(time, :millisecond)
+
+  defp time(name, time),
+    do: raise(ArgumentError, "#{inspect(name)} must be a DateTime, got: #{inspect(time)}")
 
   defp device_type(nil), do: nil
 

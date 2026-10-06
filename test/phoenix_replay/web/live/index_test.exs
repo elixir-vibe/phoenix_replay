@@ -190,6 +190,61 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     refute has_element?(view, "#recording-filter-add-items button", "Min events")
   end
 
+  test "picks when sessions started: a recent window or a range, in the viewer's time zone" do
+    save_at("old", 1_000)
+    save("new")
+    {:ok, view, _html} = live(build_conn(), "/replay?view=Counter")
+    assert has_element?(view, "#recording-filter-time", "Any time")
+
+    view |> element("#recording-filter-time") |> render_click()
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-time-picker a[href="/replay?view=Counter&within=15m"]),
+             "Last 15 min"
+           )
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-time-picker a[aria-current="true"]),
+             "Any time"
+           )
+
+    # The range comes from the browser in UTC; the list shows it localized.
+    render_hook(view, "time_range", %{
+      "from" => "1970-01-01T00:00:00.000Z",
+      "to" => "1970-01-01T00:00:02.000Z"
+    })
+
+    assert_patch(
+      view,
+      "/replay?from=1970-01-01T00%3A00%3A00Z&to=1970-01-01T00%3A00%3A02Z&view=Counter"
+    )
+
+    {:ok, view, _html} =
+      live(build_conn(), "/replay?from=1970-01-01T00:00:00Z&to=1970-01-01T00:00:02Z")
+
+    assert has_element?(view, "#recording-old")
+    refute has_element?(view, "#recording-new")
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-from[phx-hook="LocalTime"][datetime="1970-01-01T00:00:00.000Z"])
+           )
+
+    assert has_element?(view, ~s(#recording-filter-to[title="1970-01-01 00:00:02 UTC"]))
+
+    view |> element("#recording-filter-time") |> render_click()
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-range[phx-hook="TimeRange"][data-from="1970-01-01T00:00:00.000Z"])
+           )
+
+    render_click(view, "close_filter", %{})
+    refute has_element?(view, "#recording-filter-time-picker")
+  end
+
   test "shows the first page for page 0, and for a page past the end once emptied" do
     for i <- 1..26, do: save("page-#{i}")
 

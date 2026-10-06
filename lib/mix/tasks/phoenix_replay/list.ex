@@ -9,7 +9,8 @@ defmodule Mix.Tasks.PhoenixReplay.List do
         [--event save] [--mark my_app.checkout.completed] [--text checkout]
         [--source google] [--medium cpc] [--campaign spring]
         [--device-type phone|tablet|desktop] [--browser "Mobile Safari"]
-        [--within 1h|24h|7d] [--longer-than 60] [--limit 20]
+        [--within 15m|1h|24h|7d|30d] [--from 2026-10-06T14:00:00Z]
+        [--to 2026-10-06T15:00:00Z] [--longer-than 60] [--limit 20]
 
   It starts your application and reads storage, so it lists saved
   recordings: sessions still running are in the server's memory; call
@@ -31,6 +32,8 @@ defmodule Mix.Tasks.PhoenixReplay.List do
     device_type: :string,
     browser: :string,
     longer_than: :integer,
+    from: :string,
+    to: :string,
     text: :string,
     within: :string,
     limit: :integer
@@ -39,6 +42,7 @@ defmodule Mix.Tasks.PhoenixReplay.List do
   @impl true
   def run(args) do
     {opts, _rest} = OptionParser.parse!(args, strict: @switches)
+    opts = opts |> times(:from) |> times(:to)
     Mix.Task.run("app.start")
 
     try do
@@ -48,6 +52,20 @@ defmodule Mix.Tasks.PhoenixReplay.List do
       |> IO.inspect(pretty: true, limit: :infinity)
     rescue
       error in ArgumentError -> Mix.raise(Exception.message(error))
+    end
+  end
+
+  # An ISO 8601 time on the command line, for `PhoenixReplay.Trace.find/2`.
+  defp times(opts, key) do
+    case Keyword.fetch(opts, key) do
+      {:ok, text} ->
+        case DateTime.from_iso8601(text) do
+          {:ok, time, _offset} -> Keyword.put(opts, key, time)
+          {:error, _reason} -> Mix.raise("--#{key} must be an ISO 8601 time, got: #{text}")
+        end
+
+      :error ->
+        opts
     end
   end
 end

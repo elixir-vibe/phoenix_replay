@@ -35,13 +35,17 @@ defmodule PhoenixReplay.TraceTest do
     # Only the windows the dashboard offers; others would fail counting back.
     assert ids(within: "24h") |> Enum.sort() == ["failing", "traced"]
 
-    assert_raise ArgumentError, ~s(:within must be one of 1h, 24h, 7d, got: "2h"), fn ->
+    assert_raise ArgumentError, ~s(:within must be one of 15m, 1h, 24h, 7d, 30d, got: "2h"), fn ->
       Trace.find(within: "2h")
     end
 
     assert_raise ArgumentError, ~r/:min_events must be a positive integer/, fn ->
       Trace.find(min_events: 0)
     end
+
+    assert ids(from: DateTime.utc_now()) == []
+    assert ids(to: DateTime.utc_now()) |> Enum.sort() == ["failing", "traced"]
+    assert_raise ArgumentError, ~r/:from must be a DateTime/, fn -> Trace.find(from: "today") end
 
     # Saved without a landing, where the visits came from is unknown.
     assert ids(source: "google") == []

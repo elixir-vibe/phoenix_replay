@@ -13,7 +13,15 @@ defmodule PhoenixReplay.Web.Components.Player.Header do
   import PhoenixIconify, only: [icon: 1]
 
   import PhoenixReplay.Web.Components.Core,
-    only: [aria_keyshortcuts: 1, button: 1, close_menu: 2, kbd: 1, menu: 1, theme_toggle: 1]
+    only: [
+      aria_keyshortcuts: 1,
+      button: 1,
+      close_menu: 2,
+      kbd: 1,
+      local_time: 1,
+      menu: 1,
+      theme_toggle: 1
+    ]
 
   alias Phoenix.LiveView.JS
   alias PhoenixReplay.Recording
@@ -58,7 +66,10 @@ defmodule PhoenixReplay.Web.Components.Player.Header do
           {Format.path_of(@recording.url)}
         </code>
         <span class="text-sm text-muted tabular-nums">
-          {Format.started(@recording.connected_at)} · {Format.clock(@duration_ms)} · {Format.count(
+          <.local_time id="replay-started" at={@recording.connected_at}>
+            {Format.started(@recording.connected_at)}
+          </.local_time>
+          · {Format.clock(@duration_ms)} · {Format.count(
             length(@recording.events),
             "event"
           )}

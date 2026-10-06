@@ -44,6 +44,8 @@ defmodule PhoenixReplay.Recording.FilterTest do
       device_type: "phone",
       browser: "Firefox",
       within: "7d",
+      from: 1_791_274_440_000,
+      to: 1_791_278_040_000,
       longer_than: 60,
       min_events: 3,
       errors: true,
@@ -102,6 +104,12 @@ defmodule PhoenixReplay.Recording.FilterTest do
     assert ids(%{"device_type" => "watch"}, summaries) == ~w(paid phone)
     assert ids(%{"longer_than" => "60"}, summaries) == ~w(paid)
     assert ids(%{"q" => "SPRING"}, summaries) == ~w(paid)
+
+    # A range of start times, in any offset.
+    assert ids(%{"from" => "1970-01-01T02:46:40+00:00"}, summaries) == ~w(paid phone)
+    assert ids(%{"from" => "1970-01-01T05:46:41+03:00"}, summaries) == []
+    assert ids(%{"to" => "1970-01-01T02:46:39Z"}, summaries) == []
+    assert ids(%{"from" => "yesterday"}, summaries) == ~w(paid phone)
 
     # A field's own criterion leaves its other values on offer.
     filter = Filter.from_params(%{"source" => "google"})

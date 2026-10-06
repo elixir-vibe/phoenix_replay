@@ -424,6 +424,41 @@ defmodule PhoenixReplay.Web.Components.Core do
   end
 
   @doc """
+  A time shown in the viewer's time zone by the `LocalTime` hook, as
+  `format` says: `"datetime"`, such as "Oct 6, 14:05", or `"date"`, such
+  as "Oct 6"; `"title"` keeps the text in the slot, such as "12 s ago".
+  Its tooltip has the full time in the viewer's zone and in UTC. Until the
+  hook runs, and without JavaScript, the slot's text shows, in UTC.
+  """
+  attr :id, :string, required: true
+  attr :at, :integer, required: true, doc: "Unix milliseconds"
+  attr :format, :string, values: ~w(datetime date title), default: "datetime"
+  attr :class, :any, default: nil
+  slot :inner_block, required: true
+
+  @spec local_time(map()) :: Phoenix.LiveView.Rendered.t()
+  def local_time(assigns) do
+    time = DateTime.from_unix!(assigns.at, :millisecond)
+
+    assigns =
+      assign(assigns,
+        iso: DateTime.to_iso8601(time),
+        utc: Calendar.strftime(time, "%Y-%m-%d %H:%M:%S UTC")
+      )
+
+    ~H"""
+    <time
+      id={@id}
+      phx-hook="LocalTime"
+      datetime={@iso}
+      data-format={@format}
+      title={@utc}
+      class={@class}
+    >{render_slot(@inner_block)}</time>
+    """
+  end
+
+  @doc """
   Tabs that switch a panel. Clicking one sends `event` with the tab's value
   as `value`; the panel is the caller's, with `id` plus `-panel`.
   """

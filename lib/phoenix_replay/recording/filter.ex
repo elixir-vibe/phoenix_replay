@@ -16,7 +16,10 @@ defmodule PhoenixReplay.Recording.Filter do
       `PhoenixReplay.Recording.Client.traffic/1`
     * `"device_type"` — `"phone"`, `"tablet"` or `"desktop"`
     * `"browser"` — the browser's family, such as `"Mobile Safari"`
-    * `"within"` — `"1h"`, `"24h"` or `"7d"` since the session started
+    * `"within"` — `"15m"`, `"1h"`, `"24h"`, `"7d"` or `"30d"` since the
+      session started
+    * `"from"` and `"to"` — the session started within this time range,
+      each an ISO 8601 time such as `"2026-10-06T14:00:00Z"`
     * `"longer_than"` — a minimum duration, in seconds
     * `"min_events"` — minimum number of recorded events
     * `"errors"` — `"1"` to keep only sessions with an error, such as an
@@ -28,7 +31,13 @@ defmodule PhoenixReplay.Recording.Filter do
 
   alias PhoenixReplay.Recording.{Client, Summary}
 
-  @windows %{"1h" => :timer.hours(1), "24h" => :timer.hours(24), "7d" => :timer.hours(24 * 7)}
+  @windows %{
+    "15m" => :timer.minutes(15),
+    "1h" => :timer.hours(1),
+    "24h" => :timer.hours(24),
+    "7d" => :timer.hours(24 * 7),
+    "30d" => :timer.hours(24 * 30)
+  }
 
   @type t :: %__MODULE__{
           query: String.t() | nil,
@@ -41,6 +50,8 @@ defmodule PhoenixReplay.Recording.Filter do
           device_type: Client.device_type() | nil,
           browser: String.t() | nil,
           within: String.t() | nil,
+          from: integer() | nil,
+          to: integer() | nil,
           longer_than: pos_integer() | nil,
           min_events: pos_integer() | nil,
           errors: boolean(),
@@ -58,6 +69,8 @@ defmodule PhoenixReplay.Recording.Filter do
     :device_type,
     :browser,
     :within,
+    :from,
+    :to,
     :longer_than,
     :min_events,
     :tab,
@@ -69,7 +82,7 @@ defmodule PhoenixReplay.Recording.Filter do
 
   @doc "The supported `\"within\"` values, shortest first."
   @spec windows() :: [String.t()]
-  def windows, do: ~w(1h 24h 7d)
+  def windows, do: ~w(15m 1h 24h 7d 30d)
 
   @doc "Builds a filter from string-keyed query parameters."
   @spec from_params(map()) :: t()
@@ -85,6 +98,8 @@ defmodule PhoenixReplay.Recording.Filter do
       device_type: if(params["device_type"] in Client.device_types(), do: params["device_type"]),
       browser: text(params["browser"]),
       within: if(Map.has_key?(@windows, params["within"]), do: params["within"]),
+      from: time(params["from"]),
+      to: time(params["to"]),
       longer_than: positive_integer(params["longer_than"]),
       min_events: positive_integer(params["min_events"]),
       errors: params["errors"] == "1",
@@ -106,6 +121,8 @@ defmodule PhoenixReplay.Recording.Filter do
       {"device_type", filter.device_type},
       {"browser", filter.browser},
       {"within", filter.within},
+      {"from", filter.from && iso8601(filter.from)},
+      {"to", filter.to && iso8601(filter.to)},
       {"longer_than", filter.longer_than && Integer.to_string(filter.longer_than)},
       {"min_events", filter.min_events && Integer.to_string(filter.min_events)},
       {"errors", if(filter.errors, do: "1")},
@@ -219,6 +236,8 @@ defmodule PhoenixReplay.Recording.Filter do
       (is_nil(filter.mark) or Map.has_key?(summary.marks, filter.mark)) and
       (is_nil(filter.longer_than) or summary.duration_ms >= filter.longer_than * 1_000) and
       (is_nil(filter.within) or summary.connected_at >= started_after(filter, now)) and
+      (is_nil(filter.from) or summary.connected_at >= filter.from) and
+      (is_nil(filter.to) or summary.connected_at <= filter.to) and
       (is_nil(filter.min_events) or summary.event_count >= filter.min_events) and
       (not filter.errors or summary.error_count > 0) and
       (is_nil(filter.tab) or summary.tab == filter.tab)
@@ -241,6 +260,23 @@ defmodule PhoenixReplay.Recording.Filter do
     |> Enum.concat(Map.keys(summary.marks))
     |> Enum.any?(&(is_binary(&1) and &1 |> String.downcase() |> String.contains?(query)))
   end
+
+  # Unix milliseconds of an ISO 8601 time with an offset.
+  defp time(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, time, _offset} -> DateTime.to_unix(time, :millisecond)
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp time(_value), do: nil
+
+  defp iso8601(unix_ms),
+    do:
+      unix_ms
+      |> DateTime.from_unix!(:millisecond)
+      |> DateTime.truncate(:second)
+      |> DateTime.to_iso8601()
 
   defp text(value) when is_binary(value) do
     case String.trim(value) do

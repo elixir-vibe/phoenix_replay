@@ -96,18 +96,16 @@ defmodule PhoenixReplay.Web.Live.Index do
     end
   end
 
-  # The search and the time window; chips keep the other criteria.
-  def handle_event("filter", params, socket) do
-    filter =
-      socket.assigns.filter
-      |> Filter.to_params()
-      |> Map.drop(~w(q within))
-      |> Map.merge(Map.take(params, ~w(q within)))
-      |> Filter.from_params()
+  # The search; chips keep the other criteria.
+  def handle_event("filter", params, socket),
+    do: {:noreply, patch_filter(socket, ~w(q), Map.take(params, ~w(q)), replace: true)}
 
-    path = index_path(socket.assigns.context, filter, 1)
-    {:noreply, push_patch(socket, to: path, replace: true)}
-  end
+  def handle_event("edit_time", _params, socket),
+    do: {:noreply, assign(socket, editing: :time, values: [], typed: "")}
+
+  # A range of start times, in UTC, from the browser.
+  def handle_event("time_range", params, socket),
+    do: {:noreply, patch_filter(socket, ~w(within from to), Map.take(params, ~w(from to)), [])}
 
   def handle_event("edit_filter", %{"field" => name}, socket) do
     case FilterFields.parse(name) do
@@ -151,6 +149,18 @@ defmodule PhoenixReplay.Web.Live.Index do
       {:error, reason} ->
         socket |> put_flash(:error, "Could not #{action}: #{inspect(reason)}") |> load()
     end
+  end
+
+  # The list filtered by `params` in place of the criteria `keys`.
+  defp patch_filter(socket, keys, params, opts) do
+    filter =
+      socket.assigns.filter
+      |> Filter.to_params()
+      |> Map.drop(keys)
+      |> Map.merge(params)
+      |> Filter.from_params()
+
+    push_patch(socket, [to: index_path(socket.assigns.context, filter, 1)] ++ opts)
   end
 
   # Opens the value picker for `field`, with the values recordings

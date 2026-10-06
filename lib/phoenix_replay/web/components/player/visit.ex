@@ -10,7 +10,7 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
   use Phoenix.Component
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.Core, only: [badge: 1, data_list: 1]
+  import PhoenixReplay.Web.Components.Core, only: [badge: 1, data_list: 1, local_time: 1]
 
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.Client
@@ -108,7 +108,10 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
           </.link>
           <span>
             landed on <code class="font-mono text-ink">{@landing.path}</code>
-            at {Format.timestamp(@landing.at)}
+            at
+            <.local_time id="replay-visit-landed" at={@landing.at}>
+              {Format.timestamp(@landing.at)} UTC
+            </.local_time>
           </span>
         </div>
         <.data_list>

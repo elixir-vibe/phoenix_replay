@@ -31,6 +31,17 @@ defmodule PhoenixReplay.Web.Format do
     end
   end
 
+  @doc """
+  Names a time window of `PhoenixReplay.Recording.Filter`, such as
+  `"Last 15 min"` for `"15m"` or `"Last 7 days"` for `"7d"`.
+  """
+  @spec window(String.t()) :: String.t()
+  def window("15m"), do: "Last 15 min"
+  def window("1h"), do: "Last hour"
+  def window("24h"), do: "Last 24 hours"
+  def window("7d"), do: "Last 7 days"
+  def window("30d"), do: "Last 30 days"
+
   @doc "Formats a whole number of seconds as `10 s`, `1 min` or `1 min 30 s`."
   @spec seconds(non_neg_integer()) :: String.t()
   def seconds(seconds) when seconds < 60, do: "#{seconds} s"

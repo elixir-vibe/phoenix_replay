@@ -11,7 +11,9 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   use Phoenix.Component
 
   import PhoenixIconify, only: [icon: 1]
-  import PhoenixReplay.Web.Components.Core, only: [badge: 1, close_menu: 2, kbd: 1, menu: 1]
+
+  import PhoenixReplay.Web.Components.Core,
+    only: [badge: 1, close_menu: 2, kbd: 1, local_time: 1, menu: 1]
 
   alias Phoenix.LiveView.JS
   alias PhoenixReplay.Recording.{Client, Filter, Summary}
@@ -74,7 +76,8 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   end
 
   def recording_list(assigns) do
-    assigns = assign(assigns, :columns, @columns)
+    # Older starts read as dates, in the viewer's time zone.
+    assigns = assign(assigns, columns: @columns, two_days: :timer.hours(48))
 
     ~H"""
     <section :if={@recordings != []} aria-labelledby="recordings-saved">
@@ -107,9 +110,13 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
               )}
             </:meta>
             <:started>
-              <span title={Format.timestamp(recording.connected_at) <> " UTC"}>
+              <.local_time
+                id={"recording-#{recording.id}-started"}
+                at={recording.connected_at}
+                format={if @now - recording.connected_at < @two_days, do: "title", else: "date"}
+              >
                 {Format.relative(recording.connected_at, @now)}
-              </span>
+              </.local_time>
             </:started>
             <:status>
               <.badge :if={recording.error_count > 0} tone="error" dot="static">
@@ -162,9 +169,9 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   end
 
   @doc """
-  Narrows the list. The search and the time window are sent as `filter`
-  with `q` and `within`; the errors toggle, chips and values are links to
-  the list filtered.
+  Narrows the list. The search is sent as `filter` with `q`; the errors
+  toggle, chips and values are links to the list filtered. **Started**
+  sends `edit_time` to open `time_picker/1` as `editing: :time`.
 
   The other fields of `PhoenixReplay.Web.FilterFields` show as chips
   once set, and **+ Filter** adds one: it sends `edit_filter` with the
@@ -173,7 +180,11 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   """
   attr :filter, Filter, required: true
   attr :path, :any, required: true, doc: "a function from a filter to the list's URL"
-  attr :editing, :map, default: nil, doc: "the field whose value is being chosen"
+
+  attr :editing, :any,
+    default: nil,
+    doc: "the field whose value is being chosen, or `:time` for when sessions started"
+
   attr :values, :list, default: [], doc: "the `editing` field's values, with counts"
   attr :typed, :string, default: "", doc: "what was typed in the value picker"
 
@@ -216,20 +227,20 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
           />
           <.kbd keys={["/"]} class="hidden sm:inline-flex" />
         </label>
-        <label class={@field}>
-          <span class="text-muted">Started</span>
-          <select name="within" class="cursor-pointer bg-transparent font-medium outline-none">
-            <option value="">Any time</option>
-            <option
-              :for={window <- Filter.windows()}
-              value={window}
-              selected={window == @filter.within}
-            >
-              Last {window}
-            </option>
-          </select>
-        </label>
       </form>
+      <button
+        id="recording-filter-time"
+        type="button"
+        phx-click="edit_time"
+        aria-haspopup="dialog"
+        aria-expanded={to_string(@editing == :time)}
+        class={[@field, "font-medium hover:bg-hover"]}
+      >
+        <.icon name="lucide:clock" class="size-4 text-muted" />
+        <span class="text-muted">Started</span>
+        <.time_label filter={@filter} />
+        <.icon name="lucide:chevron-down" class="size-3.5 text-muted" />
+      </button>
       <.link
         id="recording-filter-errors"
         patch={@path.(@errors_toggled)}
@@ -278,14 +289,119 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
           </button>
         </:item>
       </.menu>
+      <.time_picker :if={@editing == :time} filter={@filter} path={@path} />
       <.filter_value
-        :if={@editing}
+        :if={is_map(@editing)}
         field={@editing}
         filter={@filter}
         values={@values}
         typed={@typed}
         path={@path}
       />
+    </div>
+    """
+  end
+
+  attr :filter, Filter, required: true
+
+  # When the sessions shown started: a window, a range in the viewer's
+  # time zone, or any time.
+  defp time_label(assigns) do
+    ~H"""
+    <span :if={@filter.within}>{Format.window(@filter.within)}</span>
+    <span :if={@filter.from || @filter.to} class="inline-flex items-center gap-1">
+      <span :if={!@filter.from}>before</span>
+      <.local_time :if={@filter.from} id="recording-filter-from" at={@filter.from}>
+        {Format.started(@filter.from)} UTC
+      </.local_time>
+      <span :if={@filter.from && @filter.to}>–</span>
+      <span :if={@filter.from && !@filter.to}>on</span>
+      <.local_time :if={@filter.to} id="recording-filter-to" at={@filter.to}>
+        {Format.started(@filter.to)} UTC
+      </.local_time>
+    </span>
+    <span :if={!@filter.within && !@filter.from && !@filter.to}>Any time</span>
+    """
+  end
+
+  @doc """
+  Chooses when the sessions shown started, under the filter bar: a recent
+  window, which links to the list filtered by it, or a range. The
+  `TimeRange` hook reads the range in the viewer's time zone and sends it
+  as `time_range` with `from` and `to` in UTC, either blank. Escape or a
+  click outside sends `close_filter`.
+  """
+  attr :filter, Filter, required: true
+  attr :path, :any, required: true
+
+  @spec time_picker(map()) :: Phoenix.LiveView.Rendered.t()
+  def time_picker(assigns) do
+    assigns =
+      assign(assigns,
+        windows:
+          for(
+            window <- [nil | Filter.windows()],
+            do: {window, %Filter{assigns.filter | within: window, from: nil, to: nil}}
+          ),
+        iso: &(&1 && &1 |> DateTime.from_unix!(:millisecond) |> DateTime.to_iso8601())
+      )
+
+    ~H"""
+    <div
+      id="recording-filter-time-picker"
+      role="dialog"
+      aria-label="When sessions started"
+      phx-click-away="close_filter"
+      phx-window-keydown="close_filter"
+      phx-key="Escape"
+      class="absolute top-full right-0 left-0 z-30 mt-1 rounded-lg border border-line bg-surface p-1.5 shadow-lg sm:left-auto sm:w-80"
+    >
+      <ul aria-label="Recent">
+        <li :for={{window, filter} <- @windows}>
+          <.link
+            patch={@path.(filter)}
+            aria-current={(window == @filter.within and !@filter.from and !@filter.to) && "true"}
+            class="group flex items-center gap-2 rounded-md px-2.5 py-1.5 hover:bg-hover focus-visible:bg-hover"
+          >
+            <.icon
+              name="lucide:check"
+              class="size-3.5 shrink-0 opacity-0 group-aria-[current=true]:opacity-100"
+            />
+            {if window, do: Format.window(window), else: "Any time"}
+          </.link>
+        </li>
+      </ul>
+      <form
+        id="recording-filter-range"
+        phx-hook="TimeRange"
+        data-from={@iso.(@filter.from)}
+        data-to={@iso.(@filter.to)}
+        class="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-t border-line px-2.5 pt-3 pb-1"
+      >
+        <label for="recording-filter-range-from" class="text-muted">From</label>
+        <input
+          id="recording-filter-range-from"
+          type="datetime-local"
+          name="from"
+          class="h-9 min-w-0 rounded-md border border-line bg-canvas px-2 [color-scheme:inherit]"
+        />
+        <label for="recording-filter-range-to" class="text-muted">To</label>
+        <input
+          id="recording-filter-range-to"
+          type="datetime-local"
+          name="to"
+          class="h-9 min-w-0 rounded-md border border-line bg-canvas px-2 [color-scheme:inherit]"
+        />
+        <p class="col-span-2 text-xs text-muted">
+          In your time zone<span id="recording-filter-zone" phx-update="ignore" data-time-zone></span>.
+        </p>
+        <button
+          type="submit"
+          class="col-span-2 h-9 rounded-md bg-ink font-medium text-on-ink hover:bg-ink/85"
+        >
+          Show this range
+        </button>
+      </form>
     </div>
     """
   end
