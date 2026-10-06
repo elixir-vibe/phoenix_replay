@@ -121,7 +121,7 @@ Export a recording as an MP4 of the page and the pointer, from the player's menu
 
 `PhoenixReplay.Trace` reads recordings as plain data, for IEx, scripts and agents: `find/1` by view, event, errors or time, `events/1` as the player lists them, and `state/2` with the assigns at a moment and what changed. `mix phoenix_replay.list` and `mix phoenix_replay.show` print the same from a shell.
 
-The package ships two agent skills, `phoenix-replay-setup` and `phoenix-replay-debugging`, in `usage-rules/skills`. With [usage_rules](https://hexdocs.pm/usage_rules), add `package_skills: [:phoenix_replay]` to its `skills` config and run `mix usage_rules.sync`.
+The package ships two agent skills, `phoenix-replay-setup` and `phoenix-replay-debugging`, as `SKILL.md` files in `deps/phoenix_replay/skills/`. Point your agent at them, or copy them to wherever it reads skills from.
 
 ## Storage
 
