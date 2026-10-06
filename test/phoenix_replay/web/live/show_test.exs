@@ -156,11 +156,12 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     refute has_element?(view, "[data-changes]")
   end
 
-  test "shows the value an assign replaced whole, under its new one" do
+  test "shows the value an assign replaced whole, dimmed before its new one" do
     {:ok, view, _html} = live(build_conn(), "/replay/show?at=3")
     open_tab(view, "State")
 
-    assert has_element?(view, ~s([data-assign="count"] [data-was]), "was 0")
+    assert has_element?(view, ~s([data-assign="count"] [data-was]), "0")
+    assert has_element?(view, ~s([data-assign="count"]), ~r/0\s*→\s*1/)
     refute has_element?(view, ~s([data-changes="count"]))
   end
 

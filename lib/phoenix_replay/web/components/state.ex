@@ -60,10 +60,7 @@ defmodule PhoenixReplay.Web.Components.State do
                 class="mt-0.5 size-3 text-muted transition-transform group-open:rotate-90"
               />
               <span class={["truncate", row.key in @changed && "text-accent"]}>{row.key}</span>
-              <span class="min-w-0">
-                <span class="block truncate">{row.preview}</span>
-                <.was :if={row.was} value={row.was} />
-              </span>
+              <span class="block min-w-0 truncate"><.was :if={row.was} value={row.was} />{row.preview}</span>
             </div>
             <%!-- What changed stays in view whether the value is open or not. --%>
             <.changes :if={row.changes != []} key={row.key} changes={row.changes} more={row.more} />
@@ -88,10 +85,7 @@ defmodule PhoenixReplay.Web.Components.State do
         >
           <span></span>
           <span class={["truncate", row.key in @changed && "text-accent"]}>{row.key}</span>
-          <span class="min-w-0">
-            <span class="block">{row.preview}</span>
-            <.was :if={row.was} value={row.was} />
-          </span>
+          <span class="min-w-0"><.was :if={row.was} value={row.was} />{row.preview}</span>
         </div>
         <.changes
           :if={!row.full and row.changes != []}
@@ -106,10 +100,11 @@ defmodule PhoenixReplay.Web.Components.State do
 
   attr :value, :any, required: true
 
-  # The value an assign had before the event replaced it whole.
+  # The value an assign had before the event replaced it whole, dimmed
+  # before its new one.
   defp was(assigns) do
     ~H"""
-    <span data-was class="block truncate text-faint">was {@value}</span>
+    <span data-was class="opacity-50">{@value}</span><span class="text-muted"> → </span>
     """
   end
 
