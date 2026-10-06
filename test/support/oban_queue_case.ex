@@ -74,6 +74,7 @@ defmodule PhoenixReplay.Test.ObanQueueCase do
         assert Queue.latest("rec", opts).id == job.id
         assert Queue.latest("other", opts) == nil
         assert Queue.get("oban-0", opts) == nil
+        assert Queue.get(String.replace(job.id, "oban-", "oban-0"), opts) == nil
         assert Queue.get("not-oban", opts) == nil
       end
 

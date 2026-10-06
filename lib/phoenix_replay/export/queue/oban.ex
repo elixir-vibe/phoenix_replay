@@ -93,12 +93,13 @@ if Code.ensure_loaded?(Oban) do
     end
 
     @impl Queue
-    def get(@prefix <> number = id, opts) do
+    # Only an id as `to_job/1` writes it: `oban-7`, not `oban-007`.
+    def get(@prefix <> number, opts) do
       with {oban_id, ""} <- Integer.parse(number),
+           true <- Integer.to_string(oban_id) == number,
            %Oban.Job{} = oban_job <- Oban.Repo.get(config(opts), Oban.Job, oban_id),
-           true <- oban_job.worker == worker_name(),
-           %Job{} = job <- kept(to_job(oban_job)) do
-        if job.id == id, do: job
+           true <- oban_job.worker == worker_name() do
+        oban_job |> to_job() |> kept()
       else
         _missing -> nil
       end
