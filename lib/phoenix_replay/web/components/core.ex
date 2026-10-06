@@ -317,6 +317,10 @@ defmodule PhoenixReplay.Web.Components.Core do
   hidden from assistive technology: the control names itself, with
   `aria-label` and `aria-keyshortcuts`. Without `enabled`, it renders the
   control alone.
+
+  `position` is the side it prefers: Floating UI places it there, or on
+  the other side when there is no room, within the window, as it shows;
+  see `priv/ts/dom/floating.ts`.
   """
   attr :label, :string, required: true
   attr :keys, :list, default: nil, doc: "key combinations; the tooltip shows the first"
@@ -327,16 +331,16 @@ defmodule PhoenixReplay.Web.Components.Core do
   @spec tooltip(map()) :: Phoenix.LiveView.Rendered.t()
   def tooltip(assigns) do
     ~H"""
-    <span class="group/tip relative inline-flex">
+    <span class="group/tip inline-flex" data-tip={@enabled}>
       {render_slot(@inner_block)}
       <span
         :if={@enabled}
         aria-hidden="true"
+        data-tip-content
+        data-placement={@position}
         class={[
-          "pointer-events-none absolute left-1/2 z-30 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-md bg-ink px-2 py-1 text-xs whitespace-nowrap text-on-ink opacity-0 shadow-md transition-opacity",
-          "group-hover/tip:opacity-100 group-hover/tip:delay-300 group-has-focus-visible/tip:opacity-100",
-          @position == "top" && "bottom-full mb-1.5",
-          @position == "bottom" && "top-full mt-1.5"
+          "pointer-events-none fixed top-0 left-0 z-50 not-data-placed:invisible inline-flex w-max items-center gap-1.5 rounded-md bg-ink px-2 py-1 text-xs whitespace-nowrap text-on-ink opacity-0 shadow-md transition-opacity",
+          "group-hover/tip:opacity-100 group-hover/tip:delay-300 group-has-focus-visible/tip:opacity-100"
         ]}
       >
         {@label}
@@ -557,7 +561,8 @@ defmodule PhoenixReplay.Web.Components.Core do
   @doc """
   A button that opens a short list of actions, closed again by a click
   elsewhere or Escape. `label` names the button; `trigger_class` styles
-  it, by default as an icon button.
+  it, by default as an icon button. The list opens below the button, or
+  above it without room there, placed by the `Floating` hook.
   """
   attr :id, :string, required: true
   attr :label, :string, required: true
@@ -599,7 +604,10 @@ defmodule PhoenixReplay.Web.Components.Core do
         id={"#{@id}-items"}
         role="menu"
         aria-labelledby={"#{@id}-button"}
-        class="absolute right-0 z-20 mt-1 hidden min-w-48 rounded-lg border border-line bg-surface p-1 shadow-lg"
+        phx-hook="Floating"
+        data-anchor={"#{@id}-button"}
+        data-placement="bottom-end"
+        class="fixed top-0 left-0 z-40 hidden min-w-48 rounded-lg border border-line bg-surface p-1 shadow-lg data-open:block"
       >
         <div
           :for={item <- @item}
@@ -620,7 +628,7 @@ defmodule PhoenixReplay.Web.Components.Core do
 
   defp toggle_menu(id) do
     %JS{}
-    |> JS.toggle(to: "##{id}-items")
+    |> JS.toggle_attribute({"data-open", "true"}, to: "##{id}-items")
     |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "##{id}-button")
   end
 
@@ -632,7 +640,7 @@ defmodule PhoenixReplay.Web.Components.Core do
   """
   def close_menu(js \\ %JS{}, id) do
     js
-    |> JS.hide(to: "##{id}-items")
+    |> JS.remove_attribute("data-open", to: "##{id}-items")
     |> JS.set_attribute({"aria-expanded", "false"}, to: "##{id}-button")
   end
 

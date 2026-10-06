@@ -182,18 +182,20 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
           :for={bar <- @bars}
           patch={bar.path}
           aria-label={"#{Format.count(bar.sessions, "session")}, #{bar.errors} with errors"}
-          class="group/bar relative flex h-full min-w-0 flex-1 flex-col justify-end rounded-sm hover:bg-hover focus-visible:bg-hover"
+          data-tip
+          class="group/tip flex h-full min-w-0 flex-1 flex-col justify-end rounded-sm"
         >
           <span
             class="flex w-full flex-col justify-end overflow-hidden rounded-sm bg-track"
             style={"height: max(2px, #{bar.height}%)"}
           >
-            <span :if={bar.sessions > 0} class="w-full flex-1 bg-faint/60 group-hover/bar:bg-muted"></span>
+            <span :if={bar.sessions > 0} class="w-full flex-1 bg-faint/60 group-hover/tip:bg-muted"></span>
             <span :if={bar.errors > 0} class="w-full bg-error" style={"height: #{bar.error_share}%"}></span>
           </span>
           <span
             aria-hidden="true"
-            class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 rounded-md bg-ink px-2 py-1 text-xs whitespace-nowrap text-on-ink shadow-md group-hover/bar:block group-focus-visible/bar:block"
+            data-tip-content
+            class="pointer-events-none fixed top-0 left-0 z-50 not-data-placed:invisible w-max rounded-md bg-ink px-2 py-1 text-xs whitespace-nowrap text-on-ink opacity-0 shadow-md group-hover/tip:opacity-100 group-focus-visible/tip:opacity-100"
           >
             <.local_time id={"recordings-activity-#{bar.index}"} at={bar.start}>
               {Format.started(bar.start)} UTC
@@ -323,7 +325,12 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
       >
         <.icon name="lucide:triangle-alert" class="size-4" /> With errors
       </.link>
-      <span :for={{field, {prefix, shown}} <- @set} data-filter={field.key} class={chip_class()}>
+      <span
+        :for={{field, {prefix, shown}} <- @set}
+        id={"recording-filter-chip-#{field.key}"}
+        data-filter={field.key}
+        class={chip_class()}
+      >
         <button
           type="button"
           phx-click="edit_filter"
@@ -423,7 +430,10 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
       phx-click-away="close_filter"
       phx-window-keydown="close_filter"
       phx-key="Escape"
-      class="absolute top-full right-0 left-0 z-30 mt-1 rounded-lg border border-line bg-surface p-1.5 shadow-lg sm:left-auto sm:w-80"
+      phx-hook="Floating"
+      data-anchor="recording-filter-time"
+      data-placement="bottom-start"
+      class="fixed top-0 left-0 z-40 w-[min(20rem,calc(100vw-1rem))] rounded-lg border border-line bg-surface p-1.5 shadow-lg"
     >
       <ul aria-label="Recent">
         <li :for={{window, filter} <- @windows}>
@@ -546,7 +556,14 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
       phx-click-away="close_filter"
       phx-window-keydown="close_filter"
       phx-key="Escape"
-      class="absolute top-full right-0 left-0 z-30 mt-1 rounded-lg sm:left-auto sm:w-96 border border-line bg-surface p-1.5 shadow-lg"
+      phx-hook="Floating"
+      data-anchor={
+        if Map.fetch!(@filter, @field.key),
+          do: "recording-filter-chip-#{@field.key}",
+          else: "recording-filter-add-button"
+      }
+      data-placement="bottom-start"
+      class="fixed top-0 left-0 z-40 w-[min(24rem,calc(100vw-1rem))] rounded-lg border border-line bg-surface p-1.5 shadow-lg"
     >
       <form
         id="recording-filter-value-form"

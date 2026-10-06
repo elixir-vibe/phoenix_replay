@@ -3,6 +3,7 @@ import { LiveSocket } from 'phoenix_live_view'
 
 import { confirmClicks } from './dom/confirm'
 import { copyLinks } from './dom/copy'
+import { Floating, floatingTooltips } from './dom/floating'
 import { replayInputs } from './client/replay_inputs'
 import { searchShortcut } from './dom/shortcut'
 import { themeToggle } from './dom/theme'
@@ -25,6 +26,7 @@ const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Sock
     DetailsResizer,
     EventList,
     ExportStage,
+    Floating,
     FrameViewport,
     LocalTime,
     PlayerKeys,
@@ -36,6 +38,7 @@ const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Sock
 
 confirmClicks(window)
 copyLinks(window)
+floatingTooltips(window)
 replayInputs(window)
 searchShortcut(window)
 themeToggle(window)
