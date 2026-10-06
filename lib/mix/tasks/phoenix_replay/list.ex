@@ -6,7 +6,10 @@ defmodule Mix.Tasks.PhoenixReplay.List do
   them.
 
       mix phoenix_replay.list [--errors] [--view MyAppWeb.CheckoutLive]
-        [--event save] [--text checkout] [--within 1h|24h|7d] [--limit 20]
+        [--event save] [--mark my_app.checkout.completed] [--text checkout]
+        [--source google] [--medium cpc] [--campaign spring]
+        [--device-type phone|tablet|desktop] [--browser "Mobile Safari"]
+        [--within 1h|24h|7d] [--longer-than 60] [--limit 20]
 
   It starts your application and reads storage, so it lists saved
   recordings: sessions still running are in the server's memory; call
@@ -21,6 +24,13 @@ defmodule Mix.Tasks.PhoenixReplay.List do
     errors: :boolean,
     view: :string,
     event: :string,
+    mark: :string,
+    source: :string,
+    medium: :string,
+    campaign: :string,
+    device_type: :string,
+    browser: :string,
+    longer_than: :integer,
     text: :string,
     within: :string,
     limit: :integer

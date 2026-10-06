@@ -626,6 +626,7 @@ defmodule PhoenixReplay.Web.Live.Show do
             recording={@recording}
             viewport={@viewport}
             journey={@journey}
+            filter_path={&filtered_list(@context, &1)}
           />
         </div>
       </aside>
@@ -664,4 +665,10 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   defp at_time(%{assigns: %{at: at, next_at: next_at}} = socket, requested),
     do: assign(socket, :at, requested |> Params.integer(at) |> max(at) |> min(next_at))
+
+  # The recording list filtered by `criteria`, such as where a visit came from.
+  defp filtered_list(context, criteria) do
+    Context.path(context, []) <>
+      "?" <> URI.encode_query(Filter.to_params(struct!(Filter, criteria)))
+  end
 end

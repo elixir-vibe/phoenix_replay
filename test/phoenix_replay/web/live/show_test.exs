@@ -746,6 +746,13 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       visit = view |> element("#replay-visit") |> render()
       assert visit =~ "google / cpc"
       assert visit =~ "from www.google.com"
+      # Each links to the recordings that came the same way.
+      assert has_element?(
+               view,
+               ~s(#replay-visit-campaign[href="/replay?medium=cpc&source=google"])
+             )
+
+      assert has_element?(view, ~s(#replay-visit a[href="/replay?source=www.google.com"]))
       assert visit =~ "/pricing"
       assert visit =~ "de-DE"
     end

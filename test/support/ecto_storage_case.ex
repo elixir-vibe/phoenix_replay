@@ -79,11 +79,25 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
         setup %{opts: opts} do
           error = %Event{at: 9, type: :log, data: %{level: :error, message: "x", metadata: %{}}}
 
+          mark = %Event{
+            at: 9,
+            type: :telemetry,
+            data: %{event: [:shop, :paid], measurements: %{}, metadata: %{}, mark: "Paid"}
+          }
+
+          google = %PhoenixReplay.Recording.Client.Landing{
+            path: "/",
+            at: 0,
+            params: %{"utm_source" => "google", "utm_medium" => "cpc"}
+          }
+
           for {id, at, extra} <- [
                 {"a", 1, []},
-                {"b", 2, [url: "http://x/sale/100%_off!", tab: "t1"]},
-                {"c", 3, [view: Other, error: error]},
-                {"d", 4, [tab: "t1"]}
+                {"b", 2,
+                 [url: "http://x/sale/100%_off!", tab: "t1", landing: google, mark: mark]},
+                {"c", 3,
+                 [view: Other, error: error, viewport: %{width: 390, height: 844, dpr: 3}]},
+                {"d", 4, [tab: "t1", mark: mark]}
               ] do
             recording = Fixtures.counter_recording(id: id, connected_at: at)
 
@@ -91,8 +105,13 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
               recording
               | url: extra[:url] || recording.url,
                 view: extra[:view] || recording.view,
-                events: recording.events ++ List.wrap(extra[:error]),
-                client: %{recording.client | tab: extra[:tab]}
+                events: recording.events ++ List.wrap(extra[:error]) ++ List.wrap(extra[:mark]),
+                client: %{
+                  recording.client
+                  | tab: extra[:tab],
+                    landing: extra[:landing],
+                    viewport: extra[:viewport]
+                }
             }
 
             :ok = EctoStorage.save(recording, opts)
@@ -150,9 +169,24 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
           assert query.(%{"view" => "Other"}) == {~w(c), 1}
           assert query.(%{"errors" => "1"}) == {~w(c), 1}
           assert query.(%{"tab" => "t1"}) == {~w(d b), 2}
-          assert query.(%{"min_events" => "7"}) == {~w(c), 1}
+          assert query.(%{"min_events" => "7"}) == {~w(d c b), 3}
+          assert query.(%{"min_events" => "8"}) == {[], 0}
           assert query.(%{"event" => "inc", "tab" => "t1"}) == {~w(d b), 2}
           assert query.(%{"event" => "nothing"}) == {[], 0}
+          assert query.(%{"mark" => "Paid"}) == {~w(d b), 2}
+          assert query.(%{"mark" => "Paid", "q" => "sale"}) == {~w(b), 1}
+          assert query.(%{"source" => "google", "medium" => "cpc"}) == {~w(b), 1}
+          assert query.(%{"device_type" => "phone"}) == {~w(c), 1}
+          assert query.(%{"longer_than" => "2"}) == {~w(d c b a), 4}
+          assert query.(%{"longer_than" => "3"}) == {[], 0}
+
+          # Marks come with the summaries, from their own table.
+          assert {[%{id: "d", marks: %{"Paid" => 1}} | _rest], 2} =
+                   EctoStorage.query(
+                     Filter.from_params(%{"mark" => "Paid"}),
+                     [now: 10, limit: 10],
+                     opts
+                   )
         end
 
         test "counts the values of views and event names", %{opts: opts} do
@@ -168,6 +202,11 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
                  ]
 
           assert values.(:event, %{"tab" => "t1"}) == [{"inc", 2}]
+          assert values.(:mark, %{}) == [{"Paid", 2}]
+          assert values.(:mark, %{"q" => "sale"}) == [{"Paid", 1}]
+          assert values.(:source, %{}) == [{"google", 1}]
+          assert values.(:device_type, %{"mark" => "Paid"}) == []
+          assert values.(:device_type, %{}) == [{"phone", 1}]
         end
       end
     end

@@ -18,9 +18,26 @@ defmodule PhoenixReplay.Trace do
   """
 
   alias PhoenixReplay.{Catalog, Config, Recording}
-  alias PhoenixReplay.Recording.{Diff, Event, Filter, State, Summary, Timeline}
+  alias PhoenixReplay.Recording.{Client, Diff, Event, Filter, State, Summary, Timeline}
 
-  @filters [:text, :view, :event, :within, :min_events, :errors, :tab, :live, :limit]
+  @filters [
+    :text,
+    :view,
+    :event,
+    :mark,
+    :source,
+    :medium,
+    :campaign,
+    :device_type,
+    :browser,
+    :within,
+    :longer_than,
+    :min_events,
+    :errors,
+    :tab,
+    :live,
+    :limit
+  ]
 
   @typedoc """
   One event of a recording:
@@ -77,11 +94,19 @@ defmodule PhoenixReplay.Trace do
   Summaries of the recordings matching `filters`, running sessions first,
   then saved ones, most recent first.
 
-    * `:text` — found in the URL, id or event names
+    * `:text` — found in the URL, id, event or mark names, source or
+      campaign
     * `:view` — the view module, such as `MyAppWeb.CheckoutLive`
-    * `:event` — a `handle_event/3` name the session triggered, or the name
-      of a telemetry event that marked a moment in it
+    * `:event` — a `handle_event/3` name the session triggered
+    * `:mark` — the name of a moment the session reached, such as
+      `"my_app.checkout.completed"`
+    * `:source`, `:medium` and `:campaign` — where the visit came from,
+      such as `"google"`, `"cpc"` and `"spring"`, or `"(direct)"`; see
+      `PhoenixReplay.Recording.Client.traffic/1`
+    * `:device_type` — `"phone"`, `"tablet"` or `"desktop"`
+    * `:browser` — the browser's family, such as `"Mobile Safari"`
     * `:within` — `"1h"`, `"24h"` or `"7d"` since the session started
+    * `:longer_than` — lasting at least that many seconds
     * `:min_events` — at least that many events
     * `:errors` — `true` for sessions with an error only
     * `:tab` — the sessions of one browser tab
@@ -204,8 +229,15 @@ defmodule PhoenixReplay.Trace do
       query: filters[:text],
       view: view_name(filters[:view]),
       event: filters[:event],
+      mark: filters[:mark],
+      source: filters[:source],
+      medium: filters[:medium],
+      campaign: filters[:campaign],
+      device_type: device_type(filters[:device_type]),
+      browser: filters[:browser],
       within: within(filters[:within]),
-      min_events: min_events(filters[:min_events]),
+      longer_than: positive(:longer_than, filters[:longer_than]),
+      min_events: positive(:min_events, filters[:min_events]),
       errors: filters[:errors] == true,
       tab: filters[:tab]
     }
@@ -224,11 +256,24 @@ defmodule PhoenixReplay.Trace do
         )
   end
 
-  defp min_events(nil), do: nil
-  defp min_events(count) when is_integer(count) and count > 0, do: count
+  defp positive(_name, nil), do: nil
+  defp positive(_name, count) when is_integer(count) and count > 0, do: count
 
-  defp min_events(count),
-    do: raise(ArgumentError, ":min_events must be a positive integer, got: #{inspect(count)}")
+  defp positive(name, count),
+    do:
+      raise(ArgumentError, "#{inspect(name)} must be a positive integer, got: #{inspect(count)}")
+
+  defp device_type(nil), do: nil
+
+  defp device_type(type) do
+    if type in Client.device_types(),
+      do: type,
+      else:
+        raise(
+          ArgumentError,
+          ":device_type must be one of #{Enum.join(Client.device_types(), ", ")}, got: #{inspect(type)}"
+        )
+  end
 
   # A view module, or its name as the dashboard shows it.
   defp view_name(view) when is_atom(view) and not is_nil(view), do: inspect(view)

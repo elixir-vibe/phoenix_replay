@@ -25,6 +25,7 @@ defmodule PhoenixReplay.Session.Buffer do
     * `{{id, :last_at}, at}` — the latest offset among flushed events,
       written only by the process flushing it
     * `{{:event_name, id, name}}` — one per `handle_event/3` name seen
+    * `{{:mark, id, name}, count}` — how many times each mark was reached
     * `{{:process, pid}, id, started_at, max_events, sanitizer}` — finds
       the session of the calling process, with what recording an event
       needs, small enough to read on every event
@@ -170,7 +171,7 @@ defmodule PhoenixReplay.Session.Buffer do
   @spec append(Recording.id(), non_neg_integer(), Event.t()) :: :ok
   def append(id, seq, %Event{} = event) do
     :ets.insert(@table, {{id, seq}, event})
-    {shown, error, _name} = count(id, event)
+    {shown, error, _name, _mark} = count(id, event)
     :ets.update_counter(@table, {id, :seq}, [{6, shown}, {7, error}])
     :ok
   end
@@ -316,6 +317,7 @@ defmodule PhoenixReplay.Session.Buffer do
     :ets.match_delete(@table, {{:process, :_}, id, :_, :_, :_})
     :ets.match_delete(@table, {{:collected, id, :_}, :_, :_})
     :ets.match_delete(@table, {{:event_name, id, :_}})
+    :ets.match_delete(@table, {{:mark, id, :_}, :_})
     :ets.delete(@table, {id, :seq})
     :ets.delete(@table, {id, :last_at})
     :ets.delete(@table, {id, :state})
@@ -333,6 +335,7 @@ defmodule PhoenixReplay.Session.Buffer do
           event_count: shown,
           error_count: errors,
           event_names: :ets.select(@table, fun(do: ({{:event_name, ^id, name}} -> name))),
+          marks: Map.new(:ets.select(@table, fun(do: ({{:mark, ^id, name}, n} -> {name, n})))),
           duration_ms:
             max(:ets.lookup_element(@table, {id, :last_at}, 2, 0), last_buffered_at(id))
         }
@@ -345,7 +348,7 @@ defmodule PhoenixReplay.Session.Buffer do
   defp write(id, started_at, type, data) do
     at = System.monotonic_time(:millisecond) - started_at
     event = %Event{at: at, type: type, data: data}
-    {shown, error, _name} = count(id, event)
+    {shown, error, _name, _mark} = count(id, event)
 
     [next | _counts] =
       :ets.update_counter(@table, {id, :seq}, [
@@ -365,11 +368,12 @@ defmodule PhoenixReplay.Session.Buffer do
     ArgumentError -> discard(id, nil)
   end
 
-  # Notes the event's name for the session's totals, and returns what it
-  # adds to the counters.
+  # Notes the event's name and mark for the session's totals, and returns
+  # what it adds to the counters.
   defp count(id, event) do
-    {_shown, _error, name} = counts = Summary.counts(event)
+    {_shown, _error, name, mark} = counts = Summary.counts(event)
     if name, do: :ets.insert(@table, {{:event_name, id, name}})
+    if mark, do: :ets.update_counter(@table, {:mark, id, mark}, 1, {{:mark, id, mark}, 0})
     counts
   end
 
@@ -389,6 +393,7 @@ defmodule PhoenixReplay.Session.Buffer do
     if seq, do: :ets.delete(@table, {id, seq})
     :ets.match_delete(@table, {{:collected, id, :_}, :_, :_})
     :ets.match_delete(@table, {{:event_name, id, :_}})
+    :ets.match_delete(@table, {{:mark, id, :_}, :_})
     :ok
   end
 

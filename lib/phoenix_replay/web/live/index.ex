@@ -354,11 +354,18 @@ defmodule PhoenixReplay.Web.Live.Index do
       </.empty_state>
 
       <.new_recordings count={@newer} />
-      <.recording_list live recordings={@live} now={@now} path={&Context.path(@context, [&1.id])} />
+      <.recording_list
+        live
+        recordings={@live}
+        now={@now}
+        path={&Context.path(@context, [&1.id])}
+        filter_path={&index_path(@context, Map.put(@filter, &1, &2), 1)}
+      />
       <.recording_list
         recordings={@saved}
         now={@now}
         path={&Context.path(@context, [&1.id])}
+        filter_path={&index_path(@context, Map.put(@filter, &1, &2), 1)}
         delete="delete"
       />
 

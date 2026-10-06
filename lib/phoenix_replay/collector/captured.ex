@@ -11,9 +11,10 @@ defmodule PhoenixReplay.Collector.Captured do
     * `:error` — a description of a failure, which makes the session match
       `keep: [errors: true]`
     * `:mark` — whether the event marks a moment in the session, such as
-      a signup or a checkout, rather than measuring work: the player
-      gives marks a lane of their own, and the recording list finds
-      sessions by their names
+      a signup or a checkout, rather than measuring work: `true`, named
+      after the event, or the mark's name, such as `"Checkout completed"`.
+      The player gives marks a lane of their own, and the recording list
+      finds sessions by their names.
   """
 
   @type t :: %__MODULE__{
@@ -22,7 +23,7 @@ defmodule PhoenixReplay.Collector.Captured do
           measurements: %{atom() => number()},
           metadata: map(),
           error: String.t() | nil,
-          mark: boolean()
+          mark: boolean() | String.t()
         }
 
   defstruct summary: nil,

@@ -31,6 +31,12 @@ defmodule PhoenixReplay.Web.Format do
     end
   end
 
+  @doc "Formats a whole number of seconds as `10 s`, `1 min` or `1 min 30 s`."
+  @spec seconds(non_neg_integer()) :: String.t()
+  def seconds(seconds) when seconds < 60, do: "#{seconds} s"
+  def seconds(seconds) when rem(seconds, 60) == 0, do: "#{div(seconds, 60)} min"
+  def seconds(seconds), do: "#{div(seconds, 60)} min #{rem(seconds, 60)} s"
+
   @doc "Formats a Unix millisecond timestamp as UTC `YYYY-MM-DD HH:MM:SS`."
   @spec timestamp(integer()) :: String.t()
   def timestamp(unix_ms) do

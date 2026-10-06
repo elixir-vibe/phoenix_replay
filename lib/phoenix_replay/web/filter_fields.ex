@@ -6,7 +6,11 @@ defmodule PhoenixReplay.Web.FilterFields do
 
     * `:choice` — the values recordings have, with how many have each,
       from `PhoenixReplay.Catalog.values/4`, or any value typed in
+    * `:duration` — a number of seconds, typed in or picked from a few
     * `:number` — a number typed in
+
+  A field with `menu: false` is not offered in the menu, but shows as a
+  chip when a link sets it, so it can be changed or removed.
 
   Each field is a criterion of `PhoenixReplay.Recording.Filter` under the
   same name, so the URL, `PhoenixReplay.Trace` and the Mix tasks read it
@@ -15,15 +19,26 @@ defmodule PhoenixReplay.Web.FilterFields do
   """
 
   alias PhoenixReplay.Recording.Filter
+  alias PhoenixReplay.Web.Format
 
-  @type control :: :choice | :number
-  @type t :: %{key: atom(), label: String.t(), control: control()}
+  @type control :: :choice | :duration | :number
+  @type t :: %{key: atom(), label: String.t(), control: control(), menu: boolean()}
 
   @fields [
-    %{key: :view, label: "View", control: :choice},
-    %{key: :event, label: "Event", control: :choice},
-    %{key: :min_events, label: "Min events", control: :number}
+    %{key: :view, label: "View", control: :choice, menu: true},
+    %{key: :event, label: "Event", control: :choice, menu: true},
+    %{key: :mark, label: "Mark", control: :choice, menu: true},
+    %{key: :source, label: "Source", control: :choice, menu: true},
+    %{key: :medium, label: "Medium", control: :choice, menu: true},
+    %{key: :campaign, label: "Campaign", control: :choice, menu: true},
+    %{key: :device_type, label: "Device", control: :choice, menu: true},
+    %{key: :browser, label: "Browser", control: :choice, menu: true},
+    %{key: :longer_than, label: "Duration", control: :duration, menu: true},
+    %{key: :min_events, label: "Min events", control: :number, menu: false}
   ]
+
+  # Durations offered, in seconds.
+  @durations [10, 60, 300]
 
   @doc "Every field, in the order the menu lists them."
   @spec all() :: [t()]
@@ -51,7 +66,26 @@ defmodule PhoenixReplay.Web.FilterFields do
 
   @doc "The fields `filter` does not set yet, for the menu."
   @spec unset(Filter.t()) :: [t()]
-  def unset(%Filter{} = filter), do: Enum.filter(@fields, &is_nil(Map.fetch!(filter, &1.key)))
+  def unset(%Filter{} = filter),
+    do: Enum.filter(@fields, &(&1.menu and is_nil(Map.fetch!(filter, &1.key))))
+
+  @doc """
+  How a chip reads a field set to `value`, as what comes before the value
+  and the value, such as `{"Device is", "Phone"}` or `{"Longer than",
+  "1 min"}`.
+  """
+  @spec describe(t(), term()) :: {String.t(), String.t()}
+  def describe(%{control: :duration}, seconds), do: {"Longer than", Format.seconds(seconds)}
+  def describe(field, value), do: {field.label <> " is", display(field, value)}
+
+  @doc "A value as the picker and chips show it, such as `\"Phone\"` for `\"phone\"`."
+  @spec display(t(), term()) :: String.t()
+  def display(%{key: :device_type}, value), do: String.capitalize(value)
+  def display(_field, value), do: to_string(value)
+
+  @doc "The durations offered for a `:duration` field, in seconds."
+  @spec durations() :: [pos_integer()]
+  def durations, do: @durations
 
   @doc "`filter` without its criterion on `field`."
   @spec without(Filter.t(), t()) :: Filter.t()

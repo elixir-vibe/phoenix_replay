@@ -3,6 +3,7 @@ defmodule PhoenixReplay.Recording.ClientTest do
 
   alias PhoenixReplay.Recording.Client
   alias PhoenixReplay.Recording.Client.Landing
+  alias PhoenixReplay.Recording.Traffic
 
   test "names the browser and system of a user agent" do
     assert Client.device(
@@ -31,15 +32,36 @@ defmodule PhoenixReplay.Recording.ClientTest do
       %Client{landing: %Landing{path: "/", at: 0, params: params, referrer: referrer}}
     end
 
-    assert Client.source(landing.(%{"utm_source" => "google", "utm_medium" => "cpc"}, nil)) ==
-             "google / cpc"
+    assert Client.traffic(
+             landing.(
+               %{"utm_source" => "google", "utm_medium" => "cpc", "utm_campaign" => "spring"},
+               nil
+             )
+           ) == %Traffic{source: "google", medium: "cpc", campaign: "spring"}
 
-    assert Client.source(landing.(%{}, "https://news.ycombinator.com/item?id=1")) ==
-             "news.ycombinator.com"
+    assert Client.traffic(landing.(%{}, "https://news.ycombinator.com/item?id=1")) ==
+             %Traffic{source: "news.ycombinator.com", medium: "referral"}
 
-    assert Client.source(landing.(%{"ref" => "x"}, nil)) == nil
-    assert Client.source(%Client{}) == nil
+    assert Client.traffic(landing.(%{"ref" => "x"}, nil)) ==
+             %Traffic{source: "(direct)", medium: "(none)"}
+
+    # Without a kept landing, where the visit came from is unknown.
+    assert Client.traffic(%Client{}) == %Traffic{}
     assert Client.referrer_host("not a url") == nil
+  end
+
+  test "tells the kind of device and the browser" do
+    assert Client.device_type(%{width: 390, height: 844, dpr: 3}) == "phone"
+    assert Client.device_type(%{width: 820, height: 1180, dpr: 2}) == "tablet"
+    assert Client.device_type(%{width: 1440, height: 900, dpr: 1}) == "desktop"
+    assert Client.device_type(nil) == nil
+
+    assert Client.browser_family(
+             "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 " <>
+               "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+           ) == "Mobile Safari"
+
+    assert Client.browser_family("") == nil
   end
 
   test "stores viewports compactly" do

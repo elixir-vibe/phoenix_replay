@@ -24,6 +24,11 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
   attr :viewport, :map, default: nil
   attr :journey, :map, default: nil, doc: "the tab's sessions, with URLs"
 
+  attr :filter_path, :any,
+    required: true,
+    doc:
+      "a function from criteria, such as `[source: \"google\"]`, to the recording list filtered by them"
+
   @spec visit(map()) :: Phoenix.LiveView.Rendered.t()
   def visit(%{recording: %{client: client}} = assigns) do
     assigns =
@@ -31,7 +36,8 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
         user_agent: client.user_agent,
         navigated_from: client.navigated_from,
         landing: client.landing,
-        headers: client.headers
+        headers: client.headers,
+        traffic: Client.traffic(client)
       )
 
     ~H"""
@@ -83,10 +89,23 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
       >
         <h3 id="replay-visit-heading" class={heading()}>Visit</h3>
         <div :if={@landing} class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted">
-          <.badge :if={Client.campaign(@landing.params)}>{Client.campaign(@landing.params)}</.badge>
-          <span :if={Client.referrer_host(@landing.referrer)} title={@landing.referrer}>
-            from {Client.referrer_host(@landing.referrer)}
-          </span>
+          <.link
+            :if={campaign = Client.campaign(@landing.params)}
+            id="replay-visit-campaign"
+            navigate={@filter_path.(@traffic |> Map.from_struct() |> Map.to_list())}
+            title="Recordings from this campaign"
+            class="rounded-full hover:opacity-80"
+          >
+            <.badge>{campaign}</.badge>
+          </.link>
+          <.link
+            :if={host = Client.referrer_host(@landing.referrer)}
+            navigate={@filter_path.(source: host)}
+            title={@landing.referrer}
+            class="hover:text-ink hover:underline"
+          >
+            from {host}
+          </.link>
           <span>
             landed on <code class="font-mono text-ink">{@landing.path}</code>
             at {Format.timestamp(@landing.at)}

@@ -7,9 +7,9 @@ config :phoenix_replay,
   collect: [
     {PhoenixReplay.Collector.Ecto, repo: Example.Repo},
     {[:example, :task, :created],
-     metadata: [:title, :priority], summary: &"created #{&1.title}", mark: true},
+     metadata: [:title, :priority], summary: &"created #{&1.title}", mark: "Task created"},
     {[:example, :task, :completed],
-     metadata: [:title], summary: &"completed #{&1.title}", mark: true}
+     metadata: [:title], summary: &"completed #{&1.title}", mark: "Task completed"}
   ]
 
 # config/runtime.exs is executed for all environments, including

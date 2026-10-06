@@ -9,6 +9,7 @@ defmodule PhoenixReplay.Storage.Codec do
   """
 
   alias PhoenixReplay.Recording
+  alias PhoenixReplay.Recording.Summary
 
   @frame_marker "PRF1"
 
@@ -114,5 +115,6 @@ defmodule PhoenixReplay.Storage.Codec do
   defp shape(_term, _shape), do: {:error, :undecodable}
 
   defp upgrade(%Recording{} = recording), do: Recording.upgrade(recording)
+  defp upgrade(%Summary{} = summary), do: Summary.upgrade(summary)
   defp upgrade(term), do: term
 end

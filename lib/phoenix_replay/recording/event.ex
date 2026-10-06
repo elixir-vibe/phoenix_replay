@@ -18,10 +18,10 @@ defmodule PhoenixReplay.Recording.Event do
       LiveComponent removed from the page
     * `:telemetry` — `%{event: [atom], summary: String.t() | nil,
       language: :sql | nil, measurements: map, metadata: map,
-      error: String.t() | nil, mark: boolean}`, a telemetry event captured
-      by a `PhoenixReplay.Collector`; `language` is what the summary is
-      written in, and `mark` whether it marks a moment, both absent from
-      events recorded before 0.6
+      error: String.t() | nil, mark: boolean | String.t()}`, a telemetry
+      event captured by a `PhoenixReplay.Collector`; `language` is what the
+      summary is written in, and `mark` whether it marks a moment, or the
+      mark's name, both absent from events recorded before 0.6
     * `:log` — `%{level: Logger.level(), message: String.t(), metadata: map}`,
       a log message, see `PhoenixReplay.Capture.Logs`
     * `:exit` — `%{reason: String.t()}`, the LiveView process exited
@@ -76,8 +76,21 @@ defmodule PhoenixReplay.Recording.Event do
   rather than measuring work; see `PhoenixReplay.Collector.Captured`.
   """
   @spec mark?(t()) :: boolean()
-  def mark?(%__MODULE__{type: :telemetry, data: %{mark: true}}), do: true
-  def mark?(%__MODULE__{}), do: false
+  def mark?(%__MODULE__{} = event), do: mark_name(event) != nil
+
+  @doc """
+  The name of the moment an event marks: the name its collector gave it,
+  or else its telemetry event's name joined with dots, such as
+  `"my_app.checkout.completed"`. `nil` for events that mark nothing.
+  """
+  @spec mark_name(t()) :: String.t() | nil
+  def mark_name(%__MODULE__{type: :telemetry, data: %{mark: name}}) when is_binary(name),
+    do: name
+
+  def mark_name(%__MODULE__{type: :telemetry, data: %{mark: true, event: event}}),
+    do: Enum.map_join(event, ".", &Atom.to_string/1)
+
+  def mark_name(%__MODULE__{}), do: nil
 
   @doc "One line describing the event; see `PhoenixReplay.Recording.Label`."
   @spec label(t()) :: String.t()

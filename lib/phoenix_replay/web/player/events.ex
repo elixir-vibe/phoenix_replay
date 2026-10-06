@@ -161,6 +161,7 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   def details(%Event{type: :telemetry, data: data} = event) do
     present([
+      {"Mark", Event.mark_name(event)},
       {"Event", Collector.name(data.event)},
       {"Summary", summary(data)},
       {"Duration", event |> Event.duration() |> duration()},

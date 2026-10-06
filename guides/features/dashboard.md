@@ -49,8 +49,12 @@ Saved recordings are listed as of when you opened the list or last changed its f
 The filter bar always has a search, by URL, recording id or event name, the start time within the last hour, day or week, and **With errors**, for sessions with an error log, a failed query or a crash. **+ Filter** adds the others:
 
 - **View**, the LiveView module,
-- **Event**, an event the session triggered or a [mark](telemetry-and-logs.md#marking-moments) it reached,
-- **Min events**, a minimum number of events.
+- **Event**, an event the session triggered,
+- **Mark**, a [moment](telemetry-and-logs.md#marking-moments) the session reached,
+- **Source**, **Medium** and **Campaign**, where the visit came from, as analytics tools tell it: the `utm_source`, `utm_medium` and `utm_campaign` it landed with, else the referring site as the source and `referral` as the medium, else `(direct)` and `(none)`. They need the visit's landing, kept by `PhoenixReplay.Plug` with `:context`; see [Visit context](recording.md#visit-context),
+- **Device**, phone, tablet or desktop, by the viewport's width,
+- **Browser**, such as Chrome or Mobile Safari,
+- **Duration**, longer than 10 seconds, a minute, five minutes or a number of seconds you type.
 
 Choosing one opens a picker listing the values recordings have, with how many have each, counting only the recordings that match your other filters. Type to narrow the list, or press Enter to filter by what you typed. A filter in use is a chip, such as **View is MyAppWeb.CheckoutLive**: click it to change the value, or × to remove it.
 

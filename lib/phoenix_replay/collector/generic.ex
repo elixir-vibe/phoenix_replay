@@ -21,7 +21,8 @@ defmodule PhoenixReplay.Collector.Generic do
     * `:summary` — a function of the metadata returning the line shown in
       the replay. Defaults to the event name.
     * `:mark` — `true` for an event that marks a moment, such as a signup
-      or a completed checkout, as an analytics event would; see
+      or a completed checkout, as an analytics event would, or the mark's
+      name, such as `"Checkout completed"`; see
       `PhoenixReplay.Collector.Captured`. Defaults to `false`.
 
   Measurements are kept, with times converted to milliseconds by

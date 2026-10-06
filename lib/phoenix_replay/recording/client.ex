@@ -20,6 +20,7 @@ defmodule PhoenixReplay.Recording.Client do
 
   alias PhoenixReplay.Recording
   alias PhoenixReplay.Recording.Client.Landing
+  alias PhoenixReplay.Recording.Traffic
 
   @type t :: %__MODULE__{
           viewport: Recording.viewport() | nil,
@@ -91,6 +92,40 @@ defmodule PhoenixReplay.Recording.Client do
   defp browser(%{family: family}), do: family
 
   @doc """
+  The browser in a user agent, without its version, such as `"Mobile
+  Safari"`, or `nil` when it is not recognized.
+  """
+  @spec browser_family(String.t() | nil) :: String.t() | nil
+  def browser_family(nil), do: nil
+
+  def browser_family(user_agent) do
+    case UAParser.parse(user_agent) do
+      %{family: family} when family not in [nil, "Other"] -> family
+      _unknown -> nil
+    end
+  end
+
+  @typedoc "The kind of device a session ran on, by its viewport's width; see `device_type/1`."
+  @type device_type :: String.t()
+
+  @device_types ~w(phone tablet desktop)
+
+  @doc "The kinds of device `device_type/1` tells apart."
+  @spec device_types() :: [device_type()]
+  def device_types, do: @device_types
+
+  @doc """
+  The kind of device a viewport belongs to, by its width in CSS pixels:
+  `"phone"` below 640, `"tablet"` below 1024, `"desktop"` otherwise, or
+  `nil` without a viewport.
+  """
+  @spec device_type(PhoenixReplay.Recording.viewport() | nil) :: device_type() | nil
+  def device_type(nil), do: nil
+  def device_type(%{width: width}) when width < 640, do: "phone"
+  def device_type(%{width: width}) when width < 1024, do: "tablet"
+  def device_type(%{width: _width}), do: "desktop"
+
+  @doc """
   Describes a landing's campaign as `"google / cpc / spring_sale"`, from
   its UTM source, medium and campaign, or returns `nil` without them.
   """
@@ -114,15 +149,28 @@ defmodule PhoenixReplay.Recording.Client do
   end
 
   @doc """
-  Where the visit came from: its landing's campaign, or else the host of
-  the site that referred it. `nil` for direct visits and without
-  `PhoenixReplay.Plug`.
+  Where the visit came from, as Google Analytics tells it; see
+  `PhoenixReplay.Recording.Traffic`.
   """
-  @spec source(t()) :: String.t() | nil
-  def source(%__MODULE__{landing: %Landing{params: params, referrer: referrer}}),
-    do: campaign(params) || referrer_host(referrer)
+  @spec traffic(t()) :: Traffic.t()
+  def traffic(%__MODULE__{landing: %Landing{params: params, referrer: referrer}}) do
+    host = referrer_host(referrer)
 
-  def source(%__MODULE__{}), do: nil
+    %Traffic{
+      source: param(params, "utm_source") || host || "(direct)",
+      medium: param(params, "utm_medium") || if(host, do: "referral", else: "(none)"),
+      campaign: param(params, "utm_campaign")
+    }
+  end
+
+  def traffic(%__MODULE__{}), do: %Traffic{}
+
+  defp param(params, key) do
+    case params[key] do
+      value when is_binary(value) and value != "" -> value
+      _none -> nil
+    end
+  end
 
   @doc """
   Writes a viewport as `"390x844@3"`, compact for storing alongside a

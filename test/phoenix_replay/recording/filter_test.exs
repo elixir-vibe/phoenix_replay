@@ -37,7 +37,14 @@ defmodule PhoenixReplay.Recording.FilterTest do
       query: "a",
       view: "V",
       event: "e",
+      mark: "Paid",
+      source: "google",
+      medium: "cpc",
+      campaign: "spring",
+      device_type: "phone",
+      browser: "Firefox",
       within: "7d",
+      longer_than: 60,
       min_events: 3,
       errors: true,
       tab: "t1"
@@ -68,6 +75,43 @@ defmodule PhoenixReplay.Recording.FilterTest do
 
     assert ids(%{"min_events" => "30", "within" => "7d", "event" => "save"}, summaries) ==
              ~w(checkout-1)
+  end
+
+  test "matches where a visit came from, its device, marks and duration" do
+    summaries = [
+      summary("paid",
+        source: "google",
+        medium: "cpc",
+        campaign: "spring",
+        marks: %{"Paid" => 2},
+        duration_ms: 90_000
+      ),
+      summary("phone",
+        source: "(direct)",
+        medium: "(none)",
+        device_type: "phone",
+        browser: "Firefox"
+      )
+    ]
+
+    assert ids(%{"source" => "google", "medium" => "cpc"}, summaries) == ~w(paid)
+    assert ids(%{"campaign" => "spring"}, summaries) == ~w(paid)
+    assert ids(%{"source" => "(direct)"}, summaries) == ~w(phone)
+    assert ids(%{"mark" => "Paid"}, summaries) == ~w(paid)
+    assert ids(%{"device_type" => "phone", "browser" => "Firefox"}, summaries) == ~w(phone)
+    assert ids(%{"device_type" => "watch"}, summaries) == ~w(paid phone)
+    assert ids(%{"longer_than" => "60"}, summaries) == ~w(paid)
+    assert ids(%{"q" => "SPRING"}, summaries) == ~w(paid)
+
+    # A field's own criterion leaves its other values on offer.
+    filter = Filter.from_params(%{"source" => "google"})
+
+    assert Filter.count_values(summaries, :source, filter, @now, 10) == [
+             {"(direct)", 1},
+             {"google", 1}
+           ]
+
+    assert Filter.count_values(summaries, :mark, filter, @now, 10) == [{"Paid", 1}]
   end
 
   test "pages matches within a time range and counts them all" do

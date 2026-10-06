@@ -64,7 +64,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     {:ok, view, _html} = live(build_conn(), "/replay")
     row = view |> element("#recording-phone") |> render()
     assert row =~ "Mobile Safari 18 on iOS"
-    assert row =~ "from hn"
+    assert has_element?(view, ~s(#recording-phone a[href="/replay?source=hn"]), "hn")
     assert row =~ ~s(aria-label="Phone")
   end
 
@@ -171,6 +171,23 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     render_click(view, "edit_filter", %{"field" => "event"})
     render_click(view, "close_filter", %{})
     refute has_element?(view, "#recording-filter-value")
+
+    # Durations are picked from a few, and chips read naturally.
+    render_click(view, "edit_filter", %{"field" => "longer_than"})
+
+    assert has_element?(
+             view,
+             ~s(#recording-filter-value a[href="/replay?longer_than=60&min_events=3&view=Counter"]),
+             "1 min"
+           )
+
+    {:ok, view, _html} = live(build_conn(), "/replay?longer_than=90&device_type=phone")
+    assert has_element?(view, ~s([data-filter="longer_than"]), "Longer than")
+    assert has_element?(view, ~s([data-filter="longer_than"]), "1 min 30 s")
+    assert has_element?(view, ~s([data-filter="device_type"]), "Device is")
+    assert has_element?(view, ~s([data-filter="device_type"]), "Phone")
+    # Min events is no longer offered, but a link setting it shows its chip.
+    refute has_element?(view, "#recording-filter-add-items button", "Min events")
   end
 
   test "shows the first page for page 0, and for a page past the end once emptied" do

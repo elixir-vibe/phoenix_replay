@@ -184,10 +184,8 @@ defmodule ExampleWeb.Catalog.Live do
 
       <.panel title="Recording list" padded>
         <.filter_bar
-          filter={%Filter{errors: true}}
+          filter={%Filter{errors: true, view: "ExampleWeb.TaskLive.Index", source: "google"}}
           path={&("?" <> URI.encode_query(Filter.to_params(&1)))}
-          views={["ExampleWeb.TaskLive.Index"]}
-          event_names={["save"]}
         />
         <.new_recordings count={3} />
         <.recording_list
@@ -195,11 +193,13 @@ defmodule ExampleWeb.Catalog.Live do
           recordings={Enum.filter(@summaries, & &1.live?)}
           now={@now}
           path={&("#" <> &1.id)}
+          filter_path={&("?" <> URI.encode_query(%{&1 => &2}))}
         />
         <.recording_list
           recordings={Enum.reject(@summaries, & &1.live?)}
           now={@now}
           path={&("#" <> &1.id)}
+          filter_path={&("?" <> URI.encode_query(%{&1 => &2}))}
           delete="delete"
         />
       </.panel>

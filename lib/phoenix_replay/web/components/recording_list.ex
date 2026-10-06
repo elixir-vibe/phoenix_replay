@@ -14,7 +14,7 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   import PhoenixReplay.Web.Components.Core, only: [badge: 1, close_menu: 2, kbd: 1, menu: 1]
 
   alias Phoenix.LiveView.JS
-  alias PhoenixReplay.Recording.{Filter, Summary}
+  alias PhoenixReplay.Recording.{Client, Filter, Summary}
   alias PhoenixReplay.Web.{FilterFields, Format}
 
   # Columns on wider screens: mark, session, started, duration, events,
@@ -24,11 +24,17 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   @doc """
   A section of recordings: sessions still recording with `live`, or saved
   ones under a header row. `delete` names the event that deletes a saved
-  recording, or is `nil` when the viewer may not delete.
+  recording, or is `nil` when the viewer may not delete. Where each visit
+  came from links to the list filtered by it, through `filter_path`.
   """
   attr :recordings, :list, required: true
   attr :now, :integer, required: true
   attr :path, :any, required: true, doc: "a function from a summary to its URL"
+
+  attr :filter_path, :any,
+    required: true,
+    doc: "a function from a criterion and its value to the list's URL filtered by it"
+
   attr :live, :boolean, default: false
   attr :delete, :string, default: nil
 
@@ -43,7 +49,12 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
         <span class="size-2 animate-pulse rounded-full bg-live"></span> Live now
       </h2>
       <ul class="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-        <.row :for={recording <- @recordings} recording={recording} path={@path.(recording)}>
+        <.row
+          :for={recording <- @recordings}
+          recording={recording}
+          path={@path.(recording)}
+          filter_path={@filter_path}
+        >
           <:mark><span class="size-2.5 animate-pulse rounded-full bg-live"></span></:mark>
           <:meta>
             Live · {Format.clock(recording.duration_ms)} · {Format.count(
@@ -82,7 +93,12 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
           <span>Events</span><span>Errors</span><span></span>
         </div>
         <ul class="divide-y divide-line">
-          <.row :for={recording <- @recordings} recording={recording} path={@path.(recording)}>
+          <.row
+            :for={recording <- @recordings}
+            recording={recording}
+            path={@path.(recording)}
+            filter_path={@filter_path}
+          >
             <:mark><.device_icon viewport={recording.viewport} /></:mark>
             <:meta>
               {Format.relative(recording.connected_at, @now)} · {Format.count(
@@ -167,7 +183,11 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
       assign(assigns,
         field:
           "flex h-10 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 focus-within:outline-2 focus-within:outline-accent pointer-coarse:h-11",
-        set: FilterFields.set(assigns.filter),
+        set:
+          for(
+            {field, value} <- FilterFields.set(assigns.filter),
+            do: {field, FilterFields.describe(field, value)}
+          ),
         unset: FilterFields.unset(assigns.filter),
         errors_toggled: %Filter{assigns.filter | errors: not assigns.filter.errors},
         without_tab: %Filter{assigns.filter | tab: nil}
@@ -223,16 +243,16 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
       >
         <.icon name="lucide:triangle-alert" class="size-4" /> With errors
       </.link>
-      <span :for={{field, value} <- @set} data-filter={field.key} class={chip_class()}>
+      <span :for={{field, {prefix, shown}} <- @set} data-filter={field.key} class={chip_class()}>
         <button
           type="button"
           phx-click="edit_filter"
           phx-value-field={field.key}
-          aria-label={"Change the #{field.label} filter, #{value}"}
+          aria-label={"Change the filter #{prefix} #{shown}"}
           class="flex min-w-0 items-center gap-1 rounded-l-full py-1 pr-1 pl-3 hover:bg-hover"
         >
-          <span class="text-muted">{field.label} is</span>
-          <span class="max-w-56 truncate font-medium">{value}</span>
+          <span class="text-muted">{prefix}</span>
+          <span class="max-w-56 truncate font-medium">{shown}</span>
         </button>
         <.remove_filter path={@path.(FilterFields.without(@filter, field))} label={field.label} />
       </span>
@@ -293,9 +313,9 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   Asks for the value of a filter field, under the filter bar. A choice
   lists the values recordings have, the most common first, narrowed by
   what is typed, which `type_value` sends as `value`, with the one set
-  now marked; each value links to the list filtered by it. Enter, or **Apply** for a number, sends
-  `apply_filter` with the `value` typed. Escape or a click outside sends
-  `close_filter`.
+  now marked; a duration lists a few. Each links to the list filtered by
+  it. Enter, or **Apply** for a number, sends `apply_filter` with the
+  `value` typed. Escape or a click outside sends `close_filter`.
   """
   attr :field, :map, required: true
   attr :filter, Filter, required: true
@@ -307,15 +327,30 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   def filter_value(assigns) do
     typed = String.downcase(String.trim(assigns.typed))
 
-    current = Map.fetch!(assigns.filter, assigns.field.key)
+    %{field: field, filter: filter} = assigns
+    current = Map.fetch!(filter, field.key)
+
+    shown =
+      case field.control do
+        :choice ->
+          for {value, count} <- assigns.values,
+              String.contains?(String.downcase(FilterFields.display(field, value)), typed),
+              do: {value, FilterFields.display(field, value), count}
+
+        :duration ->
+          for seconds <- FilterFields.durations(),
+              do: {Integer.to_string(seconds), Format.seconds(seconds), nil}
+
+        :number ->
+          []
+      end
 
     assigns =
       assign(assigns,
         current: current && to_string(current),
-        shown:
-          Enum.filter(assigns.values, fn {value, _count} ->
-            String.contains?(String.downcase(value), typed)
-          end)
+        prefix: if(field.control == :duration, do: "Longer than", else: field.label <> " is"),
+        typed?: field.control != :choice,
+        shown: shown
       )
 
     ~H"""
@@ -335,21 +370,29 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
         class="flex gap-1.5"
       >
         <label class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-line bg-canvas px-2.5 focus-within:outline-2 focus-within:outline-accent">
-          <span class="shrink-0 text-muted">{@field.label} is</span>
+          <span class="shrink-0 text-muted">{@prefix}</span>
           <input
-            type={if @field.control == :number, do: "number", else: "text"}
+            type={if @typed?, do: "number", else: "text"}
             name="value"
-            min={@field.control == :number && "1"}
+            min={@typed? && "1"}
             value={@typed}
-            placeholder={@current || if(@field.control == :number, do: "1", else: "Any value")}
+            placeholder={
+              @current ||
+                case @field.control do
+                  :choice -> "Any value"
+                  :duration -> "Seconds"
+                  :number -> "1"
+                end
+            }
             autocomplete="off"
             phx-debounce={@field.control == :choice && "150"}
             phx-mounted={JS.focus()}
             class="h-full min-w-0 flex-1 bg-transparent font-medium outline-none"
           />
         </label>
+        <span :if={@field.control == :duration} class="self-center text-muted">s</span>
         <button
-          :if={@field.control == :number}
+          :if={@typed?}
           type="submit"
           class="h-9 rounded-md bg-ink px-3 font-medium text-on-ink hover:bg-ink/85"
         >
@@ -357,11 +400,11 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
         </button>
       </form>
       <ul
-        :if={@field.control == :choice and @shown != []}
+        :if={@shown != []}
         aria-label={"#{@field.label} values"}
         class="mt-1 max-h-72 overflow-y-auto"
       >
-        <li :for={{value, count} <- @shown}>
+        <li :for={{value, label, count} <- @shown}>
           <.link
             patch={@path.(FilterFields.put(@filter, @field, value))}
             aria-current={value == @current && "true"}
@@ -371,8 +414,8 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
               name="lucide:check"
               class="size-3.5 shrink-0 opacity-0 group-aria-[current=true]:opacity-100"
             />
-            <span class="min-w-0 flex-1 truncate">{value}</span>
-            <span class="text-muted tabular-nums">{count}</span>
+            <span class="min-w-0 flex-1 truncate">{label}</span>
+            <span :if={count} class="text-muted tabular-nums">{count}</span>
           </.link>
         </li>
       </ul>
@@ -386,6 +429,7 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
 
   attr :recording, Summary, required: true
   attr :path, :string, required: true
+  attr :filter_path, :any, required: true
   slot :mark, required: true
   slot :meta, required: true, doc: "the second line on phones"
   slot :started, required: true
@@ -393,7 +437,7 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   slot :action, required: true
 
   defp row(assigns) do
-    assigns = assign(assigns, :columns, @columns)
+    assigns = assign(assigns, columns: @columns, traffic: traffic_of(assigns.recording))
 
     ~H"""
     <li
@@ -414,10 +458,11 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
         <p class="mt-0.5 truncate font-mono text-xs text-muted">
           <span class="sm:hidden">{render_slot(@meta)}</span>
           <span class="hidden sm:inline">
-            {page(@recording)}<span :if={@recording.device}> · {@recording.device}</span><span :if={
-              @recording.source
-            }> · from {@recording.source}</span>
-            · {short_id(@recording)}
+            {page(@recording)}<span :if={@recording.device}> · {@recording.device}</span><.traffic
+              :if={@traffic != []}
+              traffic={@traffic}
+              filter_path={@filter_path}
+            /> · {short_id(@recording)}
           </span>
         </p>
       </div>
@@ -434,20 +479,42 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
 
   attr :viewport, :map, default: nil
 
-  # The kind of screen the session ran on, by its width in CSS pixels.
+  # The kind of device the session ran on; see `Client.device_type/1`.
   defp device_icon(assigns) do
     ~H"""
-    <%= cond do %>
-      <% is_nil(@viewport) -> %>
+    <%= case Client.device_type(@viewport) do %>
+      <% nil -> %>
         <.icon name="lucide:circle-play" class="size-4 text-muted" />
-      <% @viewport.width < 640 -> %>
+      <% "phone" -> %>
         <.icon name="lucide:smartphone" class="size-4 text-muted" label="Phone" />
-      <% @viewport.width < 1024 -> %>
+      <% "tablet" -> %>
         <.icon name="lucide:tablet" class="size-4 text-muted" label="Tablet" />
-      <% true -> %>
+      <% "desktop" -> %>
         <.icon name="lucide:monitor" class="size-4 text-muted" label="Desktop" />
     <% end %>
     """
+  end
+
+  attr :traffic, :list, required: true
+  attr :filter_path, :any, required: true
+
+  # Each part of where the visit came from links to the list filtered by it.
+  defp traffic(%{traffic: _traffic} = assigns) do
+    ~H"""
+    <span phx-no-format> · from <%= for {{criterion, value}, index} <- Enum.with_index(@traffic) do %><%= if index > 0 do %> / <% end %><.link patch={@filter_path.(criterion, value)} class="relative z-10 hover:text-ink hover:underline">{value}</.link><% end %></span>
+    """
+  end
+
+  # Where the visit came from, leaving out what says nothing: a direct
+  # visit, no medium, or a referral, which the referrer's host as the
+  # source already tells.
+  defp traffic_of(%Summary{source: source, medium: medium, campaign: campaign}) do
+    [
+      {:source, if(source != "(direct)", do: source)},
+      {:medium, if(medium not in ["(none)", "referral"], do: medium)},
+      {:campaign, campaign}
+    ]
+    |> Enum.reject(fn {_criterion, value} -> is_nil(value) end)
   end
 
   defp page(%Summary{url: nil}), do: "—"

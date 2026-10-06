@@ -42,6 +42,14 @@ defmodule PhoenixReplay.TraceTest do
     assert_raise ArgumentError, ~r/:min_events must be a positive integer/, fn ->
       Trace.find(min_events: 0)
     end
+
+    # Saved without a landing, where the visits came from is unknown.
+    assert ids(source: "google") == []
+    assert ids(longer_than: 2) |> Enum.sort() == ["failing", "traced"]
+
+    assert_raise ArgumentError, ~r/:device_type must be one of phone, tablet, desktop/, fn ->
+      Trace.find(device_type: "watch")
+    end
   end
 
   test "lists events with the player's indexes, grouped under what caused them",

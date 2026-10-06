@@ -5,11 +5,19 @@ defmodule PhoenixReplay.Recording.Filter do
   Filters round-trip through URL query parameters, so a filtered dashboard
   view can be shared as a link:
 
-    * `"q"` — text found in the recording's URL, id or event names
+    * `"q"` — text found in the recording's URL, id, event names, mark
+      names, source or campaign
     * `"view"` — exact view module name, such as `"MyAppWeb.CheckoutLive"`
-    * `"event"` — a `handle_event/3` name the session triggered, or the
-      name of a telemetry event that marked a moment in it
+    * `"event"` — a `handle_event/3` name the session triggered
+    * `"mark"` — the name of a moment the session reached; see
+      `PhoenixReplay.Recording.Event.mark_name/1`
+    * `"source"`, `"medium"` and `"campaign"` — where the visit came from,
+      such as `"google"`, `"cpc"` and `"spring"`; see
+      `PhoenixReplay.Recording.Client.traffic/1`
+    * `"device_type"` — `"phone"`, `"tablet"` or `"desktop"`
+    * `"browser"` — the browser's family, such as `"Mobile Safari"`
     * `"within"` — `"1h"`, `"24h"` or `"7d"` since the session started
+    * `"longer_than"` — a minimum duration, in seconds
     * `"min_events"` — minimum number of recorded events
     * `"errors"` — `"1"` to keep only sessions with an error, such as an
       error log, a failed query or a crash
@@ -18,7 +26,7 @@ defmodule PhoenixReplay.Recording.Filter do
   Blank or invalid parameters are ignored.
   """
 
-  alias PhoenixReplay.Recording.Summary
+  alias PhoenixReplay.Recording.{Client, Summary}
 
   @windows %{"1h" => :timer.hours(1), "24h" => :timer.hours(24), "7d" => :timer.hours(24 * 7)}
 
@@ -26,13 +34,38 @@ defmodule PhoenixReplay.Recording.Filter do
           query: String.t() | nil,
           view: String.t() | nil,
           event: String.t() | nil,
+          mark: String.t() | nil,
+          source: String.t() | nil,
+          medium: String.t() | nil,
+          campaign: String.t() | nil,
+          device_type: Client.device_type() | nil,
+          browser: String.t() | nil,
           within: String.t() | nil,
+          longer_than: pos_integer() | nil,
           min_events: pos_integer() | nil,
           errors: boolean(),
           tab: String.t() | nil
         }
 
-  defstruct [:query, :view, :event, :within, :min_events, :tab, errors: false]
+  defstruct [
+    :query,
+    :view,
+    :event,
+    :mark,
+    :source,
+    :medium,
+    :campaign,
+    :device_type,
+    :browser,
+    :within,
+    :longer_than,
+    :min_events,
+    :tab,
+    errors: false
+  ]
+
+  # Criteria that match one of a summary's values exactly.
+  @exact [:view, :source, :medium, :campaign, :device_type, :browser]
 
   @doc "The supported `\"within\"` values, shortest first."
   @spec windows() :: [String.t()]
@@ -45,7 +78,14 @@ defmodule PhoenixReplay.Recording.Filter do
       query: text(params["q"]),
       view: text(params["view"]),
       event: text(params["event"]),
+      mark: text(params["mark"]),
+      source: text(params["source"]),
+      medium: text(params["medium"]),
+      campaign: text(params["campaign"]),
+      device_type: if(params["device_type"] in Client.device_types(), do: params["device_type"]),
+      browser: text(params["browser"]),
       within: if(Map.has_key?(@windows, params["within"]), do: params["within"]),
+      longer_than: positive_integer(params["longer_than"]),
       min_events: positive_integer(params["min_events"]),
       errors: params["errors"] == "1",
       tab: text(params["tab"])
@@ -59,7 +99,14 @@ defmodule PhoenixReplay.Recording.Filter do
       {"q", filter.query},
       {"view", filter.view},
       {"event", filter.event},
+      {"mark", filter.mark},
+      {"source", filter.source},
+      {"medium", filter.medium},
+      {"campaign", filter.campaign},
+      {"device_type", filter.device_type},
+      {"browser", filter.browser},
       {"within", filter.within},
+      {"longer_than", filter.longer_than && Integer.to_string(filter.longer_than)},
       {"min_events", filter.min_events && Integer.to_string(filter.min_events)},
       {"errors", if(filter.errors, do: "1")},
       {"tab", filter.tab}
@@ -72,9 +119,10 @@ defmodule PhoenixReplay.Recording.Filter do
   A criterion whose values can be listed and counted, for suggesting them:
   see `values_of/2`.
   """
-  @type field :: :view | :event
+  @type field ::
+          :view | :event | :mark | :source | :medium | :campaign | :device_type | :browser
 
-  @fields [:view, :event]
+  @fields [:view, :event, :mark, :source, :medium, :campaign, :device_type, :browser]
 
   @doc "The criteria whose values can be listed; see `t:field/0`."
   @spec fields() :: [field()]
@@ -82,8 +130,11 @@ defmodule PhoenixReplay.Recording.Filter do
 
   @doc "The values a summary has for `field`, such as its view or its event names."
   @spec values_of(Summary.t(), field()) :: [String.t()]
-  def values_of(%Summary{view: view}, :view), do: [view]
   def values_of(%Summary{event_names: names}, :event), do: names
+  def values_of(%Summary{marks: marks}, :mark), do: Map.keys(marks)
+
+  def values_of(%Summary{} = summary, field) when field in @exact,
+    do: summary |> Map.fetch!(field) |> List.wrap()
 
   @doc """
   Counts the values of `field` among the `summaries` matching `filter`,
@@ -163,13 +214,21 @@ defmodule PhoenixReplay.Recording.Filter do
   def started_after(%__MODULE__{within: within}, now), do: now - @windows[within]
 
   defp matches?(summary, filter, now) do
-    query?(summary, filter.query) and
-      (is_nil(filter.view) or summary.view == filter.view) and
+    query?(summary, filter.query) and Enum.all?(@exact, &exact?(summary, filter, &1)) and
       (is_nil(filter.event) or filter.event in summary.event_names) and
+      (is_nil(filter.mark) or Map.has_key?(summary.marks, filter.mark)) and
+      (is_nil(filter.longer_than) or summary.duration_ms >= filter.longer_than * 1_000) and
       (is_nil(filter.within) or summary.connected_at >= started_after(filter, now)) and
       (is_nil(filter.min_events) or summary.event_count >= filter.min_events) and
       (not filter.errors or summary.error_count > 0) and
       (is_nil(filter.tab) or summary.tab == filter.tab)
+  end
+
+  defp exact?(summary, filter, criterion) do
+    case Map.fetch!(filter, criterion) do
+      nil -> true
+      value -> Map.fetch!(summary, criterion) == value
+    end
   end
 
   defp query?(_summary, nil), do: true
@@ -177,10 +236,10 @@ defmodule PhoenixReplay.Recording.Filter do
   defp query?(summary, query) do
     query = String.downcase(query)
 
-    Enum.any?(
-      [summary.id, summary.url || "" | summary.event_names],
-      &(&1 |> String.downcase() |> String.contains?(query))
-    )
+    [summary.id, summary.url, summary.source, summary.campaign]
+    |> Enum.concat(summary.event_names)
+    |> Enum.concat(Map.keys(summary.marks))
+    |> Enum.any?(&(is_binary(&1) and &1 |> String.downcase() |> String.contains?(query)))
   end
 
   defp text(value) when is_binary(value) do

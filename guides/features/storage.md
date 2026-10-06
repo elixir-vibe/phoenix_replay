@@ -37,12 +37,12 @@ Create the table with a migration that calls `PhoenixReplay.Storage.Ecto.Migrati
 defmodule MyApp.Repo.Migrations.AddPhoenixReplay do
   use Ecto.Migration
 
-  def up, do: PhoenixReplay.Storage.Ecto.Migration.up(version: 2)
-  def down, do: PhoenixReplay.Storage.Ecto.Migration.down(version: 2)
+  def up, do: PhoenixReplay.Storage.Ecto.Migration.up(version: 3)
+  def down, do: PhoenixReplay.Storage.Ecto.Migration.down(version: 3)
 end
 ```
 
-The table is versioned, and pinning the version keeps the migration doing the same thing after later releases. When a release changes the table, the changelog says so; add a migration that upgrades from the version you have, such as `up(from: 1, version: 2)` for a table PhoenixReplay 0.4 created.
+The table is versioned, and pinning the version keeps the migration doing the same thing after later releases. When a release changes the table, the changelog says so; add a migration that upgrades from the version you have, such as `up(from: 2, version: 3)` for a table PhoenixReplay 0.5 created. Version 3 adds the columns the recording list filters where a visit came from, its device type and browser by, and a `phoenix_replay_marks` table for [marks](telemetry-and-logs.md#marking-moments); it fills the new columns of rows saved earlier, except their browser.
 
 The dashboard reads one page at a time in SQL, with a count for the total. Event names are stored encoded, so text search, which also matches event names, and filtering by an event name check the rows that match the other filters after reading them. The names the filter suggests come from the 500 most recent recordings.
 
