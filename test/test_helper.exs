@@ -28,7 +28,9 @@ ExUnit.start(exclude: exclude)
 
 # Dashboard TypeScript tests from priv/ts run as ExUnit tests: pure modules in
 # QuickBEAM, DOM helpers and LiveView hooks in a browser against the real
-# LiveView client.
+# LiveView client. The browser runs under Volt's own supervisor, and Volt is
+# a build-time dependency, so its application is started here.
+{:ok, _apps} = Application.ensure_all_started(:volt)
 Volt.Test.ExUnit.install(exclude: ["client/**", "dom/**", "hooks/**", "test/**"])
 
 Volt.Test.ExUnit.install(
