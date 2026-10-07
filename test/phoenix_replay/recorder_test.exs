@@ -201,6 +201,29 @@ defmodule PhoenixReplay.RecorderTest do
                )
     end
 
+    test "keeps only the media settings the :client config asks for", %{sessions: sessions} do
+      Application.put_env(:phoenix_replay, :client, media: [:color_scheme])
+      on_exit(fn -> Application.delete_env(:phoenix_replay, :client) end)
+
+      {:ok, view, _html, id} = Sessions.live(sessions, client_conn(), "/counter")
+
+      sent = %{
+        "width" => 390,
+        "height" => 844,
+        "dpr" => 3,
+        "angle" => 90,
+        "color_scheme" => "dark",
+        "pointer" => "coarse",
+        "hover" => "none"
+      }
+
+      render_click(view, "inc", %{"_replay" => sent})
+      {:ok, recording} = Buffer.fetch(id)
+
+      assert %Event{data: viewport} = Enum.find(recording.events, &(&1.type == :viewport))
+      assert viewport == %{width: 390, height: 844, dpr: 3, angle: 90, color_scheme: :dark}
+    end
+
     test "records the screen's angle and the media settings, dropping unknown values", %{
       sessions: sessions
     } do

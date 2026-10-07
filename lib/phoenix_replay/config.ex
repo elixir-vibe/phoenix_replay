@@ -78,8 +78,14 @@ defmodule PhoenixReplay.Config do
       * `:max_bytes` — the JSON size a batch may have; a fuller batch is
         sent early, and the server drops the rest (default `65_536`)
       * `:limit` — batches recorded per session (default `3_600`)
-    * `:context` — request context `PhoenixReplay.Plug` keeps for a visit
-      and recordings carry in `client`:
+    * `:client` — what recordings keep in `client` about the browser and
+      the visit. `:context` is its former name, still read, with a
+      warning:
+      * `:media` — the media settings the browser reports with its
+        viewport, which the replay applies to the page: a list of
+        `:color_scheme`, `:reduced_motion`, `:contrast`, `:pointer` and
+        `:hover` (default all of them), or `false` for none. See "What the
+        browser sends" in the privacy guide
       * `:headers` — request header names to capture, refreshed on each
         request (default `[]`). `cookie`, `authorization` and
         `proxy-authorization` are refused.
@@ -144,7 +150,7 @@ defmodule PhoenixReplay.Config do
   ## Switching options off and overriding them
 
   `:flush`, `:logs`, `:pointer`, `:state`, `:export`, `:redact`,
-  `:max_memory` and the context's `:landing` can be switched off with `nil`
+  `:max_memory` and the client's `:landing` and `:media` can be switched off with `nil`
   or `false`.
 
   For `:flush`, `:logs`, `:pointer`, `:state`, `:export` and `:landing`, `true` turns
@@ -190,6 +196,7 @@ defmodule PhoenixReplay.Config do
     debounce: 300
   }
   @landing %{params: [], referrer: true, attribution: :first}
+  @media [:color_scheme, :reduced_motion, :contrast, :pointer, :hover]
   @export %{
     endpoint: nil,
     frame_layout: nil,
@@ -264,7 +271,10 @@ defmodule PhoenixReplay.Config do
           attribution: :first | :last
         }
 
-  @type context :: %{headers: [String.t()], landing: landing() | nil}
+  @typedoc "A media setting a viewport may carry; see `PhoenixReplay.Recording.viewport/0`."
+  @type media :: :color_scheme | :reduced_motion | :contrast | :pointer | :hover
+
+  @type client :: %{headers: [String.t()], landing: landing() | nil, media: [media()]}
 
   @type export :: %{
           endpoint: module() | nil,
@@ -303,7 +313,7 @@ defmodule PhoenixReplay.Config do
           flush: flush() | nil,
           pointer: pointer() | nil,
           state: state() | nil,
-          context: context(),
+          client: client(),
           replay: module() | nil,
           export: export() | nil,
           retention: retention(),
@@ -322,7 +332,7 @@ defmodule PhoenixReplay.Config do
             flush: %{events: 200, interval: 5_000},
             pointer: nil,
             state: @state,
-            context: %{headers: [], landing: nil},
+            client: %{headers: [], landing: nil, media: @media},
             replay: nil,
             export: nil,
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
@@ -416,15 +426,21 @@ defmodule PhoenixReplay.Config do
   defp put({:max_memory, max}, config) when is_integer(max) and max > 0,
     do: %{config | max_memory: max}
 
-  defp put({:context, opts}, config) when is_list(opts) do
-    context =
-      Enum.reduce(opts, config.context, fn
+  defp put({:client, opts}, config) when is_list(opts) do
+    client =
+      Enum.reduce(opts, config.client, fn
         {:headers, names}, acc when is_list(names) -> %{acc | headers: Enum.map(names, &header/1)}
         {:landing, value}, acc -> %{acc | landing: landing(value, acc.landing)}
+        {:media, value}, acc -> %{acc | media: media(value)}
         {key, value}, _acc -> invalid!(key, value)
       end)
 
-    %{config | context: context}
+    %{config | client: client}
+  end
+
+  defp put({:context, opts}, config) when is_list(opts) do
+    IO.warn("config :phoenix_replay, :context is deprecated, use :client", [])
+    put({:client, opts}, config)
   end
 
   defp put({:replay, off}, config) when off in @off, do: %{config | replay: nil}
@@ -449,6 +465,15 @@ defmodule PhoenixReplay.Config do
     do: %{config | persist: merge(config.persist, opts, &valid_persist?/2)}
 
   defp put({key, value}, _config), do: invalid!(key, value)
+
+  defp media(off) when off in @off, do: []
+  defp media(true), do: @media
+
+  defp media(settings) when is_list(settings) do
+    if settings -- @media == [], do: settings, else: invalid!(:media, settings)
+  end
+
+  defp media(settings), do: invalid!(:media, settings)
 
   # An option that can be off: nil or false switch it off, true turns it on
   # as it was or with the defaults, and a keyword list sets some of it.

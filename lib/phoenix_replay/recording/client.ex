@@ -9,9 +9,9 @@ defmodule PhoenixReplay.Recording.Client do
       lists `:user_agent` in its `:connect_info`
     * `:tab` — an id of the browser tab, shared by the tab's sessions
     * `:navigated_from` — the URL of the LiveView that live-navigated here
-    * `:headers` — request headers listed in `:context`, kept by
+    * `:headers` — request headers listed in the `:client` config, kept by
       `PhoenixReplay.Plug`
-    * `:landing` — the visit's first request, when `:context` asks for it;
+    * `:landing` — the visit's first request, when the `:client` config asks for it;
       see `PhoenixReplay.Recording.Client.Landing`
 
   Its functions describe the device, named from its user agent with

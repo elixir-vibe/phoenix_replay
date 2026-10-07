@@ -57,11 +57,11 @@ socket "/live", Phoenix.LiveView.Socket,
 
 ### Visit context
 
-Some context exists only on the HTTP requests of a visit, not on the LiveView socket: headers such as `Accept-Language`, the external `Referer` a visitor arrived from, and the campaign params of the page they landed on, which later LiveViews no longer see. `PhoenixReplay.Plug` keeps what `:context` asks for in the session, and every recording of the visit carries it:
+Some context exists only on the HTTP requests of a visit, not on the LiveView socket: headers such as `Accept-Language`, the external `Referer` a visitor arrived from, and the campaign params of the page they landed on, which later LiveViews no longer see. `PhoenixReplay.Plug` keeps what the `:client` config asks for in the session, and every recording of the visit carries it:
 
 ```elixir
 config :phoenix_replay,
-  context: [
+  client: [
     headers: ["accept-language", "cf-ipcountry"],
     landing: [params: [:utm, :click_ids, "ref"], referrer: true]
   ]
@@ -78,7 +78,7 @@ end
 - **`landing`** — the visit's first `GET`: its path, time, tracked query params and `Referer`. `:utm` and `:click_ids` expand to the usual parameter names. The referrer loses its query string unless `referrer: :full`, since query strings often carry tokens.
 - **Attribution** is first-touch: the landing is kept for the whole visit. `attribution: :last` replaces it whenever a request carries tracked params, to see which campaign brought someone back.
 
-A visit lasts as long as the session cookie. The plug rewrites the session only when the kept context changes, and does nothing until `:context` is configured; the installer adds it to the `:browser` pipeline. The player shows the campaign, the referrer's host and the landing page, with the params and headers under "Visit details".
+A visit lasts as long as the session cookie. The plug rewrites the session only when the kept context changes, and does nothing until `:client` asks for headers or a landing; the installer adds it to the `:browser` pipeline. The player shows the campaign, the referrer's host and the landing page, with the params and headers under "Visit details".
 
 Headers such as `x-forwarded-for` or `cf-connecting-ip` hold IP addresses, which are personal data in many jurisdictions; capture them only when you need them. Captured headers and the landing go through the [redactor](privacy-and-security.md#redacting-values) when a recording is saved.
 

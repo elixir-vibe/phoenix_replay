@@ -213,13 +213,14 @@ socket "/live", Phoenix.LiveView.Socket,
 
 ```elixir
 config :phoenix_replay,
-  context: [
+  client: [
     headers: ["accept-language"],
-    landing: [params: [:utm, :click_ids]]
+    landing: [params: [:utm, :click_ids]],
+    media: [:color_scheme, :reduced_motion, :contrast, :pointer, :hover]
   ]
 ```
 
-Needs `plug PhoenixReplay.Plug` in the `:browser` pipeline. First-touch by default; `attribution: :last` follows the latest campaign.
+Headers and the landing need `plug PhoenixReplay.Plug` in the `:browser` pipeline. First-touch by default; `attribution: :last` follows the latest campaign. `media` lists the browser's media settings to keep, all by default, `false` for none. `:context` is this option's former name.
 
 ## Live sessions
 {: .col-2}

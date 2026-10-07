@@ -117,7 +117,12 @@ defmodule PhoenixReplay.Recorder do
       session: sanitizer.sanitize_params(session),
       connected_at: System.system_time(:millisecond),
       client:
-        Browser.build(get_connect_params(socket), get_connect_info(socket, :user_agent), kept)
+        Browser.build(
+          get_connect_params(socket),
+          get_connect_info(socket, :user_agent),
+          kept,
+          config.client.media
+        )
     }
 
     :ok = Buffer.open(recording, self(), config)

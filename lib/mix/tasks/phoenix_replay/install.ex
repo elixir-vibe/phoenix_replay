@@ -19,7 +19,7 @@ if Code.ensure_loaded?(Igniter) do
        your LiveView tests do not record sessions
     4. Ignore the default recordings directory in `.gitignore`
     5. Add `PhoenixReplay.Plug` to the `:browser` pipeline, which keeps the
-       request context `:context` asks for; it does nothing until then
+       request context the `:client` config asks for; it does nothing until then
     6. Add `:user_agent` to the `:connect_info` of the endpoint's LiveView
        socket, so recordings name the browser
     7. Wire PhoenixReplay's client module into `assets/js/app.js` (or
@@ -139,7 +139,7 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    # A no-op until :context is configured, so turning it on is config only.
+    # A no-op until :client asks for headers or a landing, so turning it on is config only.
     defp add_context_plug(igniter, router) do
       {igniter, _source, zipper} = Igniter.Project.Module.find_module!(igniter, router)
 

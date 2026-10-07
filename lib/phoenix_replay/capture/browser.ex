@@ -23,15 +23,18 @@ defmodule PhoenixReplay.Capture.Browser do
   `handle_event/3` sees the extra param; it is left out of recorded params.
 
   The last viewport seen is kept in the LiveView's process dictionary,
-  since both the recorder's hooks and LiveComponent telemetry run there.
+  since both the recorder's hooks and the telemetry handlers run there, and
+  so are the media settings the `:client` config keeps; the others the
+  browser sends are dropped.
   """
 
-  alias PhoenixReplay.Recording
+  alias PhoenixReplay.{Config, Recording}
   alias PhoenixReplay.Recording.Client
   alias PhoenixReplay.Recording.Client.Landing
   alias PhoenixReplay.Session.Buffer
 
   @key {__MODULE__, :viewport}
+  @media_key {__MODULE__, :media}
   @max_tab 64
 
   # The settings a viewport may carry, with the values each may take; any
@@ -45,16 +48,27 @@ defmodule PhoenixReplay.Capture.Browser do
     hover: %{"hover" => :hover, "none" => :none}
   ]
 
-  @doc "Parses a viewport sent by the client, or returns `nil`."
+  @doc """
+  Parses a viewport sent by the client, or returns `nil`, keeping the media
+  settings `build/4` was given for this LiveView, or all of them.
+  """
   @spec parse(term()) :: Recording.viewport() | nil
   def parse(%{"width" => width, "height" => height} = viewport)
       when is_integer(width) and is_integer(height) and width in 1..20_000 and
              height in 1..20_000 do
+    kept = Process.get(@media_key) || Keyword.keys(@settings)
+
     Enum.reduce(@settings, %{width: width, height: height, dpr: dpr(viewport["dpr"])}, fn
       {name, values}, parsed ->
         case viewport[Atom.to_string(name)] do
-          sent when is_map_key(values, sent) -> Map.put(parsed, name, values[sent])
-          _other -> parsed
+          sent when is_map_key(values, sent) ->
+            # The angle is the viewport's own, and always kept.
+            if name == :angle or name in kept,
+              do: Map.put(parsed, name, values[sent]),
+              else: parsed
+
+          _other ->
+            parsed
         end
     end)
   end
@@ -64,10 +78,13 @@ defmodule PhoenixReplay.Capture.Browser do
   @doc """
   Returns the client context of a connecting LiveView, from its connect
   params, the `User-Agent` in its connect info, and the request context
-  `PhoenixReplay.Plug` kept for the visit.
+  `PhoenixReplay.Plug` kept for the visit. `media` lists the media
+  settings to keep, from the `:client` config, for this viewport and those
+  the LiveView reports after it.
   """
-  @spec build(map() | nil, String.t() | nil, map() | nil) :: Client.t()
-  def build(connect_params, user_agent, kept) do
+  @spec build(map() | nil, String.t() | nil, map() | nil, [Config.media()]) :: Client.t()
+  def build(connect_params, user_agent, kept, media) do
+    Process.put(@media_key, media)
     replay = (connect_params || %{})["_replay"]
     viewport = parse(replay)
     Process.put(@key, viewport)

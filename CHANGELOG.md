@@ -11,6 +11,7 @@ Pointer, touch and form recording, marks, video export, and a richer player and 
 - `PhoenixReplay.Recording.Summary`'s `source` holds only the source, with `medium` and `campaign` beside it. A recording's `client` is a `PhoenixReplay.Recording.Client` struct, whose `referer` is now `navigated_from`. Saved recordings are upgraded when read.
 - Custom storage backends: the optional `facets/1` callback is replaced by `values/4`, and `PhoenixReplay.Storage.File.query/3` is gone.
 - `:flush`, `:pointer`, `:logs` and `:landing` set on a live session now merge into the global configuration instead of replacing it.
+- The `:context` option is now `:client`, as recordings call it. `:context` still works, with a deprecation warning.
 
 ### Added
 
@@ -21,7 +22,7 @@ Pointer, touch and form recording, marks, video export, and a richer player and 
 - `phx_replay:start` and `phx_replay:stop` window events, and a `data-phx-replay` attribute on `<html>`, tell browser code when a page is recorded.
 - The player draws the recorded cursor, taps and touches over the replay, and scrolls the page as the user did.
 - The player's **View** menu: Fit, Actual size, Rotate, and Follow scroll. **Rotate** turns the shown device to look at it the other way round; when the user turned their phone, the replay shows it turning.
-- The recorder captures the user's color scheme, reduced motion, contrast, pointer type and hover with the viewport, and the replay applies them to the page's media rules, so a dark-mode or phone session looks as it did, `dark:` and `pointer-coarse:` styles included. The Visit tab lists them.
+- The recorder captures the user's color scheme, reduced motion, contrast, pointer type and hover with the viewport, and the replay applies them to the page's media rules, so a dark-mode or phone session looks as it did, `dark:` and `pointer-coarse:` styles included. The Visit tab lists them, and `client: [media: …]` keeps fewer.
 - The replay renders your root layout again with each moment's assigns, so `<html>` and `<body>` attributes that follow them, such as a theme the server keeps, change as the session plays. A `PhoenixReplay.Replay` module, configured as `:replay`, adapts the assigns older recordings hold, and covers layouts that read something else. See the recording guide's "Themes" and "Older recordings".
 - The **State** tab shows what each event changed, such as `tasks[id: 2].done: false → true`.
 - A details pane for the playing or pinned event, with telemetry measurements. Slow queries and calls stand out.

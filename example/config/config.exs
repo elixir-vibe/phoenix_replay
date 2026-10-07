@@ -87,7 +87,7 @@ config :phoenix_replay,
   logs: [level: :info],
   keep: [errors: true, marks: true],
   # Which language visitors browse in and which campaign brought them.
-  context: [headers: ["accept-language"], landing: [params: [:utm, :click_ids]]],
+  client: [headers: ["accept-language"], landing: [params: [:utm, :click_ids]]],
   # Where the pointer moved and what it pressed, shown over the replay.
   pointer: true,
   # Recordings exported as videos, from the player or with

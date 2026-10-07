@@ -91,7 +91,7 @@ With the client module's `replayParams` and `replayMetadata`, the browser sends,
 - the media settings the page's CSS can see: the color scheme, reduced motion, contrast, whether the pointer is a finger or a mouse, and whether it hovers,
 - an id for the browser tab, kept in `sessionStorage`, and the page a live navigation came from.
 
-None of these says much on its own, but together with the user agent they narrow down which browser a session came from, as fingerprinting does. They are stored with the recording, and the player's Visit tab shows them. `replayRecorder` adds the pointer, touches and scrolling when `pointer: true`, and the form controls and client state below.
+None of these says much on its own, but together with the user agent they narrow down which browser a session came from, as fingerprinting does. The replay applies the media settings to the page, so a dark-mode or phone session looks as it did; keep fewer with `client: [media: [:color_scheme]]`, or none with `client: [media: false]`. They are stored with the recording, and the player's Visit tab shows them. `replayRecorder` adds the pointer, touches and scrolling when `pointer: true`, and the form controls and client state below.
 
 ## Form controls and client state
 

@@ -53,7 +53,7 @@ The filter bar always has a search, by URL, recording id, event or mark name, so
 - **View**, the LiveView module,
 - **Event**, an event the session triggered,
 - **Mark**, a [moment](telemetry-and-logs.md#marking-moments) the session reached,
-- **Source**, **Medium** and **Campaign**, where the visit came from, as analytics tools tell it: the `utm_source`, `utm_medium` and `utm_campaign` it landed with, else the referring site as the source and `referral` as the medium, else `(direct)` and `(none)`. They need the visit's landing, kept by `PhoenixReplay.Plug` with `:context`; see [Visit context](recording.md#visit-context),
+- **Source**, **Medium** and **Campaign**, where the visit came from, as analytics tools tell it: the `utm_source`, `utm_medium` and `utm_campaign` it landed with, else the referring site as the source and `referral` as the medium, else `(direct)` and `(none)`. They need the visit's landing, kept by `PhoenixReplay.Plug` with the `:client` config; see [Visit context](recording.md#visit-context),
 - **Device**, phone, tablet or desktop, by the viewport's width,
 - **Browser**, such as Chrome or Mobile Safari,
 - **Duration**, longer than 10 seconds, a minute, five minutes or a number of seconds you type.
