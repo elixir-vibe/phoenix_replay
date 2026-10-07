@@ -1,4 +1,5 @@
 import { ViewHook } from 'phoenix_live_view'
+import { createKeybindingsHandler } from 'tinykeys'
 import type { Combination, Shortcut } from '../../../shared/payloads'
 
 /** What a shortcut does: an event pushed to the player, or a click on a control. */
@@ -40,58 +41,52 @@ const PRESSABLE =
   'button, a[href], summary, [role="button"], [role="switch"], [role="tab"], [role^="menuitem"]'
 
 /**
- * Whether `event` is `combination`. Letters and named keys need Shift
- * exactly as the combination has it; a symbol such as `?` comes with
- * whatever its keyboard layout needs.
+ * A combination in tinykeys' notation, such as `Shift+E`. Letters and
+ * named keys need Shift exactly as the combination has it; a lone symbol,
+ * such as `?`, comes with or without it, as its keyboard layout needs.
  */
-export const matches = (combination: Combination, event: KeyboardEvent): boolean => {
-  const key = combination[combination.length - 1] ?? ''
-  const pressed = event.key === ' ' ? 'Space' : event.key
-  if (pressed.toLowerCase() !== key.toLowerCase()) return false
-
-  const symbol = key.length === 1 && !/[a-z0-9]/i.test(key)
-  return symbol || event.shiftKey === combination.includes('Shift')
+export const binding = (combination: Combination): string => {
+  const [key = ''] = combination.slice(-1)
+  const symbol = combination.length === 1 && key.length === 1 && !/[a-z0-9]/i.test(key)
+  return symbol ? `[Shift]+${key}` : combination.join('+')
 }
-
-/** The shortcut `event` is, if any, among `shortcuts`. */
-export const shortcutFor = (shortcuts: Shortcut[], event: KeyboardEvent): Shortcut | undefined =>
-  shortcuts.find(({ keys }) => keys.some((combination) => matches(combination, event)))
 
 /**
  * Acts on the player's keyboard shortcuts anywhere on the page, from the
- * list in `data-shortcuts` (see `PhoenixReplay.Web.Player.Shortcuts`).
+ * list in `data-shortcuts` (see `PhoenixReplay.Web.Player.Shortcuts`),
+ * matched by [tinykeys](https://github.com/jamiebuilds/tinykeys), which
+ * also leaves combinations with a modifier they do not name alone.
  *
  * Keys are left alone while a dialog is open, while typing in a field,
- * with Control, Command or Alt held, when something already handled them, such as the timeline's
- * own arrows, and for the space bar on a control that presses with it.
- * `/` is the search's own shortcut; see `dom/shortcut`.
+ * when something already handled them, such as the timeline's own arrows,
+ * and for the space bar on a control that presses with it. A held key
+ * repeats only stepping and skipping. `/` is the search's own shortcut;
+ * see `dashboard/dom/shortcut`.
  */
 export class PlayerKeys extends ViewHook {
-  private shortcuts: Shortcut[] = []
-  private readonly onKeyDown = (event: KeyboardEvent): void => this.handle(event)
+  private handler?: (event: KeyboardEvent) => void
 
   mounted(): void {
-    this.shortcuts = JSON.parse(this.el.dataset.shortcuts ?? '[]') as Shortcut[]
-    window.addEventListener('keydown', this.onKeyDown)
+    const shortcuts = JSON.parse(this.el.dataset.shortcuts ?? '[]') as Shortcut[]
+    const bindings: Record<string, (event: KeyboardEvent) => void> = {}
+
+    for (const { id, keys } of shortcuts) {
+      const action = ACTIONS[id]
+      if (!action) continue
+      for (const combination of keys)
+        bindings[binding(combination)] = (event) => this.act(id, action, event)
+    }
+
+    this.handler = createKeybindingsHandler(bindings, { ignore: ignored })
+    window.addEventListener('keydown', this.handler)
   }
 
   destroyed(): void {
-    window.removeEventListener('keydown', this.onKeyDown)
+    if (this.handler) window.removeEventListener('keydown', this.handler)
   }
 
-  private handle(event: KeyboardEvent): void {
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return
-    if (document.querySelector(MODAL)) return
-
-    const target = event.target instanceof Element ? event.target : null
-    if (target?.closest(EDITABLE)) return
-    if (event.key === ' ' && target?.closest(PRESSABLE)) return
-
-    const shortcut = shortcutFor(this.shortcuts, event)
-    const action = shortcut && ACTIONS[shortcut.id]
-    if (!shortcut || !action) return
-    if (event.repeat && !REPEATABLE.has(shortcut.id)) return
-
+  private act(id: string, action: Action, event: KeyboardEvent): void {
+    if (event.repeat && !REPEATABLE.has(id)) return
     event.preventDefault()
 
     if ('click' in action) {
@@ -101,4 +96,12 @@ export class PlayerKeys extends ViewHook {
       this.pushEvent(action.push, action.payload ?? {}).catch(() => undefined)
     }
   }
+}
+
+// Where the player takes no keys at all.
+const ignored = (event: KeyboardEvent): boolean => {
+  if (event.defaultPrevented || event.isComposing || document.querySelector(MODAL)) return true
+
+  const target = event.target instanceof Element ? event.target : null
+  return Boolean(target?.closest(EDITABLE) || (event.key === ' ' && target?.closest(PRESSABLE)))
 }

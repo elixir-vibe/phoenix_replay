@@ -1,24 +1,18 @@
+import { tinykeys } from 'tinykeys'
+
 /**
  * Focuses the page's `[data-shortcut="/"]` field when `/` is pressed,
- * unless a text field already has focus or a modifier is held.
+ * with Shift or without, as the keyboard layout needs, unless a text field
+ * already has focus or another modifier is held, as
+ * [tinykeys](https://github.com/jamiebuilds/tinykeys) leaves those alone.
  */
-export const searchShortcut = (target: Window): (() => void) => {
-  const listener = (event: KeyboardEvent): void => {
-    if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return
+export const searchShortcut = (target: Window): (() => void) =>
+  tinykeys(target, {
+    '[Shift]+/': (event) => {
+      const field = target.document.querySelector<HTMLElement>('[data-shortcut="/"]')
+      if (!field) return
 
-    const active = target.document.activeElement
-    if (active instanceof HTMLElement && (active.isContentEditable || typing(active))) return
-
-    const field = target.document.querySelector<HTMLElement>('[data-shortcut="/"]')
-    if (!field) return
-
-    event.preventDefault()
-    field.focus()
-  }
-
-  target.addEventListener('keydown', listener)
-  return () => target.removeEventListener('keydown', listener)
-}
-
-const typing = (element: HTMLElement): boolean =>
-  ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName)
+      event.preventDefault()
+      field.focus()
+    }
+  })

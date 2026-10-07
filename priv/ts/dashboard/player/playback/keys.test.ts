@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'volt:test'
 
 import { html } from '../../../test/hooks'
 import type { Shortcut } from '../../../shared/payloads'
-import { matches, PlayerKeys, shortcutFor } from './keys'
+import { binding, PlayerKeys } from './keys'
 
 afterEach(() => document.body.replaceChildren())
 
@@ -16,8 +16,19 @@ const SHORTCUTS: Shortcut[] = [
   { id: 'help', keys: [['?']] }
 ]
 
+// The physical key a browser reports with each name, as tinykeys needs one.
+const CODES: Record<string, string> = { ' ': 'Space', '?': 'Slash', '/': 'Slash' }
+
+const codeOf = (name: string): string =>
+  CODES[name] ?? (/^[a-z]$/i.test(name) ? `Key${name.toUpperCase()}` : name)
+
 const key = (init: KeyboardEventInit): KeyboardEvent =>
-  new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+  new KeyboardEvent('keydown', {
+    bubbles: true,
+    cancelable: true,
+    code: codeOf(init.key ?? ''),
+    ...init
+  })
 
 const mount = (): { pushed: [string, unknown][]; hook: PlayerKeys } => {
   const el = html(`<div data-shortcuts='${JSON.stringify(SHORTCUTS)}' hidden></div>`)
@@ -32,17 +43,30 @@ const mount = (): { pushed: [string, unknown][]; hook: PlayerKeys } => {
   return { pushed, hook }
 }
 
-test('letters and named keys need Shift as written; symbols come with any', () => {
-  expect(matches(['K'], key({ key: 'k' }))).toBe(true)
-  expect(matches(['K'], key({ key: 'K', shiftKey: true }))).toBe(false)
-  expect(matches(['Shift', 'E'], key({ key: 'E', shiftKey: true }))).toBe(true)
-  expect(matches(['ArrowRight'], key({ key: 'ArrowRight', shiftKey: true }))).toBe(false)
-  expect(matches(['Space'], key({ key: ' ' }))).toBe(true)
-  expect(matches(['?'], key({ key: '?', shiftKey: true }))).toBe(true)
+test("writes combinations in tinykeys' notation, a lone symbol with Shift or without", () => {
+  expect(binding(['K'])).toBe('K')
+  expect(binding(['Shift', 'E'])).toBe('Shift+E')
+  expect(binding(['Space'])).toBe('Space')
+  expect(binding(['?'])).toBe('[Shift]+?')
+  expect(binding(['1'])).toBe('1')
+})
 
-  expect(shortcutFor(SHORTCUTS, key({ key: 'e' }))?.id).toBe('next_error')
-  expect(shortcutFor(SHORTCUTS, key({ key: 'E', shiftKey: true }))?.id).toBe('previous_error')
-  expect(shortcutFor(SHORTCUTS, key({ key: 'x' }))).toBeUndefined()
+test('letters and named keys need Shift as written; symbols come with any', () => {
+  const { pushed } = mount()
+
+  document.body.dispatchEvent(key({ key: 'e' }))
+  document.body.dispatchEvent(key({ key: 'E', shiftKey: true }))
+  document.body.dispatchEvent(key({ key: 'K', shiftKey: true }))
+  document.body.dispatchEvent(key({ key: 'ArrowRight', shiftKey: true }))
+  document.body.dispatchEvent(key({ key: '?', shiftKey: true }))
+  document.body.dispatchEvent(key({ key: 'x' }))
+
+  expect(pushed).toEqual([
+    ['error', { direction: 'next' }],
+    ['error', { direction: 'previous' }],
+    ['skip', { by: 5_000 }],
+    ['shortcuts', {}]
+  ])
 })
 
 test('pushes the shortcut and keeps the page from scrolling', () => {

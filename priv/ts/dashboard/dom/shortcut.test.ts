@@ -11,7 +11,14 @@ afterEach(() => {
 })
 
 const press = (key: string, init: KeyboardEventInit = {}): KeyboardEvent => {
-  const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init })
+  // With the physical key a browser reports, as tinykeys needs one.
+  const event = new KeyboardEvent('keydown', {
+    key,
+    code: 'Slash',
+    bubbles: true,
+    cancelable: true,
+    ...init
+  })
   ;(document.activeElement ?? document.body).dispatchEvent(event)
   return event
 }
