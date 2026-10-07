@@ -14,7 +14,10 @@ const track: Track = {
     [100, 10, 10, 0],
     [200, 30, 50, 0],
     [2_000, 90, 90, 0],
-    [3_050, 60, 60, 1]
+    // An earlier touch of the same finger slot, then the one pressed at 3 s.
+    [2_900, 10, 190, 1],
+    [3_050, 60, 60, 1],
+    [3_100, 80, 80, 1]
   ],
   presses: [
     [500, 0, 30, 50, 0, 0, null, 0, 0],
@@ -81,11 +84,23 @@ test('shows a fingertip while a touch is down, and hides the cursor', () => {
   mountHook(Pointer, el)
 
   at(3_100)
-  expect(el.querySelector('circle[data-slot="1"]')?.getAttribute('cx')).toBe('60')
+  expect(el.querySelector('circle[data-slot="1"]')?.getAttribute('cx')).toBe('80')
   expect(cursor(el)).toBe(null)
 
   at(3_300)
   expect(el.querySelector('circle[data-slot="1"]')).toBe(null)
+})
+
+test('draws a trail behind a touch since it went down', () => {
+  const el = overlay()
+  mountHook(Pointer, el)
+
+  // Not back to where the slot's earlier touch moved.
+  at(3_100)
+  expect(el.querySelector('polyline')?.getAttribute('points')).toBe('60,60 80,80')
+
+  at(3_300)
+  expect(el.querySelector('polyline')).toBe(null)
 })
 
 test('scrolls the replayed page as recorded', async () => {
