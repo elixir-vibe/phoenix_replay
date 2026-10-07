@@ -100,7 +100,7 @@ defmodule PhoenixReplay.MixProject do
         priv/fonts/LICENSE
         priv/iconify/manifest.json
         priv/static/phoenix_replay.js
-        priv/static/*.d.ts
+        priv/static/types
         package.json
         guides/**/*.md
         guides/**/*.cheatmd
@@ -203,7 +203,10 @@ defmodule PhoenixReplay.MixProject do
       "assets.build": [
         "volt.build --tailwind",
         &build_client/1,
-        "cmd npx tsc priv/ts/client/phoenix_replay.ts --declaration --emitDeclarationOnly --outDir priv/static --target es2022 --lib es2022,dom",
+        # The client's declarations, under the layout of priv/ts, which
+        # package.json's types points into.
+        "cmd rm -rf priv/static/types",
+        "cmd npx tsc priv/ts/client/phoenix_replay.ts --declaration --emitDeclarationOnly --rootDir priv/ts --outDir priv/static/types --target es2022 --lib es2022,dom",
         "cmd rm -f priv/static/manifest.json"
       ],
       # The bundle in priv/static is not tracked, so every package builds it.
