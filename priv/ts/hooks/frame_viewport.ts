@@ -2,8 +2,10 @@ import { ViewHook } from 'phoenix_live_view'
 
 /** The share of the window's height a fitted frame takes when its box does not set its own. */
 const WINDOW_SHARE = 0.75
-/** How long the device takes to turn when the recording changes orientation, in milliseconds. */
-const TURN_MS = 450
+/** How long the device takes to turn, in milliseconds, about as long as a phone's own turn. */
+const TURN_MS = 300
+/** Fast at first, then settling, as a phone turns. */
+const TURN_EASING = 'cubic-bezier(0.2, 0, 0, 1)'
 
 /** A frame's recorded size and screen angle. */
 interface Shown {
@@ -35,11 +37,12 @@ interface Placement {
  * `[data-frame-overlay]` beside the frame gets the same size and transform,
  * so what it draws lines up with the page.
  *
- * When the recording turns between portrait and landscape, the device is
- * shown turning with the page it had, then settles in the new layout,
- * unless motion is reduced. `data-turn` turns the shown device a further
- * 90 degrees, to look at it the other way round; the page keeps the
- * layout it was recorded in.
+ * When the recording turns between portrait and landscape, the page takes
+ * its new layout at once and turns into place from where the device was,
+ * fading in over the layout it replaced, as a phone does; unless motion is
+ * reduced. `data-turn` turns the shown device a further 90 degrees, to
+ * look at it the other way round; the page keeps the layout it was
+ * recorded in.
  *
  * When the box's `--frame-fill` is `1`, the page's layout sizes the box and
  * the frame is scaled to it. Otherwise the box is sized to the scaled
@@ -55,7 +58,6 @@ export class FrameViewport extends ViewHook {
   private observer?: ResizeObserver
   private shown?: Shown
   private placed?: Placement
-  private turning?: ReturnType<typeof setTimeout>
   private onResize = (): void => this.fit()
 
   mounted(): void {
@@ -71,7 +73,6 @@ export class FrameViewport extends ViewHook {
 
   destroyed(): void {
     this.observer?.disconnect()
-    clearTimeout(this.turning)
     window.removeEventListener('resize', this.onResize)
   }
 
@@ -82,29 +83,23 @@ export class FrameViewport extends ViewHook {
       angle: Number(this.el.dataset.angle) || 0
     }
 
-    // The device turns with the page it had, then shows the new one.
+    // The new layout starts where the device was, and turns into place.
     const previous = this.shown
-    if (this.turning) return
+    this.shown = next
     if (previous && turned(previous, next) && !reducedMotion()) {
-      this.render(previous, turnBy(previous, next))
-      // Then the new layout, at once; by then playback may have moved on.
-      this.turning = setTimeout(() => {
-        this.turning = undefined
-        this.shown = next
-        this.placed = undefined
-        this.render(next, 0)
-        this.fit()
-      }, TURN_MS)
+      this.placed = undefined
+      this.render(next, -turnBy(previous, next))
+      this.render(next, 0, true)
       return
     }
 
-    this.shown = next
     this.render(next, 0)
   }
 
   // Draws `shown` turned by `extra` degrees besides the viewer's own turn.
-  // A change of turn swings the device there; anything else eases.
-  private render({ width, height }: Shown, extra: number): void {
+  // A change of turn swings the device there, fading in when its layout
+  // changed; anything else eases.
+  private render({ width, height }: Shown, extra: number, fades = false): void {
     const style = this.el.querySelector('style')
     const frame = this.el.querySelector('iframe')
     const box = frame?.parentElement
@@ -170,7 +165,12 @@ export class FrameViewport extends ViewHook {
       `#${frame.id},#${box.id}>[data-frame-overlay]{transition:transform ${swings ? '0s' : '.2s ease'}}}`
 
     if (swings)
-      swing([frame, ...box.querySelectorAll<HTMLElement>('[data-frame-overlay]')], from, placement)
+      swing(
+        [frame, ...box.querySelectorAll<HTMLElement>('[data-frame-overlay]')],
+        from,
+        placement,
+        fades
+      )
     if (label) label.textContent = `${width} × ${height} · ${Math.round(scale * 100)}%`
   }
 
@@ -223,7 +223,7 @@ const transform = ({ x, y, degrees, scale }: Placement): string =>
 // that the device keeps within its box at every angle on the way.
 const STEPS = 12
 
-const swing = (elements: Element[], from: Placement, to: Placement): void => {
+const swing = (elements: Element[], from: Placement, to: Placement, fades: boolean): void => {
   const frames = Array.from({ length: STEPS + 1 }, (_, step) => {
     const progress = step / STEPS
     const between = (a: number, b: number): number => a + (b - a) * progress
@@ -248,10 +248,11 @@ const swing = (elements: Element[], from: Placement, to: Placement): void => {
         degrees,
         scale
       }),
+      opacity: fades ? Math.min(1, 0.4 + progress * 1.5) : 1,
       offset: progress
     }
   })
 
   for (const element of elements)
-    element.animate(frames, { duration: TURN_MS, easing: 'ease-in-out' })
+    element.animate(frames, { duration: TURN_MS, easing: TURN_EASING })
 }

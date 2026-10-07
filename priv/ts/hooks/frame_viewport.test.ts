@@ -1,6 +1,5 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { fakeClock } from '../test/clock'
 import { html, mountHook } from '../test/hooks'
 import { FrameViewport } from './frame_viewport'
 
@@ -72,22 +71,21 @@ test('renders at 100% in a scrolling box in actual mode', () => {
   expect(label).toBe('390 × 844 · 100%')
 })
 
-test('turns the device with its page when the recording turns, then shows the new one', () => {
-  const clock = fakeClock()
+test('turns the new layout into place from where the device was when the recording turns', () => {
   const el = section({ width: 390, height: 844, maxHeight: 422 })
   const { hook } = mountHook(FrameViewport, el)
 
   el.dataset.width = '844'
   el.dataset.height = '390'
   hook.updated?.()
-  // The portrait page turns first.
-  expect(measure(el).label).toBe('390 × 844 · 71%')
-  expect(el.querySelector('style')?.textContent).toContain('rotate(-90deg)')
 
-  clock.tick(450)
+  // The page takes its new layout at once, and turns in from portrait.
   expect(measure(el).label).toBe('844 × 390 · 71%')
-  expect(el.querySelector('style')?.textContent).toContain('rotate(0deg)')
-  clock.uninstall()
+  const animations = (el.querySelector('iframe') as HTMLIFrameElement).getAnimations()
+  expect(animations.length).toBe(1)
+  const frames = ((animations[0] as Animation).effect as KeyframeEffect).getKeyframes()
+  expect(frames[0]?.transform).toContain('rotate(90deg)')
+  expect(frames.at(-1)?.transform).toContain('rotate(0deg)')
 })
 
 test('follows a new viewport and mode, and clears the sizes without one', () => {
