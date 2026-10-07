@@ -342,8 +342,21 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
     |> Enum.reject(fn {_criterion, value} -> is_nil(value) end)
   end
 
+  # The page, without the UTM parameters "from" already shows, which would
+  # otherwise fill the row and hide it.
+  @shown_utm ~w(utm_source utm_medium utm_campaign)
+
   defp page(%Summary{url: nil}), do: "—"
-  defp page(%Summary{url: url}), do: Format.path_of(url)
+  defp page(%Summary{url: url}), do: url |> URI.parse() |> without_shown_utm() |> Format.path_of()
+
+  defp without_shown_utm(%URI{query: nil} = uri), do: URI.to_string(uri)
+
+  defp without_shown_utm(%URI{query: query} = uri) do
+    params =
+      query |> URI.query_decoder() |> Enum.reject(fn {key, _value} -> key in @shown_utm end)
+
+    URI.to_string(%{uri | query: if(params != [], do: URI.encode_query(params))})
+  end
 
   defp short_id(%Summary{id: id}), do: String.slice(id, 0, 8)
 end

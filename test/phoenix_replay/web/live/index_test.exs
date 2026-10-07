@@ -61,12 +61,17 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
         landing: %Landing{path: "/", at: 0, params: %{"utm_source" => "hn"}}
     }
 
-    Storage.save(Fixtures.storage(), %{recording | client: client})
+    url = "http://localhost/tasks?utm_source=hn&filter=done&utm_campaign=launch"
+    Storage.save(Fixtures.storage(), %{recording | client: client, url: url})
     {:ok, view, _html} = live(build_conn(), "/replay")
     row = view |> element("#recording-phone") |> render()
     assert row =~ "Mobile Safari 18 on iOS"
     assert has_element?(view, ~s(#recording-phone a[href="/replay?source=hn"]), "hn")
     assert row =~ ~s(aria-label="Phone")
+
+    # The page leaves out the UTM parameters its source already shows.
+    assert row =~ "/tasks?filter=done"
+    refute row =~ "utm_"
   end
 
   test "lists running sessions apart, without delete, and counts sessions" do
