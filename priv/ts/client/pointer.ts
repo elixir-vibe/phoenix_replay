@@ -15,18 +15,7 @@ import {
   TOUCH,
   UP
 } from '../shared/pointer_track'
-
-/** The settings the server sends; see the `:pointer` option. */
-export interface PointerSettings {
-  /** Milliseconds between recorded positions of a pointer. */
-  sample: number
-  /** Milliseconds between recorded scroll offsets. */
-  scroll: number
-  /** Milliseconds between batches sent. */
-  flush: number
-  /** Positions, presses and scrolls a batch holds before it is sent early. */
-  max_points: number
-}
+import type { PointerSettings } from '../shared/payloads'
 
 /** Sends a batch to the recorded LiveView as `event`. */
 export type Push = (event: string, value: unknown) => void

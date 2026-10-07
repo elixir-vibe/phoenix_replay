@@ -1,11 +1,6 @@
+import type { Root } from '../shared/payloads'
 /** The event the replay frame receives its root layout, rendered for the moment shown, with. */
 export const ROOT_EVENT = 'phx:phx_replay:root'
-
-/** The root layout of a replayed moment, and attributes for `<html>` besides it. */
-interface Root {
-  layout?: string | null
-  attributes?: Record<string, string | null>
-}
 
 /**
  * Gives the replayed page's `<html>` and `<body>` the attributes its root

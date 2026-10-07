@@ -27,8 +27,9 @@
 import { InputRecorder } from './inputs'
 import { replayInputs } from '../replay/inputs'
 import { replayRoot } from '../replay/root'
-import { type PointerSettings, PointerRecorder, type Push } from './pointer'
-import { type StateSettings, StateRecorder, StateStore } from './state'
+import type { RecordSettings, StartDetail } from '../shared/payloads'
+import { PointerRecorder, type Push } from './pointer'
+import { StateRecorder, StateStore } from './state'
 import { ViewportRecorder } from './viewport'
 
 /** Dispatched on `window` when recording starts. */
@@ -44,17 +45,6 @@ const RECORD_EVENT = 'phx_replay:record'
 // The page-loading kinds that stay on the same LiveView: a patch, and an
 // event pushed with page loading. Any other leaves it or rejoins it.
 const SAME_VIEW = new Set(['patch', 'element'])
-
-/** What the server asks the browser to record; `null` records none. */
-export interface RecordSettings {
-  pointer: PointerSettings | null
-  state: StateSettings | null
-}
-
-/** The detail of `phx_replay:start`. */
-export interface StartDetail {
-  state: StateSettings | null
-}
 
 /** The part of LiveSocket replayRecorder uses. */
 export interface RecorderSocket {

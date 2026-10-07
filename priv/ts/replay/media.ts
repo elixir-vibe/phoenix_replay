@@ -1,3 +1,4 @@
+import type { Media } from '../shared/payloads'
 /**
  * Makes a replayed page's media rules follow the media features the user's
  * browser had, rather than the viewer's: the color scheme, reduced motion,
@@ -12,9 +13,6 @@
  * variants compile to such rules. Stylesheets from another origin cannot
  * be read, and are left as they are; so is script that asks `matchMedia`.
  */
-
-/** The recorded value of each media feature, such as `{ pointer: 'coarse' }`. */
-export type Media = Record<string, string>
 
 const FEATURES = [
   'prefers-color-scheme',

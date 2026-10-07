@@ -1,13 +1,8 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import {
-  RECORDING_ATTRIBUTE,
-  replayRecorder,
-  START_EVENT,
-  type StartDetail,
-  STOP_EVENT
-} from './recorder'
-import { type StateBatch, type StateSettings, replayState } from './state'
+import { RECORDING_ATTRIBUTE, replayRecorder, START_EVENT, STOP_EVENT } from './recorder'
+import type { StartDetail, StateBatch, StateSettings } from '../shared/payloads'
+import { replayState } from './state'
 
 let stop = (): void => {}
 

@@ -1,13 +1,5 @@
 import { ViewHook } from 'phoenix_live_view'
-
-/** One key combination, such as `["Shift", "ArrowRight"]`, in `KeyboardEvent.key` names. */
-export type Combination = string[]
-
-/** A shortcut as the player lists it: its id and its key combinations. */
-export interface Shortcut {
-  id: string
-  keys: Combination[]
-}
+import type { Combination, Shortcut } from '../../../shared/payloads'
 
 /** What a shortcut does: an event pushed to the player, or a click on a control. */
 type Action = { push: string; payload?: Record<string, unknown> } | { click: string }

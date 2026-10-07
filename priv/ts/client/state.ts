@@ -24,6 +24,7 @@
  */
 
 import type { Push } from './pointer'
+import type { StateBatch, StateEntry, StateSettings } from '../shared/payloads'
 
 /** The window event state is reported with. */
 export const STATE_EVENT = 'phx_replay:state'
@@ -34,33 +35,6 @@ export interface StateReport {
   key: string
   /** A JSON object of fields to merge into the state reported under `key`. */
   changes: Record<string, unknown>
-}
-
-/** The settings the server sends; see the `:state` option. */
-export interface StateSettings {
-  /** Milliseconds between batches sent. */
-  flush: number
-  /** Entries a batch holds before it is sent early. */
-  max_entries: number
-  /** Bytes a key may have. */
-  max_key: number
-  /** The JSON size an entry's changes may have; larger ones are dropped. */
-  max_entry_bytes: number
-  /** The JSON size a batch holds before it is sent early. */
-  max_bytes: number
-  /** Whether the values of form controls are recorded. */
-  inputs: boolean
-  /** Milliseconds a form control must stay unchanged before its value is recorded. */
-  debounce: number
-}
-
-/** `dt` counts milliseconds from the batch's first entry. */
-export type StateEntry = [dt: number, key: string, changes: Record<string, unknown>]
-
-/** What is sent: `span` counts from the first entry to sending. */
-export interface StateBatch {
-  span: number
-  e: StateEntry[]
 }
 
 type Changes = Record<string, unknown>

@@ -1,22 +1,5 @@
+import type { ReplayViewport } from '../shared/payloads'
 import type { Push } from './pointer'
-
-/**
- * The browser's viewport, as PhoenixReplay records it: its size and pixel
- * ratio, the screen's orientation angle, and the media settings the page's
- * CSS can see. A setting the browser does not report is left out.
- */
-export interface ReplayViewport {
-  width: number
-  height: number
-  dpr: number
-  /** `screen.orientation.angle`: 0, 90, 180 or 270. */
-  angle?: number
-  color_scheme?: 'light' | 'dark'
-  reduced_motion?: boolean
-  contrast?: 'more' | 'less' | 'no-preference'
-  pointer?: 'coarse' | 'fine' | 'none'
-  hover?: 'hover' | 'none'
-}
 
 // A recorded value and the media query that matches it.
 type Choice = readonly [unknown, string]

@@ -1,19 +1,11 @@
 import { ViewHook } from 'phoenix_live_view'
 
-import { applyMedia, type Media } from '../../replay/media'
+import { applyMedia } from '../../replay/media'
+import type { Shot } from '../../shared/payloads'
 import { TIME_EVENT } from '../player/playback/scrubber'
 
 /** How long a seek may take to render before the export gives up, in milliseconds. */
 const SHOWN_TIMEOUT_MS = 15_000
-
-/** The event index and moment to show, and the viewport the page had. */
-export interface Shot {
-  index: number
-  at: number
-  width: number
-  height: number
-  media?: Media
-}
 
 declare global {
   interface Window {
