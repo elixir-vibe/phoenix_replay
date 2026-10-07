@@ -117,7 +117,10 @@ defmodule PhoenixReplay.Web.Components.Player.Header do
         <div class="ml-auto flex shrink-0 items-center gap-x-3">
           <.button size="md" data-copy={@link} class="group">
             <.icon name="lucide:link" class="size-4" />
-            <span class="group-data-copied:hidden">Copy link to {Format.precise_clock(@at)}</span>
+            <%!-- Its digits keep their width, so the button holds still in playback. --%>
+            <span class="group-data-copied:hidden">
+              Copy link to <span class="tabular-nums">{Format.precise_clock(@at)}</span>
+            </span>
             <span class="hidden group-data-copied:inline">Copied</span>
           </.button>
           <.theme_toggle id="theme-toggle" />
