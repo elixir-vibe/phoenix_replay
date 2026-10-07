@@ -144,6 +144,7 @@ defmodule PhoenixReplay.MixProject do
           PhoenixReplay.Recorder,
           PhoenixReplay.Replay,
           PhoenixReplay.Replay.View,
+          PhoenixReplay.Migration,
           PhoenixReplay.Trace,
           PhoenixReplay.Plug,
           PhoenixReplay.Config,

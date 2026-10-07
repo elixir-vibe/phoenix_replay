@@ -105,11 +105,6 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     @moduledoc false
     @behaviour PhoenixReplay.Replay
 
-    # Recordings made when :count was :clicks.
-    @impl true
-    def prepare(_view, %{clicks: clicks} = assigns), do: Map.put_new(assigns, :count, clicks)
-    def prepare(_view, assigns), do: assigns
-
     @impl true
     def root_attributes(_view, assigns),
       do: %{"data-count" => assigns[:count], "data-none" => nil}
@@ -120,9 +115,8 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     on_exit(fn -> Application.delete_env(:phoenix_replay, :replay) end)
   end
 
-  test "adapts an older recording's assigns with the app's PhoenixReplay.Replay" do
-    replay_with(Replay)
-
+  test "migrates an older recording's assigns with the app's migrations" do
+    # See PhoenixReplay.Test.ReplayMigrations.ClicksToCount.
     save(%PhoenixReplay.Recording{
       id: "renamed",
       view: PhoenixReplay.Test.Live.Counter,
@@ -135,6 +129,21 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
 
     {:ok, view, _html} = live(build_conn(), "/replay/renamed/frame?channel=c-renamed")
     assert render(view) =~ ~s(<span id="count">7</span>)
+
+    # Made after the migration, a recording is left as it is.
+    save(%PhoenixReplay.Recording{
+      id: "current",
+      view: PhoenixReplay.Test.Live.Counter,
+      connected_at: System.system_time(:millisecond),
+      code: %{release: nil, modules: %{}, deps: %{}, migration: 20_261_007_120_000},
+      events: [
+        %Event{at: 0, type: :mount, data: %{assigns: %{}}},
+        %Event{at: 5, type: :render, data: %{assigns: %{clicks: 7}}}
+      ]
+    })
+
+    {:ok, view, _html} = live(build_conn(), "/replay/current/frame?channel=c-current")
+    assert render(view) =~ ~s(<span id="count"></span>)
   end
 
   test "sends the root layout rendered with each moment's assigns, when it changes" do

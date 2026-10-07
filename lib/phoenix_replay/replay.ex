@@ -1,37 +1,27 @@
 defmodule PhoenixReplay.Replay do
   @moduledoc """
   How your app's recordings are replayed, as a whole. For how one LiveView
-  renders in a replay, see `PhoenixReplay.Replay.View`.
+  renders in a replay, see `PhoenixReplay.Replay.View`; for assigns that
+  changed shape since a recording, see `PhoenixReplay.Migration`.
 
   Replays render today's templates and root layout with the assigns
   recorded then, and most need nothing more: an assign a recording lacks
   is rendered as `nil`, and the root layout, rendered again at each moment,
   gives the replayed page's `<html>` and `<body>` their attributes, such
   as a theme. A module of this behaviour, configured as `:replay`, covers
-  what that cannot:
+  a layout whose attributes come from something other than its assigns:
 
       config :phoenix_replay, replay: MyAppWeb.Replay
 
       defmodule MyAppWeb.Replay do
         @behaviour PhoenixReplay.Replay
 
-        # Recordings made before `:dark_mode` became `:theme`.
         @impl true
-        def prepare(_view, %{dark_mode: dark?} = assigns),
-          do: Map.put_new(assigns, :theme, if(dark?, do: "dark", else: "light"))
-
-        def prepare(_view, assigns), do: assigns
+        def root_attributes(_view, assigns), do: %{"data-plan" => assigns[:plan]}
       end
 
-  Both callbacks are optional.
+  Its callback is optional.
   """
-
-  @doc """
-  The recorded `assigns` of `view` at a moment, as its template renders
-  them today: called before each replayed render, to adapt what older
-  recordings hold, such as an assign since renamed.
-  """
-  @callback prepare(view :: module(), assigns :: map()) :: map()
 
   @doc """
   Attributes for the replayed page's `<html>` at a moment, besides those
@@ -42,13 +32,7 @@ defmodule PhoenixReplay.Replay do
               optional(String.t() | atom()) => String.t() | nil
             }
 
-  @optional_callbacks prepare: 2, root_attributes: 2
-
-  @doc "Calls `module`'s `c:prepare/2`, or returns `assigns` without it."
-  @spec prepare(module() | nil, module(), map()) :: map()
-  def prepare(module, view, assigns) do
-    if defines?(module, :prepare), do: module.prepare(view, assigns), else: assigns
-  end
+  @optional_callbacks root_attributes: 2
 
   @doc """
   Calls `module`'s `c:root_attributes/2`, with names and values as

@@ -35,7 +35,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   use Phoenix.LiveView
 
-  alias PhoenixReplay.Replay
+  alias PhoenixReplay.{Migration, Replay}
   alias PhoenixReplay.Recording.{State, Timeline}
   alias PhoenixReplay.Catalog
   alias PhoenixReplay.Web.{Context, Layouts, Rendering}
@@ -131,26 +131,36 @@ defmodule PhoenixReplay.Web.Live.Frame do
     """
   end
 
-  defp private(nil), do: %{recording: nil, timeline: nil, keys: [], inputs: %{}, root: nil}
+  defp private(nil),
+    do: %{recording: nil, timeline: nil, migrations: [], keys: [], inputs: %{}, root: nil}
 
   defp private(recording),
     do: %{
       recording: recording,
       timeline: Timeline.new(recording),
+      # The app's migrations newer than the recording, applied at each moment.
+      migrations: Migration.pending(Migration.all(recording.view), migrated(recording)),
       keys: [],
       inputs: %{},
       root: nil
     }
 
+  defp migrated(%{code: %{migration: version}}), do: version
+  defp migrated(_recording), do: nil
+
   defp show(socket, index) do
-    %{timeline: timeline, keys: previous_keys} = private = socket.private[@private]
+    %{timeline: timeline, keys: previous_keys, migrations: migrations} =
+      private = socket.private[@private]
+
     timeline = Timeline.seek(timeline, index)
-    states = timeline.components
     {flash, recorded} = Map.pop(timeline.assigns, :flash, %{})
     %{view: view} = socket.assigns[@private]
+    recorded = Migration.apply_to(migrations, view, Rendering.assignable(recorded))
 
-    recorded =
-      Replay.prepare(Context.fetch(socket).config.replay, view, Rendering.assignable(recorded))
+    states =
+      Map.new(timeline.components, fn {{module, _id} = key, assigns} ->
+        {key, Migration.apply_to(migrations, module, assigns)}
+      end)
 
     keys = Map.keys(recorded)
 

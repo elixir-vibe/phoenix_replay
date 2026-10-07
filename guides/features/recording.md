@@ -99,23 +99,23 @@ Replay renders today's templates with the assigns recorded then. So each recordi
 config :phoenix_replay, release: System.get_env("GIT_SHA")
 ```
 
- An assign a recording lacks is rendered as `nil`; see [Limitations](#limitations). When your assigns changed shape since, such as a `:dark_mode` boolean that became a `:theme`, a `PhoenixReplay.Replay` module adapts them before each replayed render. It can also give the replayed page's `<html>` attributes that your layout takes from something other than its assigns:
+An assign a recording lacks needs nothing: it renders as `nil`, and the player notes it; see [Limitations](#limitations). An assign that changed shape since, such as a `:dark_mode` boolean that became a `:theme`, takes a migration, as a database's rows do: a module with a timestamp version, found among your app's modules with nothing to configure.
 
 ```elixir
-config :phoenix_replay, replay: MyAppWeb.Replay
-
-defmodule MyAppWeb.Replay do
-  @behaviour PhoenixReplay.Replay
+defmodule MyAppWeb.ReplayMigrations.DarkModeToTheme do
+  use PhoenixReplay.Migration, version: 20261007120000
 
   @impl true
-  def prepare(_view, %{dark_mode: dark?} = assigns),
+  def up(MyAppWeb.TaskLive.Index, %{dark_mode: dark?} = assigns),
     do: Map.put_new(assigns, :theme, if(dark?, do: "dark", else: "light"))
 
-  def prepare(_view, assigns), do: assigns
+  def up(_view_or_component, assigns), do: assigns
 end
 ```
 
-`PhoenixReplay.Replay` is for the whole app; how one LiveView renders in a replay is `PhoenixReplay.Replay.View`'s `replay_render/1`, below.
+Each recording keeps the newest version it was made with, and replay applies the newer migrations, in order, to its view's and LiveComponents' assigns; the Visit tab lists them. See `PhoenixReplay.Migration`.
+
+For a root layout whose `<html>` attributes come from something other than its assigns, a `PhoenixReplay.Replay` module, configured as `:replay`, gives them. How one LiveView renders in a replay is `PhoenixReplay.Replay.View`'s `replay_render/1`, below.
 
 ## Pointer, touches and scrolling
 

@@ -31,7 +31,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   import PhoenixReplay.Web.Components.Player.{EventList, Frame, Header, Playback, Visit}
 
   alias PhoenixReplay.Recording.{Client, Event, Filter, PointerTrack, Timeline}
-  alias PhoenixReplay.{Catalog, Export}
+  alias PhoenixReplay.{Catalog, Export, Migration}
   alias PhoenixReplay.Export.Options
   alias PhoenixReplay.Web.{Context, Highlight, Layouts, Params}
   alias PhoenixReplay.Web.Export.Download
@@ -170,7 +170,8 @@ defmodule PhoenixReplay.Web.Live.Show do
       marks: Events.marks(recording),
       dropped: Events.dropped_count(recording),
       journey: Journey.of(socket, recording),
-      code_changes: PhoenixReplay.Recording.Code.changes(recording.code)
+      code_changes: PhoenixReplay.Recording.Code.changes(recording.code),
+      migrations: migrations_applied(recording)
     )
     |> hand_over()
     |> filter_events()
@@ -441,6 +442,14 @@ defmodule PhoenixReplay.Web.Live.Show do
       before: timeline.before,
       changed: Event.changed_keys(timeline.event)
     )
+  end
+
+  # The app's migrations replay applies to this recording, by name.
+  defp migrations_applied(recording) do
+    stamp = recording.code && recording.code[:migration]
+
+    for {_version, migration} <- Migration.pending(Migration.all(recording.view), stamp),
+        do: migration |> Module.split() |> List.last()
   end
 
   defp turned?(%{} = before, %{} = now), do: Client.orientation(before) != Client.orientation(now)

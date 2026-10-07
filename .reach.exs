@@ -49,6 +49,7 @@ model = [
 logic = [
   "PhoenixReplay.Authorization",
   "PhoenixReplay.Replay*",
+  "PhoenixReplay.Migration",
   "PhoenixReplay.Collector*",
   "PhoenixReplay.Redactor*",
   "PhoenixReplay.Sanitizer*",

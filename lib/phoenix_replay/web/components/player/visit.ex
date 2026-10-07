@@ -24,6 +24,7 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
   attr :recording, Recording, required: true
   attr :viewport, :map, default: nil
   attr :journey, :map, default: nil, doc: "the tab's sessions, with URLs"
+  attr :migrations, :list, default: [], doc: "the names of the migrations replay applies"
 
   attr :filter_path, :any,
     required: true,
@@ -135,6 +136,15 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
         <p class="text-muted">
           {Enum.map_join(Enum.sort(@recording.code.deps), " · ", fn {dep, vsn} -> "#{dep} #{vsn}" end)}
         </p>
+      </section>
+
+      <section
+        :if={@migrations != []}
+        id="replay-migrations"
+        aria-labelledby="replay-migrations-heading"
+      >
+        <h3 id="replay-migrations-heading" class={heading()}>Migrations applied</h3>
+        <p>{Enum.join(@migrations, ", ")}</p>
       </section>
 
       <section aria-labelledby="replay-session-heading">

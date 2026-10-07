@@ -12,6 +12,8 @@ defmodule PhoenixReplay.Recording.Code do
     * `modules` — the MD5 of each module that rendered the session, its
       view and its LiveComponents, as `module_info(:md5)` gives it, which
       changes whenever the module's code does.
+    * `migration` — the newest `PhoenixReplay.Migration` the app had,
+      whose newer ones replay applies, or `nil` without any.
     * `deps` — the versions of the dependencies that render: Phoenix,
       LiveView, `phoenix_html`, `phoenix_template`, and any dependency of
       the view's application built on LiveView, such as a component
@@ -24,6 +26,7 @@ defmodule PhoenixReplay.Recording.Code do
   @type t :: %{
           release: String.t() | nil,
           modules: %{module() => String.t()},
+          migration: pos_integer() | nil,
           deps: %{atom() => String.t()}
         }
 
@@ -37,15 +40,17 @@ defmodule PhoenixReplay.Recording.Code do
 
   @doc """
   The code `view` runs now: the release named `release`, or its
-  application's version, the view's MD5 and the rendering dependencies.
+  application's version, the view's MD5, the rendering dependencies, and
+  `migration`, the newest migration version the app has.
   """
-  @spec of(module(), String.t() | nil) :: t()
-  def of(view, release) do
+  @spec of(module(), String.t() | nil, pos_integer() | nil) :: t()
+  def of(view, release, migration \\ nil) do
     app = Application.get_application(view)
 
     %{
       release: release || version(app),
       modules: %{view => md5(view)},
+      migration: migration,
       deps: deps(app)
     }
   end

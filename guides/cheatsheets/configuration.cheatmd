@@ -139,7 +139,7 @@ The deploy each session is recorded on, shown in the player and filterable in th
 config :phoenix_replay, replay: MyAppWeb.Replay
 ```
 
-A `PhoenixReplay.Replay` module adapting the assigns older recordings hold before each replayed render, or giving the replayed page's `<html>` attributes your layout takes from elsewhere. Optional: an assign a recording lacks renders as `nil`, and your root layout's attributes follow the replayed assigns by themselves. See [Recording](recording.md#older-recordings).
+A `PhoenixReplay.Replay` module giving the replayed page's `<html>` attributes your layout takes from something other than its assigns. Optional: your root layout's attributes follow the replayed assigns by themselves, an assign a recording lacks renders as `nil`, and assigns that changed shape take a `PhoenixReplay.Migration`, found without configuration. See [Recording](recording.md#older-recordings).
 
 ### Video export
 

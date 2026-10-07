@@ -23,7 +23,7 @@ Pointer, touch and form recording, marks, video export, and a richer player and 
 - The player draws the recorded cursor, taps and touches over the replay, and scrolls the page as the user did.
 - The player's **View** menu: Fit, Actual size, Rotate, and Follow scroll. **Rotate** turns the shown device to look at it the other way round; when the user turned their phone, the replay shows it turning.
 - The recorder captures the user's color scheme, reduced motion, contrast, pointer type and hover with the viewport, and the replay applies them to the page's media rules, so a dark-mode or phone session looks as it did, `dark:` and `pointer-coarse:` styles included, and a phone session shows no desktop scrollbar. The Visit tab lists them, and `client: [media: …]` keeps fewer.
-- The replay renders your root layout again with each moment's assigns, so `<html>` and `<body>` attributes that follow them, such as a theme the server keeps, change as the session plays. A `PhoenixReplay.Replay` module, configured as `:replay`, adapts the assigns older recordings hold, and covers layouts that read something else. See the recording guide's "Themes" and "Older recordings".
+- The replay renders your root layout again with each moment's assigns, so `<html>` and `<body>` attributes that follow them, such as a theme the server keeps, change as the session plays. A `PhoenixReplay.Replay` module, configured as `:replay`, covers layouts that read something else. See the recording guide's "Themes".
 - The **State** tab shows what each event changed, such as `tasks[id: 2].done: false → true`.
 - A details pane for the playing or pinned event, with telemetry measurements. Slow queries and calls stand out.
 - SQL, assigns and metadata are syntax-highlighted.
@@ -35,6 +35,7 @@ Pointer, touch and form recording, marks, video export, and a richer player and 
 - A time window or a calendar date range for the list. Dashboard times are in the viewer's time zone.
 - Video export: turn a recording into an MP4 from the player's menu or with `mix phoenix_replay.export <id>`. Set `export: [endpoint: MyAppWeb.Endpoint]`; it needs `ffmpeg` and the optional `playwright_ex` and `muontrap` dependencies. See `PhoenixReplay.Export`.
 - `PhoenixReplay.Export.Queue.Oban` runs exports in your Oban queue, so they survive restarts and deploys.
+- Replay migrations: a module with `use PhoenixReplay.Migration, version: …` and `up(view_or_component, assigns)` adapts recordings whose assigns changed shape since. Each recording keeps the newest version it was made with, and replay applies the newer ones, in order. See the recording guide's "Older recordings".
 - Each recording keeps which code it was made with: the release, set with `:release` or your app's version, the MD5 of its view and LiveComponents, and the versions of the dependencies that render. The player notes "Code changed" when they differ from the running code, and the list filters by **Release**.
 - `PhoenixReplay.Trace`, `mix phoenix_replay.list` and `mix phoenix_replay.show` read recordings as plain data, for IEx, tests and coding agents. Two agent skills ship in the package's `skills` directory.
 - Optional `child_spec/1` and `histogram/4` callbacks for storage backends.

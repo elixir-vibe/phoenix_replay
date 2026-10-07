@@ -49,7 +49,7 @@ defmodule PhoenixReplay.Recorder do
       put_private: 3
     ]
 
-  alias PhoenixReplay.{Config, Recording}
+  alias PhoenixReplay.{Config, Migration, Recording}
   alias PhoenixReplay.Capture.{Assigns, Browser, Pointer, State}
   alias PhoenixReplay.Session.{Buffer, Monitor}
 
@@ -123,7 +123,7 @@ defmodule PhoenixReplay.Recorder do
           kept,
           config.client.media
         ),
-      code: Recording.Code.of(socket.view, config.release)
+      code: Recording.Code.of(socket.view, config.release, Migration.latest(socket.view))
     }
 
     :ok = Buffer.open(recording, self(), config)
