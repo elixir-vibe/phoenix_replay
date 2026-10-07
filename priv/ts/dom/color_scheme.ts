@@ -14,7 +14,10 @@ const QUERY = /\(\s*prefers-color-scheme\s*:\s*(light|dark)\s*\)/g
 const ALWAYS = '(color)'
 const NEVER = '(not (color))'
 
-// Each rewritten rule's own media text, to put back.
+// Each rewritten rule's own media text, to put back. A reloaded page has
+// new rule objects, which start from their own text; the old ones' entries
+// go with them, as the map holds them weakly. So a rule is never given
+// the text of another.
 const originals = new WeakMap<CSSRule, string>()
 
 interface MediaRule extends CSSRule {

@@ -1,30 +1,18 @@
 import { ViewHook } from 'phoenix_live_view'
 
+import {
+  type Placement,
+  type Shown,
+  transform,
+  turnBy,
+  turnFrames,
+  turned,
+  TURN_EASING,
+  TURN_MS
+} from './device_turn'
+
 /** The share of the window's height a fitted frame takes when its box does not set its own. */
 const WINDOW_SHARE = 0.75
-/** How long the device takes to turn, in milliseconds, about as long as a phone's own turn. */
-const TURN_MS = 300
-/** Fast at first, then settling, as a phone turns. */
-const TURN_EASING = 'cubic-bezier(0.2, 0, 0, 1)'
-
-/** A frame's recorded size and screen angle. */
-interface Shown {
-  width: number
-  height: number
-  angle: number
-}
-
-/** Where a frame was drawn: its offset, turn and scale, and the room its box gave it. */
-interface Placement {
-  x: number
-  y: number
-  degrees: number
-  scale: number
-  width: number
-  height: number
-  roomWidth: number
-  roomHeight: number
-}
 
 /**
  * Renders the replay frame at the recorded viewport, keeping its aspect
@@ -164,13 +152,11 @@ export class FrameViewport extends ViewHook {
       `#${box.id}{transition:height .2s ease}` +
       `#${frame.id},#${box.id}>[data-frame-overlay]{transition:transform ${swings ? '0s' : '.2s ease'}}}`
 
-    if (swings)
-      swing(
-        [frame, ...box.querySelectorAll<HTMLElement>('[data-frame-overlay]')],
-        from,
-        placement,
-        fades
-      )
+    if (swings) {
+      const frames = turnFrames(from, placement, fades)
+      for (const element of [frame, ...box.querySelectorAll('[data-frame-overlay]')])
+        element.animate(frames, { duration: TURN_MS, easing: TURN_EASING })
+    }
     if (label) label.textContent = `${width} × ${height} · ${Math.round(scale * 100)}%`
   }
 
@@ -202,57 +188,4 @@ export class FrameViewport extends ViewHook {
   }
 }
 
-const portrait = ({ width, height }: Shown): boolean => height > width
-
-// Whether the recording went between portrait and landscape.
-const turned = (previous: Shown, next: Shown): boolean =>
-  Boolean(previous.width && next.width) && portrait(previous) !== portrait(next)
-
-// Which way the device turned, by its screen's angles: the page turns with
-// the device, against the angle's change. Without angles, as most phones
-// turn first, to the left.
-const turnBy = (previous: Shown, next: Shown): number =>
-  (((next.angle - previous.angle) % 360) + 360) % 360 === 270 ? 90 : -90
-
 const reducedMotion = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-const transform = ({ x, y, degrees, scale }: Placement): string =>
-  `translate(${x}px,${y}px) rotate(${degrees}deg) scale(${scale})`
-
-// Turns the elements from one placement to the next, through enough steps
-// that the device keeps within its box at every angle on the way.
-const STEPS = 12
-
-const swing = (elements: Element[], from: Placement, to: Placement, fades: boolean): void => {
-  const frames = Array.from({ length: STEPS + 1 }, (_, step) => {
-    const progress = step / STEPS
-    const between = (a: number, b: number): number => a + (b - a) * progress
-    const degrees = between(from.degrees, to.degrees)
-    const radians = (degrees * Math.PI) / 180
-    const [cos, sin] = [Math.abs(Math.cos(radians)), Math.abs(Math.sin(radians))]
-
-    // The room the turned device takes, at this angle.
-    const spanWidth = to.width * cos + to.height * sin
-    const spanHeight = to.width * sin + to.height * cos
-    const scale = Math.min(
-      between(from.scale, to.scale),
-      to.roomWidth / spanWidth,
-      to.roomHeight / spanHeight
-    )
-
-    return {
-      transform: transform({
-        ...to,
-        x: between(from.x, to.x),
-        y: between(from.y, to.y),
-        degrees,
-        scale
-      }),
-      opacity: fades ? Math.min(1, 0.4 + progress * 1.5) : 1,
-      offset: progress
-    }
-  })
-
-  for (const element of elements)
-    element.animate(frames, { duration: TURN_MS, easing: TURN_EASING })
-}

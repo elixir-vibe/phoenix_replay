@@ -49,10 +49,13 @@ defmodule PhoenixReplay.Capture.Browser do
   def parse(%{"width" => width, "height" => height} = viewport)
       when is_integer(width) and is_integer(height) and width in 1..20_000 and
              height in 1..20_000 do
-    for {name, values} <- @settings,
-        {:ok, value} <- [Map.fetch(values, viewport[Atom.to_string(name)])],
-        into: %{width: width, height: height, dpr: dpr(viewport["dpr"])},
-        do: {name, value}
+    Enum.reduce(@settings, %{width: width, height: height, dpr: dpr(viewport["dpr"])}, fn
+      {name, values}, parsed ->
+        case viewport[Atom.to_string(name)] do
+          sent when is_map_key(values, sent) -> Map.put(parsed, name, values[sent])
+          _other -> parsed
+        end
+    end)
   end
 
   def parse(_viewport), do: nil
