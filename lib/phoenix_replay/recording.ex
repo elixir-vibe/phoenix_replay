@@ -29,7 +29,22 @@ defmodule PhoenixReplay.Recording do
           client: Client.t()
         }
 
-  @type viewport :: %{width: pos_integer(), height: pos_integer(), dpr: number()}
+  @typedoc """
+  The browser's viewport: its size in CSS pixels and pixel ratio, and when
+  the browser reports them, the screen's orientation angle and the media
+  settings the page's CSS could see: the color scheme, reduced motion,
+  contrast and the kind of pointer.
+  """
+  @type viewport :: %{
+          required(:width) => pos_integer(),
+          required(:height) => pos_integer(),
+          required(:dpr) => number(),
+          optional(:angle) => 0 | 90 | 180 | 270,
+          optional(:color_scheme) => :light | :dark,
+          optional(:reduced_motion) => boolean(),
+          optional(:contrast) => :more | :less | :no_preference,
+          optional(:pointer) => :coarse | :fine | :none
+        }
 
   @enforce_keys [:id, :view, :connected_at]
   defstruct [

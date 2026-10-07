@@ -184,5 +184,38 @@ defmodule PhoenixReplay.RecorderTest do
       assert Enum.all?(recording.events, &(not Map.has_key?(&1.data[:params] || %{}, "_replay")))
       assert Timeline.at(recording, Timeline.last_index(recording)).viewport.width == 844
     end
+
+    test "records the screen's angle and the media settings, dropping unknown values", %{
+      sessions: sessions
+    } do
+      {:ok, view, _html, id} = Sessions.live(sessions, client_conn(), "/counter")
+
+      dark = %{
+        "width" => 390,
+        "height" => 844,
+        "dpr" => 3,
+        "angle" => 0,
+        "color_scheme" => "dark",
+        "reduced_motion" => true,
+        "contrast" => "brighter",
+        "pointer" => "coarse"
+      }
+
+      render_click(view, "inc", %{"_replay" => dark})
+
+      {:ok, recording} = Buffer.fetch(id)
+
+      assert %Event{data: viewport} = Enum.find(recording.events, &(&1.type == :viewport))
+
+      assert viewport == %{
+               width: 390,
+               height: 844,
+               dpr: 3,
+               angle: 0,
+               color_scheme: :dark,
+               reduced_motion: true,
+               pointer: :coarse
+             }
+    end
   end
 end

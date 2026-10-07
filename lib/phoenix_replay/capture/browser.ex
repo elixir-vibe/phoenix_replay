@@ -34,12 +34,25 @@ defmodule PhoenixReplay.Capture.Browser do
   @key {__MODULE__, :viewport}
   @max_tab 64
 
+  # The settings a viewport may carry, with the values each may take; any
+  # other value is left out.
+  @settings [
+    angle: %{0 => 0, 90 => 90, 180 => 180, 270 => 270},
+    color_scheme: %{"light" => :light, "dark" => :dark},
+    reduced_motion: %{true => true, false => false},
+    contrast: %{"more" => :more, "less" => :less, "no-preference" => :no_preference},
+    pointer: %{"coarse" => :coarse, "fine" => :fine, "none" => :none}
+  ]
+
   @doc "Parses a viewport sent by the client, or returns `nil`."
   @spec parse(term()) :: Recording.viewport() | nil
   def parse(%{"width" => width, "height" => height} = viewport)
       when is_integer(width) and is_integer(height) and width in 1..20_000 and
              height in 1..20_000 do
-    %{width: width, height: height, dpr: dpr(viewport["dpr"])}
+    for {name, values} <- @settings,
+        {:ok, value} <- [Map.fetch(values, viewport[Atom.to_string(name)])],
+        into: %{width: width, height: height, dpr: dpr(viewport["dpr"])},
+        do: {name, value}
   end
 
   def parse(_viewport), do: nil

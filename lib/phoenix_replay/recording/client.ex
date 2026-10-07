@@ -41,7 +41,12 @@ defmodule PhoenixReplay.Recording.Client do
   A viewport's orientation as CSS's `orientation` media feature tells it:
   portrait when it is at least as tall as it is wide.
   """
-  @spec orientation(%{width: pos_integer(), height: pos_integer()}) :: :portrait | :landscape
+  @spec orientation(%{
+          :width => pos_integer(),
+          :height => pos_integer(),
+          optional(atom()) => term()
+        }) ::
+          :portrait | :landscape
   def orientation(%{width: width, height: height}) when height >= width, do: :portrait
   def orientation(_viewport), do: :landscape
 

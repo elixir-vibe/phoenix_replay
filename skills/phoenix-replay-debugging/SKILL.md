@@ -53,7 +53,7 @@ Each event has `index` (the player's), `at` (ms from the session's start), `type
 - `:telemetry`: a collected query or request: `event`, `summary` (the SQL), `measurements`, `metadata`, `error`
 - `:log`: `level`, `message`, `metadata`; `:exit`: the crash `reason`, as `Exception.format_exit/1` writes it, cut to a length
 - `:state`: client state the browser reported, form controls under the `"phx_replay:inputs"` key as `%{selector => %{name => value}}`
-- `:viewport`: `width`, `height`, `dpr`
+- `:viewport`: `width`, `height`, `dpr`, and when the browser reports them `angle`, `color_scheme`, `reduced_motion`, `contrast`, `pointer`
 
 ## 3. Look at the view at a moment
 
