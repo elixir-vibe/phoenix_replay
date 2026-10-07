@@ -20,6 +20,14 @@ const liveSocket = new LiveSocket('/live', Socket, {
   hooks: { ...colocatedHooks, ClientSearch }
 })
 
+// The theme the server chose applies at once, and the cookie keeps it for
+// the next page load; see ExampleWeb.Theme.
+window.addEventListener('phx:theme', (event) => {
+  const { theme } = (event as CustomEvent<{ theme: string }>).detail
+  document.documentElement.dataset.theme = theme
+  document.cookie = `theme=${theme}; path=/; max-age=31536000; samesite=lax`
+})
+
 // Show progress bar on live navigation and form submits
 topbar.config({ barColors: { 0: '#29d' }, shadowColor: 'rgba(0, 0, 0, .3)' })
 window.addEventListener('phx:page-loading-start', () => topbar.show(300))

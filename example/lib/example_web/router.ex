@@ -10,12 +10,13 @@ defmodule ExampleWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug PhoenixReplay.Plug
+    plug ExampleWeb.Theme
   end
 
   scope "/", ExampleWeb do
     pipe_through :browser
 
-    live_session :recorded, on_mount: [PhoenixReplay.Recorder] do
+    live_session :recorded, on_mount: [PhoenixReplay.Recorder, {ExampleWeb.Theme, :default}] do
       live "/", TaskLive.Index, :index
       live "/tasks/new", TaskLive.Index, :new
       live "/tasks/:id/edit", TaskLive.Index, :edit

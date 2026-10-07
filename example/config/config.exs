@@ -90,6 +90,8 @@ config :phoenix_replay,
   context: [headers: ["accept-language"], landing: [params: [:utm, :click_ids]]],
   # Where the pointer moved and what it pressed, shown over the replay.
   pointer: true,
+  # The theme a session had, which the server keeps, on the replayed page.
+  root_attributes: {ExampleWeb.Theme, :root_attributes},
   # Recordings exported as videos, from the player or with
   # `mix phoenix_replay.export`.
   export: [
