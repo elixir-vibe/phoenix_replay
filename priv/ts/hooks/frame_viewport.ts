@@ -1,9 +1,7 @@
 import { ViewHook } from 'phoenix_live_view'
 
-/** Space kept below the frame when fitting it to the window, in pixels. */
-const BOTTOM_GAP = 24
-/** The smallest height a fitted frame is given, however short the window. */
-const MIN_HEIGHT = 320
+/** The share of the window's height a fitted frame takes when its box does not set its own. */
+const WINDOW_SHARE = 0.75
 
 /**
  * Renders the replay frame at the recorded viewport, keeping its aspect
@@ -15,9 +13,10 @@ const MIN_HEIGHT = 320
  * centring narrower devices; `"actual"` renders it at 100% inside a box
  * that scrolls. A `[data-frame-overlay]` beside the frame gets its size,
  * scale and position too, so what it draws lines up with the page.
- * `data-max-height` caps the height instead of the window.
- * `data-below` names an element shown under the frame, such as playback
- * controls, whose height is kept free too.
+ *
+ * When the box's `--frame-fill` is `1`, the page's layout sizes the box and
+ * the frame is scaled to it. Otherwise the box is sized to the scaled
+ * frame, which may take `data-max-height`, or a share of the window's height.
  *
  * The sizes are written as rules into the element's `phx-update="ignore"`
  * style element, keyed by the frame's and its box's ids, so LiveView keeps
@@ -62,7 +61,8 @@ export class FrameViewport extends ViewHook {
     }
 
     const actual = this.el.dataset.mode === 'actual'
-    const available = this.availableHeight(box)
+    const fills = getComputedStyle(box).getPropertyValue('--frame-fill').trim() === '1'
+    const available = this.availableHeight(box, fills)
     const containerWidth = box.clientWidth || this.el.clientWidth
 
     // Rounded down to whole percents, which keeps text from blurring at odd scales.
@@ -81,10 +81,11 @@ export class FrameViewport extends ViewHook {
 
     const inset = Math.max(0, Math.round((containerWidth - width * scale) / 2))
     const boxHeight = actual ? Math.min(height, available) : Math.round(height * scale)
+    const sized = fills ? '' : `height:${boxHeight}px;`
 
     // A rotated device eases into its new size, unless motion is reduced.
     style.textContent =
-      `#${box.id}{height:${boxHeight}px;overflow:${actual ? 'auto' : 'hidden'}}` +
+      `#${box.id}{${sized}overflow:${actual ? 'auto' : 'hidden'}}` +
       `#${frame.id},#${box.id}>[data-frame-overlay]{width:${width}px;height:${height}px;margin-left:${inset}px;` +
       `transform:translate(0px,0px) scale(${scale});transform-origin:top left}` +
       `@media (prefers-reduced-motion:no-preference){` +
@@ -113,12 +114,11 @@ export class FrameViewport extends ViewHook {
     frame.getBoundingClientRect()
   }
 
-  private availableHeight(box: HTMLElement): number {
+  private availableHeight(box: HTMLElement, fills: boolean): number {
     const max = Number(this.el.dataset.maxHeight)
     if (max) return max
+    if (fills) return box.clientHeight
 
-    const top = box.getBoundingClientRect().top + window.scrollY
-    const below = document.getElementById(this.el.dataset.below ?? '')?.offsetHeight ?? 0
-    return Math.max(MIN_HEIGHT, window.innerHeight - top - below - BOTTOM_GAP)
+    return Math.round(window.innerHeight * WINDOW_SHARE)
   }
 }

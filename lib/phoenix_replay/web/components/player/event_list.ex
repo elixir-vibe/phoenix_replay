@@ -142,7 +142,7 @@ defmodule PhoenixReplay.Web.Components.Player.EventList do
       <ol
         id="replay-events"
         phx-hook="EventList"
-        class="relative max-h-[calc(100dvh_-_14rem_-_var(--details))] min-h-32 flex-1 overflow-y-auto overscroll-contain py-1.5"
+        class="relative min-h-32 flex-1 max-lg:max-h-[calc(100dvh_-_14rem_-_var(--details))] overflow-y-auto overscroll-contain py-1.5"
       >
         <li :if={@groups == []} class="px-4 py-8 text-center text-sm text-muted">
           No events match.
