@@ -7,6 +7,7 @@ import { confirmClicks } from './dom/confirm'
 import { copyLinks } from './dom/copy'
 import { Floating, floatingTooltips } from './dom/floating'
 import { replayInputs } from './client/replay_inputs'
+import { replayRoot } from './client/replay_root'
 import { searchShortcut } from './dom/shortcut'
 import { themeToggle } from './dom/theme'
 import { DetailsResizer } from './hooks/details_resizer'
@@ -46,6 +47,7 @@ confirmClicks(window)
 copyLinks(window)
 floatingTooltips(window)
 replayInputs(window)
+replayRoot(window)
 searchShortcut(window)
 themeToggle(window)
 liveSocket.connect()

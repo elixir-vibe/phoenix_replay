@@ -101,6 +101,33 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     assert values == %{}
   end
 
+  defmodule Root do
+    @moduledoc false
+    def attributes(assigns), do: %{"data-count" => assigns[:count], "data-none" => nil}
+  end
+
+  test "gives the page's <html> the attributes the app derives from the replayed assigns" do
+    Application.put_env(:phoenix_replay, :root_attributes, {Root, :attributes})
+    on_exit(fn -> Application.delete_env(:phoenix_replay, :root_attributes) end)
+    recording = save(Fixtures.counter_recording(id: "rooted", clicks: 1))
+
+    {:ok, view, _html} = live(build_conn(), "/replay/rooted/frame?channel=c-root")
+
+    assert_push_event(view, "phx_replay:root", %{
+      attributes: %{"data-count" => "0", "data-none" => nil}
+    })
+
+    last = length(recording.events) - 1
+    seek("c-root", last)
+    render(view)
+    assert_push_event(view, "phx_replay:root", %{attributes: %{"data-count" => "1"}})
+
+    # Unchanged, the frame's script is not told again.
+    seek("c-root", last)
+    render(view)
+    refute_push_event(view, "phx_replay:root", %{})
+  end
+
   test "tells an export's stage when each position has rendered" do
     save(Fixtures.counter_recording(id: "staged", clicks: 1))
 

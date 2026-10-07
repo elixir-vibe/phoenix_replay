@@ -84,6 +84,21 @@ Headers such as `x-forwarded-for` or `cf-connecting-ip` hold IP addresses, which
 
 The client module is `deps/phoenix_replay/priv/static/phoenix_replay.js`, with types; bundlers that resolve packages from `deps`, as Phoenix's esbuild and Volt setups do, import it as `"phoenix_replay"`.
 
+### Themes
+
+A theme the user chooses in your app, rather than in their system, belongs on the server, like any setting, so recordings carry it: keep it in the session, give your LiveViews an `@theme` assign in an `on_mount` hook, and render it in your root layout, such as `<html data-theme={@theme}>`. A theme kept only in `localStorage` never reaches the server, so the replay cannot show it.
+
+Your root layout renders once, so the replay cannot follow `@theme` there by itself. Name a function that gives the replayed page's `<html>` its attributes from the replayed assigns, and the replay sets them at each moment:
+
+```elixir
+config :phoenix_replay, root_attributes: {MyAppWeb.Theme, :root_attributes}
+
+# in MyAppWeb.Theme
+def root_attributes(assigns), do: %{"data-theme" => assigns[:theme] || "system"}
+```
+
+The example app's `ExampleWeb.Theme` keeps a light, dark or system theme this way. A theme that follows the system is replayed from the recorded color scheme.
+
 ## Pointer, touches and scrolling
 
 PhoenixReplay can also record where the pointer moved, what it pressed and how the page scrolled, and the player shows them over the replay. It is off by default. Turn it on globally or per live session:

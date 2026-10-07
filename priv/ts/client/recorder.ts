@@ -26,6 +26,7 @@
 
 import { InputRecorder } from './inputs'
 import { replayInputs } from './replay_inputs'
+import { replayRoot } from './replay_root'
 import { type PointerSettings, PointerRecorder, type Push } from './pointer'
 import { type StateSettings, StateRecorder, StateStore } from './state'
 import { ViewportRecorder } from './viewport'
@@ -119,13 +120,15 @@ export const replayRecorder = (
   target.addEventListener(`phx:${RECORD_EVENT}`, start)
   target.addEventListener('phx:page-loading-start', leave)
   // In a replay frame rendered in the app's own layout, the app's script is
-  // the one that puts recorded form values back.
+  // the one that puts recorded form values and root attributes back.
   const stopRestoring = replayInputs(target)
+  const stopRooting = replayRoot(target)
 
   return () => {
     stop()
     store.close()
     stopRestoring()
+    stopRooting()
     target.removeEventListener(`phx:${RECORD_EVENT}`, start)
     target.removeEventListener('phx:page-loading-start', leave)
   }

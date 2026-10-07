@@ -19,6 +19,9 @@ defmodule PhoenixReplay.Web.Live.Frame do
   Form control values the browser recorded are pushed to the frame's
   script with a `"phx_replay:inputs"` event after each render, which puts
   them back into the replayed page; see `PhoenixReplay.Recording.State`.
+  So are the attributes the `:root_attributes` config gives the page's
+  `<html>` from the replayed assigns, with `"phx_replay:root"`, as the
+  root layout renders only once.
 
   LiveComponents in the template render through
   `PhoenixReplay.Web.Live.ReplayComponent` with their recorded assigns; see
@@ -123,10 +126,16 @@ defmodule PhoenixReplay.Web.Live.Frame do
     """
   end
 
-  defp private(nil), do: %{recording: nil, timeline: nil, keys: [], inputs: %{}}
+  defp private(nil), do: %{recording: nil, timeline: nil, keys: [], inputs: %{}, root: %{}}
 
   defp private(recording),
-    do: %{recording: recording, timeline: Timeline.new(recording), keys: [], inputs: %{}}
+    do: %{
+      recording: recording,
+      timeline: Timeline.new(recording),
+      keys: [],
+      inputs: %{},
+      root: %{}
+    }
 
   defp show(socket, index) do
     %{timeline: timeline, keys: previous_keys} = private = socket.private[@private]
@@ -145,6 +154,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
     |> put_private(@private, %{private | timeline: timeline, keys: keys})
     |> check_render()
     |> push_inputs(State.inputs(timeline.assigns[State.assign()]))
+    |> push_root(timeline.assigns)
     |> push_shown(index)
   end
 
@@ -161,6 +171,30 @@ defmodule PhoenixReplay.Web.Live.Frame do
     socket
     |> push_event("phx_replay:inputs", %{values: inputs})
     |> put_private(@private, %{socket.private[@private] | inputs: inputs})
+  end
+
+  # The `<html>` attributes the app derives from the replayed assigns, sent
+  # when they change.
+  defp push_root(socket, assigns) do
+    case Context.fetch(socket).config.root_attributes do
+      nil ->
+        socket
+
+      {module, function} ->
+        root =
+          apply(module, function, [assigns])
+          |> Map.new(fn {k, v} -> {to_string(k), v && to_string(v)} end)
+
+        push_changed_root(socket, root)
+    end
+  end
+
+  defp push_changed_root(%{private: %{@private => %{root: root}}} = socket, root), do: socket
+
+  defp push_changed_root(socket, root) do
+    socket
+    |> push_event("phx_replay:root", %{attributes: root})
+    |> put_private(@private, %{socket.private[@private] | root: root})
   end
 
   defp replace_flash(socket, flash) do

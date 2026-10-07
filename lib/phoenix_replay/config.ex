@@ -93,6 +93,11 @@ defmodule PhoenixReplay.Config do
         * `:attribution` — `:first` keeps the first landing of the visit;
           `:last` replaces it whenever a request carries tracked params
           (default `:first`)
+    * `:root_attributes` — `{module, function}` called with the replayed
+      view's assigns at each moment, returning a map of attributes for the
+      replayed page's `<html>`, such as `%{"data-theme" => "dark"}` for a
+      theme the server keeps; `nil` (the default) sets none. Your root
+      layout renders once, so the replay sets them as it plays.
     * `:max_memory` — bytes of buffered recordings above which new
       sessions are not recorded, or `nil` (the default) for no limit.
     * `:retention` — keyword list controlling `PhoenixReplay.Storage.Retention`:
@@ -301,6 +306,7 @@ defmodule PhoenixReplay.Config do
           pointer: pointer() | nil,
           state: state() | nil,
           context: context(),
+          root_attributes: {module(), atom()} | nil,
           export: export() | nil,
           retention: retention(),
           persist: persist()
@@ -319,6 +325,7 @@ defmodule PhoenixReplay.Config do
             pointer: nil,
             state: @state,
             context: %{headers: [], landing: nil},
+            root_attributes: nil,
             export: nil,
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
@@ -421,6 +428,13 @@ defmodule PhoenixReplay.Config do
 
     %{config | context: context}
   end
+
+  defp put({:root_attributes, off}, config) when off in @off,
+    do: %{config | root_attributes: nil}
+
+  defp put({:root_attributes, {module, function}}, config)
+       when is_atom(module) and is_atom(function),
+       do: %{config | root_attributes: {module, function}}
 
   defp put({:pointer, value}, config),
     do: %{config | pointer: switch(:pointer, value, config.pointer, @pointer, &positive?/2)}
