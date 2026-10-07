@@ -13,7 +13,8 @@ defmodule PhoenixReplay.Web.Export.Router do
   @context %{
     base_path: "/_phoenix_replay",
     authorize: nil,
-    live_socket_path: "/_phoenix_replay/live"
+    live_socket_path: "/_phoenix_replay/live",
+    frame_layout: {PhoenixReplay.Web.Export.Access, :frame_layout}
   }
 
   pipeline :stage do

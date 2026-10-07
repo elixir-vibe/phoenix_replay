@@ -106,7 +106,7 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     def attributes(assigns), do: %{"data-count" => assigns[:count], "data-none" => nil}
   end
 
-  test "gives the page's <html> the attributes the app derives from the replayed assigns" do
+  test "sends the root layout rendered with each moment's assigns, when it changes" do
     Application.put_env(:phoenix_replay, :root_attributes, {Root, :attributes})
     on_exit(fn -> Application.delete_env(:phoenix_replay, :root_attributes) end)
     recording = save(Fixtures.counter_recording(id: "rooted", clicks: 1))
@@ -114,6 +114,7 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     {:ok, view, _html} = live(build_conn(), "/replay/rooted/frame?channel=c-root")
 
     assert_push_event(view, "phx_replay:root", %{
+      layout: "<!DOCTYPE html>" <> _layout,
       attributes: %{"data-count" => "0", "data-none" => nil}
     })
 

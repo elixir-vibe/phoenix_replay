@@ -88,16 +88,13 @@ The client module is `deps/phoenix_replay/priv/static/phoenix_replay.js`, with t
 
 A theme the user chooses in your app, rather than in their system, belongs on the server, like any setting, so recordings carry it: keep it in the session, give your LiveViews an `@theme` assign in an `on_mount` hook, and render it in your root layout, such as `<html data-theme={@theme}>`. A theme kept only in `localStorage` never reaches the server, so the replay cannot show it.
 
-Your root layout renders once, so the replay cannot follow `@theme` there by itself. Name a function that gives the replayed page's `<html>` its attributes from the replayed assigns, and the replay sets them at each moment:
+The replay needs nothing more. When the dashboard's `:frame_layout` is your root layout, the replay renders it again with each moment's assigns and gives the replayed page's `<html>` and `<body>` the attributes it renders then, as your layout would have live. The example app's `ExampleWeb.Theme` keeps a light, dark or system theme this way. A theme that follows the system is replayed from the recorded color scheme.
+
+For a layout whose attributes come from something other than its assigns, `:root_attributes` names a function from the replayed assigns to attributes for `<html>`:
 
 ```elixir
-config :phoenix_replay, root_attributes: {MyAppWeb.Theme, :root_attributes}
-
-# in MyAppWeb.Theme
-def root_attributes(assigns), do: %{"data-theme" => assigns[:theme] || "system"}
+config :phoenix_replay, root_attributes: {MyAppWeb.Replay, :root_attributes}
 ```
-
-The example app's `ExampleWeb.Theme` keeps a light, dark or system theme this way. A theme that follows the system is replayed from the recorded color scheme.
 
 ## Pointer, touches and scrolling
 

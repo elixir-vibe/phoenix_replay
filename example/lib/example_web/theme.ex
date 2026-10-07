@@ -10,9 +10,9 @@ defmodule ExampleWeb.Theme do
   `data-theme` at once and keeps the choice in the cookie for the next
   page load.
 
-  Replays render the root layout once, so `root_attributes/1`, the
-  `:root_attributes` PhoenixReplay is configured with, gives the replayed
-  page the theme the session had at each moment.
+  Replays need nothing more: the replay renders the root layout again with
+  each moment's assigns, so the replayed page takes the theme the session
+  had then.
   """
 
   use Phoenix.Component
@@ -50,9 +50,6 @@ defmodule ExampleWeb.Theme do
     do: {:halt, socket |> assign(:theme, theme) |> push_event("theme", %{theme: theme})}
 
   defp handle_event(_event, _params, socket), do: {:cont, socket}
-
-  @doc "The replayed page's `<html>` attributes, from the replayed assigns."
-  def root_attributes(assigns), do: %{"data-theme" => chosen(assigns[:theme])}
 
   defp chosen(theme) when theme in @themes, do: theme
   defp chosen(_theme), do: "system"

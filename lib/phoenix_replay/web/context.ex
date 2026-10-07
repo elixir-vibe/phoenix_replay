@@ -15,19 +15,21 @@ defmodule PhoenixReplay.Web.Context do
 
   @typedoc """
   The dashboard's path, authorization and socket path from the router,
-  the configuration, and the `endpoint` whose static paths the replay
-  frame loads the stylesheet from, when it is not the socket's own.
+  the replay frame's root layout, the configuration, and the `endpoint`
+  whose static paths the replay frame loads the stylesheet from, when it
+  is not the socket's own.
   """
   @type t :: %__MODULE__{
           base_path: String.t(),
           authorize: module() | nil,
           live_socket_path: String.t(),
+          frame_layout: {module(), atom()} | nil,
           config: Config.t(),
           endpoint: module() | nil
         }
 
   @enforce_keys [:base_path, :live_socket_path, :config]
-  defstruct [:base_path, :authorize, :live_socket_path, :config, :endpoint]
+  defstruct [:base_path, :authorize, :live_socket_path, :frame_layout, :config, :endpoint]
 
   @private :phoenix_replay_context
 
