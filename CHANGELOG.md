@@ -2,64 +2,57 @@
 
 ## Unreleased
 
-Pointer, touch and form recording, client state, and a richer player.
+Pointer, touch and form recording, marks, video export, and a richer player and recording list.
+
+### Upgrading
+
+- Ecto storage: run migration version 3, `PhoenixReplay.Storage.Ecto.Migration.up(from: 2, version: 3)`. Saving and listing fail until it runs.
+- Renamed modules: `PhoenixReplay.Recordings` is now `PhoenixReplay.Catalog`, `Recordings.Filter` is `PhoenixReplay.Recording.Filter`, `Recordings.Retention` is `PhoenixReplay.Storage.Retention`, `Recording.Keep` is `PhoenixReplay.Session.TailSampling`, and `Recordings.complete/3` is `PhoenixReplay.Session.Finalizer.complete/3`.
+- `PhoenixReplay.Recording.Summary`'s `source` holds only the source, with `medium` and `campaign` beside it. A recording's `client` is a `PhoenixReplay.Recording.Client` struct, whose `referer` is now `navigated_from`. Saved recordings are upgraded when read.
+- Custom storage backends: the optional `facets/1` callback is replaced by `values/4`, and `PhoenixReplay.Storage.File.query/3` is gone.
+- `:flush`, `:pointer`, `:logs` and `:landing` set on a live session now merge into the global configuration instead of replacing it.
 
 ### Added
 
-- Pointer, touch and scroll recording, off by default: `pointer: true`, globally or per live session, with `:sample`, `:scroll`, `:flush`, `:max_points` and `:limit` to tune it. Call the client module's new `replayRecorder(liveSocket)`; the installer adds it. Every finger of a multi-touch gesture is followed. The zoom a pinch causes is not recorded.
-- Form controls are recorded and replayed with no app code: what users type and choose in inputs, textareas, checkboxes, radios and selects, with or without `phx-change`, once they pause (`state: [debounce: 300]`). Passwords, including one a "show password" toggle turned into text, hidden and file inputs, fields whose `autocomplete` names a card, a password or a one-time code, and anything inside `data-phx-replay-ignore` are never read; other values pass through the sanitizer like event params. `state: [inputs: false]` turns this off.
-- Client state the server never sees: report it with `replayState(key, changes)`, or with a `phx_replay:state` window event from code that cannot import the client module. The replay merges it into the reserved `@phoenix_replay_state` assign, and calls a view's optional `replay_render/1` instead of `render/1` when it defines one; `PhoenixReplay.Replayable` declares it, so `@impl` and Dialyzer check it. `:state` configures its limits.
-- `phx_replay:start` and `phx_replay:stop` window events, and a `data-phx-replay` attribute on `<html>`, tell browser code when the page is recorded.
-- The player draws the recorded pointer over the replay: the cursor with a short trail, a ripple for each press and a fingertip for each touch, and scrolls the page as recorded. **Pointer** switches it off.
-- The player shows whether the viewport is portrait or landscape at each moment, and **Rotate** shows the replay in the other orientation, laying the page out again for it.
-- The replayed page holds where the user had scrolled, after every render and against the wheel. **Follow scroll** in the **View** menu lets it scroll freely.
-- The frame's bar gives the URL most of its width: the pointer is an icon toggle, and the viewport's size and scale open a **View** menu with Fit, Actual size and Rotate.
-- Video export: **Export video** in the player's menu, and `mix phoenix_replay.export <id>`, turn a saved recording into an MP4 of the replayed page and the pointer, at the recorded viewport, with idle stretches shortened. A headless Chromium films the replay through the optional [`playwright_ex`](https://hexdocs.pm/playwright_ex) dependency and `ffmpeg` encodes it, run by the optional [MuonTrap](https://hexdocs.pm/muontrap), which stops it with the export or the VM, on Linux and macOS. Turn it on with `export: [endpoint: MyAppWeb.Endpoint]`; see `PhoenixReplay.Export`. **Cancel**, or `PhoenixReplay.Export.cancel/1`, stops an export, closing its browser and ffmpeg. `:max_shots` bounds an export's screenshots, ffmpeg is stopped when it goes quiet for `:timeout`, and videos a stopped server left are deleted on the next start. The player's export dialog, and the Mix task's flags, choose the range, idle skipping, the pointer, the orientation, and the size, frame rate and quality; see `PhoenixReplay.Export.Options`.
-- A details pane under the event list describes every kind of event, the one playing or one pinned there, instead of opening details under some rows only, which made playback jump. Its divider resizes it, and the browser remembers the height.
-- The **State** tab shows what each event changed inside an assign, such as `tasks[id: 2].done: false → true`, matching list items by `id`, and a value it replaced whole as `"all" → "active"`.
-- SQL, collected metadata, assigns and the code in event rows are highlighted in a monospace font, in colours that follow the theme, with [Lumis](https://hexdocs.pm/lumis), a new dependency. Its grammars compile when the dashboard is first opened, not when the application starts. A collector turns it on for its summary with `PhoenixReplay.Collector.Captured`'s new `:language` field.
-- `PhoenixReplay.Trace` reads recordings from code, for IEx, scripts, tests and coding agents: `find/1` by view, event, text, errors or time, `events/1` as the player lists them, and `state/2` with the assigns at a moment and what its event changed, all plain data with the player's indexes. `mix phoenix_replay.list` and `mix phoenix_replay.show ID [--at INDEX]` print the same for saved recordings. Two agent skills, `phoenix-replay-setup` and `phoenix-replay-debugging`, ship in the package's `skills` directory.
-- Keyboard shortcuts in the player: `Space` or `K` to play and pause, arrows to step, `Shift` with arrows to skip 5 seconds, `Home` and `End`, `E` for the next error, `1`–`4` for the speeds, `F`, `R` and `P` for the view, and `/` to search. Tooltips, menu items and the search field show their keys, and `?` lists them all; see the dashboard guide.
-- Marks: telemetry events collected with `mark: true` mark moments in a session, such as a signup or a completed checkout, like an analytics tool's custom events. The player gives them a lane of their own, names each in its row, and lists them in a header menu that jumps to each; `M` and `Shift` + `M` jump between them, the recording list's **Mark** filter finds sessions by their names, with how many reached each, and `keep: [marks: true]` saves every session that has one. `mark: "Checkout completed"` names a mark; `mark: true` names it after its event. See the telemetry guide's "Marking moments".
-- A button in the dashboard's header switches between the light and dark themes.
-- `PhoenixReplay.Storage` has an optional `child_spec/1` callback for a process a backend needs, which the application starts.
+- Pointer, touch and scroll recording with `pointer: true`. Call `replayRecorder(liveSocket)` in your client code; the installer adds it.
+- Form inputs are recorded and replayed with no app code. Passwords, payment and one-time-code fields are never read; `state: [inputs: false]` turns it off.
+- Client-only state: report it with `replayState(key, changes)`, and the replay renders it from `@phoenix_replay_state`, or with a view's `replay_render/1`.
+- Marks: collect a telemetry event with `mark: true` to mark a moment such as a signup or a checkout. Marks get a timeline lane, a header menu and a list filter, and `keep: [marks: true]` saves every session that reaches one.
+- `phx_replay:start` and `phx_replay:stop` window events, and a `data-phx-replay` attribute on `<html>`, tell browser code when a page is recorded.
+- The player draws the recorded cursor, taps and touches over the replay, and scrolls the page as the user did.
+- The player's **View** menu: Fit, Actual size, Rotate to the other orientation, and Follow scroll.
+- The **State** tab shows what each event changed, such as `tasks[id: 2].done: false → true`.
+- A details pane for the playing or pinned event, with telemetry measurements. Slow queries and calls stand out.
+- SQL, assigns and metadata are syntax-highlighted.
+- Keyboard shortcuts in the player; `?` lists them.
+- A light and dark theme switch.
+- The recording list filters by source, medium and campaign, device, browser, duration and mark, as chips that show how many sessions have each value.
+- A chart of sessions over time above the list, with errors in red; click a bar to narrow the list to it.
+- List rows show the device, browser, where the visit came from and the marks it reached.
+- A time window or a calendar date range for the list. Dashboard times are in the viewer's time zone.
+- Video export: turn a recording into an MP4 from the player's menu or with `mix phoenix_replay.export <id>`. Set `export: [endpoint: MyAppWeb.Endpoint]`; it needs `ffmpeg` and the optional `playwright_ex` and `muontrap` dependencies. See `PhoenixReplay.Export`.
+- `PhoenixReplay.Export.Queue.Oban` runs exports in your Oban queue, so they survive restarts and deploys.
+- `PhoenixReplay.Trace`, `mix phoenix_replay.list` and `mix phoenix_replay.show` read recordings as plain data, for IEx, tests and coding agents. Two agent skills ship in the package's `skills` directory.
+- Optional `child_spec/1` and `histogram/4` callbacks for storage backends.
 
 ### Changed
 
-- Video exports wait in a `PhoenixReplay.Export.Queue`, chosen with the new `:queue` export option. The in-memory queue is now `PhoenixReplay.Export.Queue.Local`, the default. `PhoenixReplay.Export.cancel/2`, `get/2` and `latest/2` take the configuration too.
-- The recording list filters by **Source**, **Medium** and **Campaign**, as analytics tools tell where a visit came from: the landing's UTM parameters, else the referring site and `referral`, else `(direct)` and `(none)`. Also by **Device** (phone, tablet or desktop), **Browser** and **Duration**. Each part of a row's "from google / cpc / spring", and the campaign and referrer in the player's Visit tab, link to the list filtered by it. `PhoenixReplay.Trace.find/2` and `mix phoenix_replay.list` take the same criteria, and the search also finds sources, campaigns and mark names.
-- The recording list charts the matching sessions over time, in bars that begin at the viewer's own hours and midnights, with those that had an error in red and a baseline where none started; a bar narrows the list to its stretch. When sampling leaves sessions out, a note says which are saved. `PhoenixReplay.Storage` has an optional `histogram/4` for the chart, which `PhoenixReplay.Storage.Ecto` counts in SQL.
-- The recording list flags the marks each session reached next to its view, each a link to the sessions that reached it.
-- The player's details pane shows a telemetry event's measurements besides its duration, and collected events slower than `keep: [slower_than: ms]`, or 100 ms without it, show their duration in amber and a larger marker on the timeline.
-- `PhoenixReplay.Export.Queue.Oban` keeps video exports in your Oban queue, with `export: [queue: {PhoenixReplay.Export.Queue.Oban, oban: Oban, queue: :replay_exports}]`: they survive restarts and deploys and run on any node, one per recording, with progress and cancelling as before. Oban is an optional dependency. Tested on SQLite and on DuckDB through oban_quackdb.
-- Menus, pickers and tooltips stay in the window and are no longer cut off by scrolling panels: [Floating UI](https://floating-ui.com) places them, opening the other way when there is no room.
-- Times in the dashboard are in the viewer's time zone, with the full time and UTC on hover. **Started** picks the last 15 minutes, hour, 24 hours, 7 days or 30 days, or a range of days on a calendar ([Cally](https://wicky.nillia.ms/cally/)) with the times they start and end, in the viewer's time zone, kept in the URL as `from` and `to` in UTC. `PhoenixReplay.Trace.find/2` takes `:from` and `:to` as `DateTime`s, and `mix phoenix_replay.list` `--from` and `--to`.
-- The recording list's filters are chips: the search, the time window and **With errors** stay in the bar, and **+ Filter** adds View, Event or Min events from a picker that lists the values recordings have, with how many have each. Click a chip to change it, or × to remove it. The phones' **Filters** button and quick filters are gone, since the bar now fits.
-- `PhoenixReplay.Storage.Ecto` needs migration version 3, `PhoenixReplay.Storage.Ecto.Migration.up(from: 2, version: 3)`: it adds `medium`, `campaign`, `device_type` and `browser` columns and a `phoenix_replay_marks` table, and fills the new columns of rows saved earlier, except their browser. Saving and listing fail until it runs.
-- `PhoenixReplay.Recording.Summary`'s `source` is now only the source, with `medium` and `campaign` beside it, where it held `"google / cpc / spring"`; summaries saved earlier are read that way. It gains `marks`, `device_type` and `browser`, and `event_names` holds only `handle_event/3` names again. Min events left the filter menu for **Duration**, though `?min_events=` still works.
-- `PhoenixReplay.Storage`'s optional `facets/1` is replaced by `values/4`, which counts a filter field's values among the recordings matching the rest of a filter. `PhoenixReplay.Storage.Ecto` counts views in SQL. A custom backend that implemented `facets/1` can drop it; without `values/4`, values are counted from `list/1`.
-- Resizes and rotations are recorded as soon as they settle, rather than with the user's next click or key press, while `replayRecorder` runs.
-- Modules are renamed: `PhoenixReplay.Recordings` is now `PhoenixReplay.Catalog`, `PhoenixReplay.Recordings.Filter` is `PhoenixReplay.Recording.Filter`, `PhoenixReplay.Recordings.Retention` is `PhoenixReplay.Storage.Retention`, `PhoenixReplay.Recording.Keep` is `PhoenixReplay.Session.TailSampling`, and `Recordings.complete/3` is `PhoenixReplay.Session.Finalizer.complete/3`. The `:retention` and `:keep` options are unchanged.
-- A recording's `client` is a `PhoenixReplay.Recording.Client` struct, and its `referer` is now `navigated_from`, so it no longer reads like the landing's HTTP referrer. Older recordings are upgraded when read.
-- Overriding `:flush`, `:pointer`, `:logs` or `:landing` in a live session merges into the global configuration instead of starting from the defaults. `nil` and `false` switch one off; `true` switches it on.
-- `PhoenixReplay.Sanitizer.Default` also filters card numbers and one-time codes, and in params and form values, CVV and CSC codes, social security numbers, PINs and one-time passwords, matching those short names only as whole words of a key. It matches every name in one pass, several times faster than before.
-- LiveView internals such as `:__changed__`, `:uploads` and `:streams` are dropped from recorded assigns before the sanitizer runs, so custom sanitizers no longer need to.
-- `PhoenixReplay.Storage.File.query/3` is gone; file storage is paged from `list/1`.
-- In the dashboard, everything clickable shows the pointing-hand cursor, only values too long for their row in the **State** tab expand, and a loader covers the replay until its frame has connected.
+- The default sanitizer also filters card numbers, CVVs, social security numbers, PINs and one-time codes.
+- LiveView internals such as `:__changed__`, `:uploads` and `:streams` are dropped from recorded assigns before your sanitizer sees them.
+- Resizes and rotations are recorded as soon as they settle, not with the next click.
+- Menus and tooltips are no longer cut off by scrolling panels.
+- [Lumis](https://hexdocs.pm/lumis) is a new dependency, for syntax highlighting.
 
 ### Fixed
 
-- In a cluster, a video's download link works on any node, not only the one that queued and rendered the export: the video is streamed from the node it is on.
-- Scrubbing to the start, **Previous** at the first render, or a link to the mount no longer shows "Could not render" in the player: it stops at the first render, the first moment the view has assigns to render with.
-- The player loads its replay frame once, after it has connected, instead of loading it, then loading it again with the connected player's channel.
-- Starting the application a second time on the same machine, such as `iex -S mix` or a Mix task next to a running server, no longer saves the server's running sessions as interrupted and deletes their chunks. File storage tags part files with the VM's process id and recovers only those whose VM is gone; on a system without `kill` to tell, it leaves them.
-- Scrubbing to a moment between two events keeps that moment instead of snapping back to the earlier event, and while dragging over a stretch without events the thumb stays under the pointer and the clock shows its time, instead of flicking back to the last event, such as 0:00.
-- Pausing keeps the time playback reached instead of jumping back to the last event.
-- **Copy link** links the exact moment, `?at=<index>&t=<ms>`, to the hundredth of a second as the clock shows it, instead of the event before it.
-- Switching from 100% back to Fit after scrolling the replay no longer leaves the page shifted out of view.
-- Collected details no longer break words mid-way, such as SQL table names.
-- A LiveComponent whose recording fails, such as with a raising sanitizer, is reported with `[:phoenix_replay, :collector, :exception]` instead of logged.
-- A save that raised, such as an Ecto save while the database is down, is retried instead of dropping the recording.
+- Scrubbing to the start no longer shows "Could not render".
+- Scrubbing between events and pausing keep the moment you chose instead of jumping back to the previous event.
+- **Copy link** links the exact moment the clock shows.
+- Switching from 100% back to Fit after scrolling no longer shifts the page out of view.
+- Collected details, such as SQL, no longer break words mid-way.
+- Running `iex -S mix` or a Mix task next to a running server no longer marks the server's sessions as interrupted.
+- A save that fails, such as while the database is down, is retried instead of losing the recording.
+- A LiveComponent that fails to record is reported through `[:phoenix_replay, :collector, :exception]` telemetry instead of a log line.
 
 ## 0.5.1 - 2026-10-04
 
