@@ -133,6 +133,12 @@ defmodule PhoenixReplay.ConfigTest do
     assert_raise ArgumentError, ~r/:media/, fn -> Config.new(client: [media: [:battery]]) end
   end
 
+  test "takes a module as :replay, not a boolean" do
+    assert Config.new(replay: MyAppWeb.Replay).replay == MyAppWeb.Replay
+    assert Config.new(replay: nil).replay == nil
+    assert_raise ArgumentError, ~r/:replay/, fn -> Config.new(replay: true) end
+  end
+
   test "reads :context, the client config's former name, with a warning" do
     warning =
       ExUnit.CaptureIO.capture_io(:stderr, fn ->

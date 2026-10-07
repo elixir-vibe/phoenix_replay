@@ -456,7 +456,9 @@ defmodule PhoenixReplay.Config do
     do: %{config | release: release}
 
   defp put({:replay, off}, config) when off in @off, do: %{config | replay: nil}
-  defp put({:replay, module}, config) when is_atom(module), do: %{config | replay: module}
+
+  defp put({:replay, module}, config) when is_atom(module) and not is_boolean(module),
+    do: %{config | replay: module}
 
   defp put({:pointer, value}, config),
     do: %{config | pointer: switch(:pointer, value, config.pointer, @pointer, &positive?/2)}
