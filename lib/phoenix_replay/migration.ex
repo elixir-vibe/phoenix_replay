@@ -31,6 +31,11 @@ defmodule PhoenixReplay.Migration do
   recording made before versions were kept gets them all, so write `up/2`
   to leave assigns that already have the new shape as they are, as
   `Map.put_new/3` does.
+
+  As with Ecto's migrations, a version says when a migration was written,
+  not when it shipped: one merged after a newer one, with an older
+  timestamp, is skipped for recordings made in between, whose version is
+  already past it. Give a migration that lands late a fresh timestamp.
   """
 
   @doc """
