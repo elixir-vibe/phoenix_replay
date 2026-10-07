@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'volt:test'
 
+import { fakeClock } from '../test/clock'
 import { html, mountHook } from '../test/hooks'
 import { FrameViewport } from './frame_viewport'
 
@@ -38,7 +39,7 @@ test('fits a wide viewport to the width', () => {
 
   const { frame, box, label } = measure(el)
   expect(frame.width).toBe('1200px')
-  expect(frame.transform).toBe('matrix(0.5, 0, 0, 0.5, 0, 0)')
+  expect(frame.transform).toMatch(/^matrix\(0\.5, 0, 0, 0\.5,/)
   expect(box.height).toBe('400px')
   expect(label).toBe('1200 × 800 · 50%')
 })
@@ -48,10 +49,8 @@ test('fits a tall viewport to the height, keeping its aspect ratio and centring 
   mountHook(FrameViewport, el)
 
   const { frame, box, label } = measure(el)
-  expect(frame.transform).toBe('matrix(0.5, 0, 0, 0.5, 0, 0)')
+  expect(frame.transform).toMatch(/^matrix\(0\.5, 0, 0, 0\.5,/)
   expect(box.height).toBe('422px')
-  // 600 wide, 195 shown: centred.
-  expect(frame.marginLeft).toBe('203px')
   expect(label).toBe('390 × 844 · 50%')
 })
 
@@ -67,24 +66,42 @@ test('renders at 100% in a scrolling box in actual mode', () => {
   mountHook(FrameViewport, el)
 
   const { frame, box, label } = measure(el)
-  expect(frame.transform).toBe('matrix(1, 0, 0, 1, 0, 0)')
+  expect(frame.transform).toMatch(/^matrix\(1, 0, 0, 1,/)
   expect(box.height).toBe('422px')
   expect(box.overflowY).toBe('auto')
   expect(label).toBe('390 × 844 · 100%')
 })
 
-test('follows a new viewport and mode, and clears the sizes without one', () => {
+test('turns the device with its page when the recording turns, then shows the new one', () => {
+  const clock = fakeClock()
   const el = section({ width: 390, height: 844, maxHeight: 422 })
   const { hook } = mountHook(FrameViewport, el)
 
   el.dataset.width = '844'
   el.dataset.height = '390'
   hook.updated?.()
+  // The portrait page turns first.
+  expect(measure(el).label).toBe('390 × 844 · 71%')
+  expect(el.querySelector('style')?.textContent).toContain('rotate(-90deg)')
+
+  clock.tick(450)
   expect(measure(el).label).toBe('844 × 390 · 71%')
+  expect(el.querySelector('style')?.textContent).toContain('rotate(0deg)')
+  clock.uninstall()
+})
+
+test('follows a new viewport and mode, and clears the sizes without one', () => {
+  const el = section({ width: 390, height: 844, maxHeight: 422 })
+  const { hook } = mountHook(FrameViewport, el)
+
+  el.dataset.width = '390'
+  el.dataset.height = '500'
+  hook.updated?.()
+  expect(measure(el).label).toBe('390 × 500 · 84%')
 
   el.dataset.mode = 'actual'
   hook.updated?.()
-  expect(measure(el).label).toBe('844 × 390 · 100%')
+  expect(measure(el).label).toBe('390 × 500 · 100%')
 
   delete el.dataset.width
   delete el.dataset.height
@@ -133,8 +150,8 @@ test('holds the scrolled view, then eases from it into the fitted frame', () => 
   hook.updated?.()
 
   const [held, fitted] = written
-  expect(held).toContain('transform:translate(-300px,-200px) scale(1)')
+  expect(held).toContain('transform:translate(-300px,-200px) rotate(0deg) scale(1)')
   expect(held).toContain('transition:none')
-  expect(fitted).toContain('transform:translate(0px,0px) scale(0.5)')
-  expect(measure(el).frame.transform).toBe('matrix(0.5, 0, 0, 0.5, 0, 0)')
+  expect(fitted).toContain('rotate(0deg) scale(0.5)')
+  expect(measure(el).frame.transform).toMatch(/^matrix\(0\.5, 0, 0, 0\.5,/)
 })

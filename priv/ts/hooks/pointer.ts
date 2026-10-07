@@ -25,9 +25,7 @@ const ARROW = 'M0 0V16.5L4.6 12.2L7.6 18.8L10.3 17.6L7.4 11.1H13.2Z'
  * It follows the time the Scrubber announces, and reads its size on every
  * draw, so whoever holds it may resize it. It scrolls the page only while
  * the element has `data-follow-scroll`, and then on every draw, so a page
- * that re-rendered or was scrolled by hand goes back where the user was. While the element has
- * `data-rotated`, the frame shows the other orientation than recorded, so
- * nothing is drawn and the page is not scrolled.
+ * that re-rendered or was scrolled by hand goes back where the user was.
  */
 export class Pointer extends ViewHook {
   private track: Track = { moves: [], presses: [], scrolls: [] }
@@ -76,9 +74,6 @@ export class Pointer extends ViewHook {
     this.at = ms
     this.size()
     svg.replaceChildren()
-
-    if (this.el.dataset.rotated !== undefined) return
-
     this.scroll(ms)
 
     const mouse = this.moves.get(0) ?? []

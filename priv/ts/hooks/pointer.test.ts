@@ -123,21 +123,3 @@ test('scrolls the replayed page as recorded', async () => {
   at(520)
   expect(frame.contentWindow?.scrollY).toBe(600)
 })
-
-test('draws nothing and leaves the page unscrolled while the frame is rotated', async () => {
-  const el = overlay()
-  const frame = el.parentElement?.querySelector('iframe') as HTMLIFrameElement
-  await new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }))
-  el.dataset.rotated = ''
-  const { hook } = mountHook(Pointer, el)
-
-  at(600)
-  expect(el.querySelector('svg')?.childElementCount).toBe(0)
-  expect(frame.contentWindow?.scrollY).toBe(0)
-
-  // Turned back, it draws and scrolls the moment it is at.
-  delete el.dataset.rotated
-  hook.updated()
-  expect(el.querySelector('circle')).not.toBe(null)
-  expect(frame.contentWindow?.scrollY).toBe(120)
-})

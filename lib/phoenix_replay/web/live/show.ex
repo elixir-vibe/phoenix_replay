@@ -30,7 +30,7 @@ defmodule PhoenixReplay.Web.Live.Show do
   import PhoenixReplay.Web.Components.{Export, Layout, State}
   import PhoenixReplay.Web.Components.Player.{EventList, Frame, Header, Playback, Visit}
 
-  alias PhoenixReplay.Recording.{Event, Filter, PointerTrack, Timeline}
+  alias PhoenixReplay.Recording.{Client, Event, Filter, PointerTrack, Timeline}
   alias PhoenixReplay.{Catalog, Export}
   alias PhoenixReplay.Export.Options
   alias PhoenixReplay.Web.{Context, Highlight, Layouts, Params}
@@ -312,7 +312,6 @@ defmodule PhoenixReplay.Web.Live.Show do
       "to" => "",
       "skip_idle" => to_string(options.skip_idle),
       "pointer" => "true",
-      "rotated" => to_string(socket.assigns.rotated?),
       "size" => "recorded",
       "fps" => to_string(options.fps),
       "quality" => "balanced"
@@ -423,6 +422,9 @@ defmodule PhoenixReplay.Web.Live.Show do
     :ok = Channel.seek(socket.assigns.channel, timeline.index)
 
     assign(socket,
+      # Turned to look at it, the device turns back when the recording turns.
+      rotated?:
+        socket.assigns.rotated? and not turned?(socket.assigns[:viewport], timeline.viewport),
       timeline: timeline,
       index: timeline.index,
       at: if(timeline.event, do: timeline.event.at, else: 0),
@@ -434,6 +436,9 @@ defmodule PhoenixReplay.Web.Live.Show do
       changed: Event.changed_keys(timeline.event)
     )
   end
+
+  defp turned?(%{} = before, %{} = now), do: Client.orientation(before) != Client.orientation(now)
+  defp turned?(_before, _now), do: false
 
   # The next event's offset, or the end of the recording after the last.
   defp next_at(timeline, duration_ms) do

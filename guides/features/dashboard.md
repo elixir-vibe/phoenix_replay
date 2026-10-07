@@ -68,7 +68,7 @@ Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&ev
 
 The header names the view, the page and when the session started, with its duration and event count. When the session had errors, **"2 errors · jump to first"** takes you to the first one. **Copy link to 0:07.25** copies a link to the current moment: `/admin/replay/<id>?at=<index>&t=<ms>` opens the player at that event, and at the time `t` in milliseconds when it falls between that event and the next.
 
-The replayed page sits under a bar showing its URL at that moment. When the browser's viewport was recorded, the page renders at that size, and the bar shows its orientation, size and scale. That chip opens the **View** menu: fit the page to the window or show it at its actual size in a scrolling box, or **Rotate** it to the other orientation.
+The replayed page sits under a bar showing its URL at that moment. When the browser's viewport was recorded, the page renders at that size, and the bar shows its orientation, size and scale. That chip opens the **View** menu: fit the page to the window or show it at its actual size in a scrolling box, or **Rotate** the device a quarter turn, to look at it the other way round: the page keeps the layout it was recorded in, with its pointer and scrolling, and the device turns back when the recording next turns. When the user turned their phone, the replay shows the device turning, then the page in its new layout.
 
 Below it, play at 1×, 2×, 5× or 10×, step to the previous or next event, and see the time to the hundredth of a second. The timeline has a lane of markers per kind of event, LiveView, Marks, Telemetry and Logs, with errors larger and red, marks larger and pink, and events slower than `keep: [slower_than: ms]`, or 100 ms, larger and amber. Click or drag it to seek, or focus it and use `←`, `→` and `Space`.
 
@@ -113,7 +113,7 @@ The same export runs from the command line, with no server running:
 mix phoenix_replay.export <recording-id> --output checkout-bug.mp4 --from 12 --to 40 --fps 60
 ```
 
-Its flags are the dialog's options: `--from` and `--to` in seconds, `--no-skip-idle`, `--no-pointer`, `--rotated`, `--size recorded|1x|half`, `--fps 15|30|60` and `--quality small|balanced|best`.
+Its flags are the dialog's options: `--from` and `--to` in seconds, `--no-skip-idle`, `--no-pointer`, `--size recorded|1x|half`, `--fps 15|30|60` and `--quality small|balanced|best`.
 
 A recording holds no pixels, so an export replays it in a headless Chromium and films it, the way the player shows it: at the recorded viewport and pixel ratio, rotations included, with the cursor, touches, ripples and scrolling drawn over it. It films at 30 frames per second but screenshots only when the picture changes, and shortens stretches without activity to three seconds, so an export takes about as long as the activity it shows, not the whole session, and makes a small file. `ffmpeg` encodes it as H.264, run by [MuonTrap](https://hexdocs.pm/muontrap), which stops it with the export, even when your app's VM goes down, so no `ffmpeg` is left running.
 

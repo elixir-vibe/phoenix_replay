@@ -73,12 +73,12 @@ defmodule PhoenixReplay.Export.Runtime do
 
   @doc """
   The address of the stage for a recording, with a token that opens it,
-  and the export's pointer and orientation.
+  and whether the export draws the pointer.
   """
   @spec stage_url(t(), PhoenixReplay.Recording.id(), Options.t()) :: String.t()
   def stage_url(runtime, recording_id, %Options{} = options) do
     token = Phoenix.Token.sign(:persistent_term.get(@secret), @salt, recording_id)
-    query = URI.encode_query(pointer: options.pointer, rotated: options.rotated)
+    query = URI.encode_query(pointer: options.pointer)
     "#{runtime.url}/_phoenix_replay/stage/#{token}?#{query}"
   end
 

@@ -20,7 +20,7 @@ Pointer, touch and form recording, marks, video export, and a richer player and 
 - Marks: collect a telemetry event with `mark: true` to mark a moment such as a signup or a checkout. Marks get a timeline lane, a header menu and a list filter, and `keep: [marks: true]` saves every session that reaches one.
 - `phx_replay:start` and `phx_replay:stop` window events, and a `data-phx-replay` attribute on `<html>`, tell browser code when a page is recorded.
 - The player draws the recorded cursor, taps and touches over the replay, and scrolls the page as the user did.
-- The player's **View** menu: Fit, Actual size, Rotate to the other orientation, and Follow scroll.
+- The player's **View** menu: Fit, Actual size, Rotate, and Follow scroll. **Rotate** turns the shown device to look at it the other way round; when the user turned their phone, the replay shows it turning.
 - The **State** tab shows what each event changed, such as `tasks[id: 2].done: false → true`.
 - A details pane for the playing or pinned event, with telemetry measurements. Slow queries and calls stand out.
 - SQL, assigns and metadata are syntax-highlighted.

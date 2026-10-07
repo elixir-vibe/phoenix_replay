@@ -23,7 +23,6 @@ defmodule Mix.Tasks.PhoenixReplay.Export do
     * `--from SECONDS`, `--to SECONDS` — the range of the recording
     * `--no-skip-idle` — keep stretches without activity whole
     * `--no-pointer` — leave the pointer out
-    * `--rotated` — show the other orientation than recorded
     * `--size recorded|1x|half` — the video's size
     * `--fps 15|30|60` — the frame rate
     * `--quality small|balanced|best` — the trade between size and detail
@@ -40,7 +39,6 @@ defmodule Mix.Tasks.PhoenixReplay.Export do
     to: :string,
     skip_idle: :boolean,
     pointer: :boolean,
-    rotated: :boolean,
     size: :string,
     fps: :string,
     quality: :string

@@ -58,12 +58,11 @@ defmodule PhoenixReplay.Export.Schedule do
     * `:hold` — milliseconds the last moment is held (required)
     * `:from` and `:to` — the range of the recording to show, in
       milliseconds; `nil` for its first render and its end
-    * `:rotated` — show every viewport in the other orientation
   """
   @spec new(Recording.t(), PointerTrack.t(), keyword()) :: t()
   def new(%Recording{} = recording, track, opts) do
     fps = Keyword.fetch!(opts, :fps)
-    viewports = viewports(recording, Keyword.get(opts, :rotated, false))
+    viewports = viewports(recording)
     first = Timeline.first_render_index(recording)
     start = max(start_at(recording, first), Keyword.get(opts, :from) || 0)
     ending = max(Timeline.duration_ms(recording), PointerTrack.end_at(track))
@@ -98,7 +97,7 @@ defmodule PhoenixReplay.Export.Schedule do
 
   # Every viewport the recording had, by event index: the client's until
   # the first `:viewport` event.
-  defp viewports(%Recording{events: events, client: client}, rotated?) do
+  defp viewports(%Recording{events: events, client: client}) do
     initial = client.viewport || Client.default_viewport()
 
     events
@@ -106,7 +105,6 @@ defmodule PhoenixReplay.Export.Schedule do
       %{type: :viewport, data: viewport}, _previous -> viewport
       _event, previous -> previous
     end)
-    |> Enum.map(&if(rotated?, do: %{&1 | width: &1.height, height: &1.width}, else: &1))
     |> List.to_tuple()
   end
 

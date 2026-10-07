@@ -700,11 +700,11 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       refute has_element?(view, "#replay-frame.pointer-events-none")
       refute has_element?(view, "#replay-pointer[data-follow-scroll]")
 
-      # Rotated, the recorded positions do not fit, so the page scrolls freely.
+      # Turned to look at it, the page keeps its layout, so it still follows.
       view |> element("#replay-follow-scroll") |> render_click()
       view |> element("#replay-rotate") |> render_click()
-      assert has_element?(view, "#replay-follow-scroll[disabled]")
-      refute has_element?(view, "#replay-frame.pointer-events-none")
+      refute has_element?(view, "#replay-follow-scroll[disabled]")
+      assert has_element?(view, "#replay-frame.pointer-events-none")
 
       # A recording without scrolling has nothing to follow.
       {:ok, view, _html} = live(build_conn(), "/replay/show")
@@ -712,7 +712,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       refute has_element?(view, "#replay-frame.pointer-events-none")
     end
 
-    test "rotates the replay to the other orientation, without the pointer" do
+    test "turns the shown device to look at it, keeping the recorded page and pointer" do
       recording = Fixtures.counter_recording(id: "turned")
 
       pointer = %Event{
@@ -721,25 +721,33 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
         data: %{span: 100, moves: [100, 5, 5, 0], presses: [], scrolls: []}
       }
 
+      landscape = %Event{
+        at: PhoenixReplay.Recording.Timeline.duration_ms(recording) + 1,
+        type: :viewport,
+        data: %{width: 844, height: 390, dpr: 3, angle: 90}
+      }
+
       Storage.save(Fixtures.storage(), %{
         recording
-        | client: client(%{width: 390, height: 844, dpr: 3}, nil),
-          events: [pointer | recording.events]
+        | client: client(%{width: 390, height: 844, dpr: 3, angle: 0}, nil),
+          events: [pointer | recording.events] ++ [landscape]
       })
 
       {:ok, view, _html} = live(build_conn(), "/replay/turned")
-      refute has_element?(view, "#replay-pointer-switch[disabled]")
+      refute has_element?(view, "#replay-viewport[data-turn]")
 
       view |> element("#replay-rotate") |> render_click()
       assert has_element?(view, ~s(#replay-rotate[aria-checked="true"]))
-      assert has_element?(view, ~s(#replay-viewport[data-width="844"][data-height="390"]))
-      assert has_element?(view, ~s(#replay-orientation[data-orientation="landscape"]))
-      assert has_element?(view, "#replay-pointer-switch[disabled]")
-      assert has_element?(view, "#replay-pointer[data-rotated]")
-
-      view |> element("#replay-rotate") |> render_click()
+      assert has_element?(view, "#replay-viewport[data-turn]")
+      # The page keeps its recorded viewport, and the pointer stays.
       assert has_element?(view, ~s(#replay-viewport[data-width="390"][data-height="844"]))
-      refute has_element?(view, "#replay-pointer[data-rotated]")
+      refute has_element?(view, "#replay-pointer-switch[disabled]")
+
+      # When the recording turns, the device turns back with it.
+      render_click(view, "seek", %{"index" => length(recording.events) + 1})
+      assert has_element?(view, ~s(#replay-viewport[data-width="844"][data-angle="90"]))
+      refute has_element?(view, "#replay-viewport[data-turn]")
+      assert has_element?(view, ~s(#replay-rotate[aria-checked="false"]))
     end
 
     test "shows how the visit started" do
