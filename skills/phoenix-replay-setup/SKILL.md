@@ -78,7 +78,7 @@ config :phoenix_replay,
 
 ## Pitfalls
 
-- A view that renders differently because of browser-only code, such as a list a script filters, replays without that code. Report the state with `replayState(key, changes)` and render it with `replay_render/1`, declared by `PhoenixReplay.Replayable`.
+- A view that renders differently because of browser-only code, such as a list a script filters, replays without that code. Report the state with `replayState(key, changes)` and render it with `replay_render/1`, declared by `PhoenixReplay.Replay.View`.
 - Streams and uploads are not replayed: their contents are not kept in assigns.
 - Do not name an assign `:phoenix_replay_state`; the replay uses it.
 - Recording state is buffered in memory until a session ends. Set `max_memory:` when recording many long sessions with `keep:` sampling.

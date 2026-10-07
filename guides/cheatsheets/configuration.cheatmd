@@ -125,13 +125,13 @@ config :phoenix_replay,
 
 On by default; `state: false` records none, and `inputs: false` records everything but form controls. Needs `replayRecorder(liveSocket)` in the browser. See [Recording](recording.md#client-state).
 
-### The replayed page's `<html>`
+### How recordings replay
 
 ```elixir
-config :phoenix_replay, root_attributes: {MyAppWeb.Theme, :root_attributes}
+config :phoenix_replay, replay: MyAppWeb.Replay
 ```
 
-A function from the replayed view's assigns to attributes for the replayed page's `<html>`, such as a theme the server keeps. See [Recording](recording.md#themes).
+A `PhoenixReplay.Replay` module adapting the assigns older recordings hold before each replayed render, or giving the replayed page's `<html>` attributes your layout takes from elsewhere. Optional: an assign a recording lacks renders as `nil`, and your root layout's attributes follow the replayed assigns by themselves. See [Recording](recording.md#older-recordings).
 
 ### Video export
 

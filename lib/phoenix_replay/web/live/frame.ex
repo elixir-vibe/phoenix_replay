@@ -35,6 +35,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   use Phoenix.LiveView
 
+  alias PhoenixReplay.Replay
   alias PhoenixReplay.Recording.{State, Timeline}
   alias PhoenixReplay.Catalog
   alias PhoenixReplay.Web.{Context, Layouts, Rendering}
@@ -146,7 +147,11 @@ defmodule PhoenixReplay.Web.Live.Frame do
     timeline = Timeline.seek(timeline, index)
     states = timeline.components
     {flash, recorded} = Map.pop(timeline.assigns, :flash, %{})
-    recorded = Rendering.assignable(recorded)
+    %{view: view} = socket.assigns[@private]
+
+    recorded =
+      Replay.prepare(Context.fetch(socket).config.replay, view, Rendering.assignable(recorded))
+
     keys = Map.keys(recorded)
 
     socket
@@ -216,15 +221,8 @@ defmodule PhoenixReplay.Web.Live.Frame do
   end
 
   defp root_attributes(socket) do
-    case Context.fetch(socket).config.root_attributes do
-      {module, function} ->
-        socket.assigns
-        |> then(&apply(module, function, [&1]))
-        |> Map.new(fn {name, value} -> {to_string(name), value && to_string(value)} end)
-
-      nil ->
-        %{}
-    end
+    %{view: view} = socket.assigns[@private]
+    Replay.root_attributes(Context.fetch(socket).config.replay, view, socket.assigns)
   end
 
   defp replace_flash(socket, flash) do

@@ -90,11 +90,25 @@ A theme the user chooses in your app, rather than in their system, belongs on th
 
 The replay needs nothing more. When the dashboard's `:frame_layout` is your root layout, the replay renders it again with each moment's assigns and gives the replayed page's `<html>` and `<body>` the attributes it renders then, as your layout would have live. The example app's `ExampleWeb.Theme` keeps a light, dark or system theme this way. A theme that follows the system is replayed from the recorded color scheme.
 
-For a layout whose attributes come from something other than its assigns, `:root_attributes` names a function from the replayed assigns to attributes for `<html>`:
+### Older recordings
+
+Replay renders today's templates with the assigns recorded then. An assign a recording lacks is rendered as `nil`; see [Limitations](#limitations). When your assigns changed shape since, such as a `:dark_mode` boolean that became a `:theme`, a `PhoenixReplay.Replay` module adapts them before each replayed render. It can also give the replayed page's `<html>` attributes that your layout takes from something other than its assigns:
 
 ```elixir
-config :phoenix_replay, root_attributes: {MyAppWeb.Replay, :root_attributes}
+config :phoenix_replay, replay: MyAppWeb.Replay
+
+defmodule MyAppWeb.Replay do
+  @behaviour PhoenixReplay.Replay
+
+  @impl true
+  def prepare(_view, %{dark_mode: dark?} = assigns),
+    do: Map.put_new(assigns, :theme, if(dark?, do: "dark", else: "light"))
+
+  def prepare(_view, assigns), do: assigns
+end
 ```
+
+`PhoenixReplay.Replay` is for the whole app; how one LiveView renders in a replay is `PhoenixReplay.Replay.View`'s `replay_render/1`, below.
 
 ## Pointer, touches and scrolling
 
@@ -199,12 +213,12 @@ A library that wants to know anyway can: `replayRecorder` dispatches `phx_replay
 
 ### Rendering what the browser did
 
-The replay merges the state recorded up to the current moment into a reserved assign, `@phoenix_replay_state`: a map of each key to its merged fields, string keys throughout, empty before any report. A view whose live render depends on code in the browser defines `replay_render/1`, the optional callback of `PhoenixReplay.Replayable`, which the replay calls instead of `render/1` with the same assigns plus that one:
+The replay merges the state recorded up to the current moment into a reserved assign, `@phoenix_replay_state`: a map of each key to its merged fields, string keys throughout, empty before any report. A view whose live render depends on code in the browser defines `replay_render/1`, the optional callback of `PhoenixReplay.Replay.View`, which the replay calls instead of `render/1` with the same assigns plus that one:
 
 ```elixir
-@behaviour PhoenixReplay.Replayable
+@behaviour PhoenixReplay.Replay.View
 
-@impl PhoenixReplay.Replayable
+@impl PhoenixReplay.Replay.View
 def replay_render(assigns) do
   query = get_in(assigns.phoenix_replay_state, ["search", "query"])
 

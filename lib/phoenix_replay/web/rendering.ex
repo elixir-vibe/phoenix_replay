@@ -44,7 +44,7 @@ defmodule PhoenixReplay.Web.Rendering do
   """
   @spec render(module(), map()) :: Phoenix.LiveView.Rendered.t()
   def render(view, assigns) do
-    # The callback of PhoenixReplay.Replayable is optional, so it is looked up.
+    # The callback of PhoenixReplay.Replay.View is optional, so it is looked up.
     if Code.ensure_loaded?(view) and function_exported?(view, :replay_render, 1),
       do: view.replay_render(Map.put(assigns, :__changed__, nil)),
       else: view.render(assigns)

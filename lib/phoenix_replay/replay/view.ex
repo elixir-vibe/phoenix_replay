@@ -1,13 +1,16 @@
-defmodule PhoenixReplay.Replayable do
+defmodule PhoenixReplay.Replay.View do
   @moduledoc """
+  How one LiveView renders in a replay. For the whole app, such as
+  adapting the assigns older recordings have, see `PhoenixReplay.Replay`.
+
   A LiveView whose live render depends on code in the browser, such as a
   list a script filters, can say how to render without that code.
 
       defmodule MyAppWeb.SearchLive do
         use MyAppWeb, :live_view
-        @behaviour PhoenixReplay.Replayable
+        @behaviour PhoenixReplay.Replay.View
 
-        @impl PhoenixReplay.Replayable
+        @impl PhoenixReplay.Replay.View
         def replay_render(assigns) do
           query = get_in(assigns.phoenix_replay_state, ["search", "query"])
           assigns |> assign(:query, query) |> render()
