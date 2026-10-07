@@ -769,6 +769,14 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       assert has_element?(view, ~s(#replay-visit a[href="/replay?source=www.google.com"]))
       assert visit =~ "/pricing"
       assert visit =~ "de-DE"
+
+      # Each value is as recorded, without the template's line breaks, which
+      # the list would keep.
+      values =
+        visit |> LazyHTML.from_fragment() |> LazyHTML.query("dd") |> Enum.map(&LazyHTML.text/1)
+
+      assert "cpc" in values
+      assert "google" in values
     end
 
     test "links the sessions of one browser tab" do

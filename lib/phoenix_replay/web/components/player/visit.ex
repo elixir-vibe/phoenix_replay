@@ -37,6 +37,7 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
         user_agent: client.user_agent,
         navigated_from: client.navigated_from,
         landing: client.landing,
+        params: if(client.landing, do: Enum.sort(client.landing.params), else: []),
         headers: client.headers,
         traffic: Client.traffic(client)
       )
@@ -115,13 +116,9 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
             </.local_time>
           </span>
         </div>
+        <%!-- The list keeps a value's whitespace, so each item is on one line. --%>
         <.data_list>
-          <:item
-            :for={{name, value} <- Enum.sort(if(@landing, do: @landing.params, else: %{}))}
-            title={name}
-          >
-            {value}
-          </:item>
+          <:item :for={{name, value} <- @params} title={name}>{value}</:item>
           <:item :if={@landing && @landing.referrer} title="referrer">{@landing.referrer}</:item>
           <:item :for={{name, value} <- Enum.sort(@headers)} title={name}>{value}</:item>
         </.data_list>
