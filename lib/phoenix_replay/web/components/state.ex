@@ -112,20 +112,24 @@ defmodule PhoenixReplay.Web.Components.State do
   attr :changes, :list, required: true
   attr :more, :integer, required: true
 
-  # Changes inside an assign, in the row's columns: a mark for what was
-  # added or removed, the path within the assign, and its values.
+  # Changes inside an assign: a mark for what was added or removed, the
+  # path within the assign, and its values. A path can be long, through a
+  # list item's id, so it wraps rather than hiding the field at its end,
+  # and the values follow it, on the next line when it leaves no room.
   defp changes(assigns) do
     ~H"""
     <ul data-changes={@key} class="pb-1.5">
       <li
         :for={{change, steps} <- Enum.map(@changes, &{&1, elem(&1, 1)})}
-        class="grid grid-cols-[0.75rem_minmax(0,8rem)_minmax(0,1fr)] gap-2 px-3.5 py-0.5"
+        class="grid grid-cols-[0.75rem_minmax(0,1fr)] gap-2 px-3.5 py-0.5"
       >
         <span class={["text-center", change_class(change)]}>{change_mark(change)}</span>
-        <span class="truncate pl-2 text-muted" title={Diff.path(@key, steps)}>
-          {Diff.path("", steps)}
+        <span class="flex min-w-0 flex-wrap items-baseline gap-x-2 pl-2">
+          <span class="break-all text-muted" title={Diff.path(@key, steps)}>
+            {Diff.path("", steps)}
+          </span>
+          <span class="max-w-full truncate">{change_values(change)}</span>
         </span>
-        <span class="min-w-0 truncate">{change_values(change)}</span>
       </li>
       <li :if={@more > 0} class="grid grid-cols-[0.75rem_minmax(0,1fr)] gap-2 px-3.5 py-0.5">
         <span></span>

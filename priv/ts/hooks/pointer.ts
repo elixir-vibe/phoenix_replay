@@ -13,7 +13,8 @@ const ARROW = 'M0 0V16.5L4.6 12.2L7.6 18.8L10.3 17.6L7.4 11.1H13.2Z'
  * Draws a recording's pointer track over the replay: the cursor, moved
  * between samples, with a short trail; a ripple for each press, on the
  * pressed element when the replayed page has it; a fingertip for each
- * touch that is down. It also scrolls the replayed page as recorded.
+ * touch that is down, with the same trail since it went down. It also
+ * scrolls the replayed page as recorded.
  *
  * The element carries the track as JSON in `data-track`, the recorded
  * viewport in `data-width` and `data-height`, and how long the path behind
@@ -81,8 +82,7 @@ export class Pointer extends ViewHook {
     this.scroll(ms)
 
     const mouse = this.moves.get(0) ?? []
-    const trail = mouse.filter(([at]) => at > ms - this.trailMs && at <= ms)
-    if (trail.length > 1) svg.append(this.trail(trail))
+    this.appendTrail(mouse, ms - this.trailMs, ms)
 
     for (const press of this.track.presses) {
       const [at, kind] = press
@@ -90,7 +90,16 @@ export class Pointer extends ViewHook {
         svg.append(this.ripple(press, (ms - at) / this.rippleMs))
     }
 
-    for (const [slot, [x, y]] of this.touchesDown(ms)) svg.append(this.fingertip(slot, x, y))
+    for (const [
+      slot,
+      {
+        since,
+        at: [x, y]
+      }
+    ] of this.touchesDown(ms)) {
+      this.appendTrail(this.moves.get(slot) ?? [], Math.max(ms - this.trailMs, since), ms)
+      svg.append(this.fingertip(slot, x, y))
+    }
 
     const cursor = position(mouse, ms)
     if (cursor && !this.touching(ms)) svg.append(this.cursor(cursor[0], cursor[1]))
@@ -116,19 +125,27 @@ export class Pointer extends ViewHook {
     if (page.scrollX !== x || page.scrollY !== y) page.scrollTo(x, y)
   }
 
-  // A touch is down from its press until its release.
-  private touchesDown(ms: number): Map<number, [number, number]> {
-    const down = new Map<number, [number, number]>()
+  // The path a pointer moved along after `from`, up to `ms`. A slot's
+  // moves span all its touches, so a fingertip's starts at its press.
+  private appendTrail(moves: Move[], from: number, ms: number): void {
+    const trail = moves.filter(([at]) => at > from && at <= ms)
+    if (trail.length > 1) this.svg?.append(this.trail(trail))
+  }
+
+  // A touch is down from its press until its release: where it is, and
+  // since when.
+  private touchesDown(ms: number): Map<number, { since: number; at: [number, number] }> {
+    const down = new Map<number, { since: number; at: [number, number] }>()
 
     for (const [at, kind, x, y, slot, type] of this.track.presses) {
       if (at > ms || type !== TOUCH) continue
-      if (kind === DOWN) down.set(slot, [x, y])
+      if (kind === DOWN) down.set(slot, { since: at, at: [x, y] })
       else down.delete(slot)
     }
 
-    for (const slot of down.keys()) {
+    for (const [slot, touch] of down) {
       const moved = position(this.moves.get(slot) ?? [], ms)
-      if (moved) down.set(slot, moved)
+      if (moved) touch.at = moved
     }
 
     return down
