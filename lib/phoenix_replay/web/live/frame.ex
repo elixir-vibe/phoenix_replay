@@ -43,6 +43,9 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   @private :phoenix_replay_frame
   @stage :phoenix_replay_stage
+  @channel :phoenix_replay_channel
+  # Assigns rendered as nil when the recording lacks them, at most.
+  @max_unrecorded 5
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
@@ -69,6 +72,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
     {:ok,
      socket
      |> put_private(@stage, params["stage"] == "1")
+     |> put_private(@channel, if(is_binary(params["channel"]), do: params["channel"]))
      |> put_private(@private, private(recording))
      |> assign(@private, frame)
      |> show_first(), layout: false}
@@ -241,8 +245,43 @@ defmodule PhoenixReplay.Web.Live.Frame do
     socket
   end
 
+  # An assign the template reads but the recording lacks, such as one a
+  # newer template reads in an older recording, is rendered as nil, which
+  # most templates take as unset, and the player is told which. One filled
+  # before stays nil, and unrecorded, until the recording sets it.
   defp check_render(socket) do
     frame = socket.assigns[@private]
-    assign(socket, @private, %{frame | error: Rendering.render_error(frame.view, socket.assigns)})
+    %{keys: recorded} = private = socket.private[@private]
+    carried = Enum.reject(private[:unrecorded] || [], &(&1 in recorded))
+    {socket, unrecorded, error} = fill_unrecorded(socket, frame.view, Enum.reverse(carried))
+
+    socket
+    |> assign(@private, %{frame | error: error})
+    |> tell_unrecorded(Enum.reverse(unrecorded))
   end
+
+  defp fill_unrecorded(socket, view, unrecorded) do
+    case Rendering.render_check(view, socket.assigns) do
+      :ok ->
+        {socket, unrecorded, nil}
+
+      {:missing, key} ->
+        if length(unrecorded) < @max_unrecorded and key not in unrecorded,
+          do: fill_unrecorded(assign(socket, key, nil), view, [key | unrecorded]),
+          else: {socket, unrecorded, "the recording has no @#{key}"}
+
+      {:error, description} ->
+        {socket, unrecorded, description}
+    end
+  end
+
+  defp tell_unrecorded(%{private: %{@channel => channel}} = socket, unrecorded)
+       when is_binary(channel) do
+    if socket.private[@private][:unrecorded] != unrecorded,
+      do: :ok = Channel.unrecorded(channel, unrecorded)
+
+    put_private(socket, @private, Map.put(socket.private[@private], :unrecorded, unrecorded))
+  end
+
+  defp tell_unrecorded(socket, _unrecorded), do: socket
 end

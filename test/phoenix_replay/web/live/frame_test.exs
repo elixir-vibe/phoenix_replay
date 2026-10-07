@@ -129,6 +129,32 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     refute_push_event(view, "phx_replay:root", %{})
   end
 
+  test "renders an assign the recording lacks as nil, and tells the player" do
+    # As a session recorded before the template began to read @count.
+    save(%PhoenixReplay.Recording{
+      id: "older",
+      view: PhoenixReplay.Test.Live.Counter,
+      connected_at: System.system_time(:millisecond),
+      events: [
+        %Event{at: 0, type: :mount, data: %{assigns: %{}}},
+        %Event{at: 5, type: :render, data: %{assigns: %{other: 1}}}
+      ]
+    })
+
+    :ok = Channel.subscribe("c-older")
+    {:ok, view, _html} = live(build_conn(), "/replay/older/frame?channel=c-older")
+
+    assert_receive {Channel, {:unrecorded, [:count]}}
+    html = render(view)
+    refute html =~ "Could not render"
+    assert html =~ ~s(<span id="count"></span>)
+
+    # Moving on, it stays unrecorded: the player is not told otherwise.
+    seek("c-older", 1)
+    render(view)
+    refute_receive {Channel, {:unrecorded, _keys}}
+  end
+
   test "tells an export's stage when each position has rendered" do
     save(Fixtures.counter_recording(id: "staged", clicks: 1))
 

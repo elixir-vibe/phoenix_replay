@@ -52,6 +52,7 @@ Pointer, touch and form recording, marks, video export, and a richer player and 
 - **Copy link** links the exact moment the clock shows.
 - Switching from 100% back to Fit after scrolling no longer shifts the page out of view.
 - Collected details, such as SQL, no longer break words mid-way.
+- A recording made before a template began to read an assign replays with it unset, and the player notes which, rather than showing "Could not render".
 - An event that one of your `on_mount` hooks handles and halts is recorded too, wherever the hook sits: events are recorded from LiveView's telemetry.
 - On a wide screen the player fits the window, so the page no longer scrolls; the replay scales to the space left.
 - The Visit tab shows landing parameters beside their names, not on a line below.

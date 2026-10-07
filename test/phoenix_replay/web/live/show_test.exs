@@ -750,6 +750,15 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       assert has_element?(view, ~s(#replay-rotate[aria-checked="false"]))
     end
 
+    test "notes the assigns a recording lacks, which the frame shows unset" do
+      Storage.save(Fixtures.storage(), Fixtures.counter_recording(id: "older"))
+      {:ok, view, _html} = live(build_conn(), "/replay/older")
+      refute has_element?(view, "#replay-unrecorded")
+
+      send(view.pid, {PhoenixReplay.Web.Player.Channel, {:unrecorded, [:theme, :plan]}})
+      assert has_element?(view, "#replay-unrecorded", "Not recorded: @theme, @plan")
+    end
+
     test "replays the color scheme the user had" do
       recording = Fixtures.counter_recording(id: "dark")
 

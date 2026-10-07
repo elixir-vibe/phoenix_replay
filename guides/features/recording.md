@@ -282,3 +282,5 @@ Replay reconstructs the assigns of LiveViews and LiveComponents. It does not rec
 - streams and uploads, whose contents are not kept in assigns,
 - what your JavaScript did with client state, such as rows a script filtered, unless the view renders it with `replay_render/1`; see [Client state](#client-state),
 - focus, and `Phoenix.LiveView.JS` commands applied on the client.
+
+Replay renders today's templates with the assigns recorded then. When a template reads an assign a recording lacks, such as one added after the session was recorded, the replay renders it as `nil`, which most templates take as unset, and the player notes "Not recorded: @name". A template that cannot take `nil` there still shows a placeholder for that moment.

@@ -56,6 +56,10 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
     default: true,
     doc: "whether the frame's LiveView connected; until then a loader covers it"
 
+  attr :unrecorded, :list,
+    default: [],
+    doc: "assigns the template reads that the recording lacks, shown as nil"
+
   @spec replay_frame(map()) :: Phoenix.LiveView.Rendered.t()
   def replay_frame(assigns) do
     viewport = assigns.viewport
@@ -92,6 +96,17 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
           class="min-w-[40%] flex-1 truncate rounded-md border border-line bg-surface px-2.5 py-1 font-mono"
         >
           {@url || "—"}
+        </span>
+        <%!-- A newer template reads assigns an older recording lacks; the
+        page shows them unset. --%>
+        <span
+          :if={@unrecorded != []}
+          id="replay-unrecorded"
+          title="The template reads these, but the recording has none, as it was made before: the page shows them unset"
+          class="inline-flex shrink-0 items-center gap-1 rounded-md bg-slow/10 px-2 py-1 text-slow"
+        >
+          <.icon name="lucide:circle-dashed" class="size-3.5" />
+          Not recorded: {Enum.map_join(@unrecorded, ", ", &"@#{&1}")}
         </span>
         <span
           title="Replayed from recorded assigns: the view renders again, rather than a capture of the screen"

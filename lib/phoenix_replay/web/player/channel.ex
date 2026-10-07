@@ -31,6 +31,13 @@ defmodule PhoenixReplay.Web.Player.Channel do
   @spec frame_ready(channel()) :: :ok
   def frame_ready(channel), do: broadcast(channel, :frame_ready)
 
+  @doc """
+  Tells the player which assigns the frame's template reads that the
+  recording lacks at the moment shown, which it rendered as `nil`.
+  """
+  @spec unrecorded(channel(), [atom()]) :: :ok
+  def unrecorded(channel, keys), do: broadcast(channel, {:unrecorded, keys})
+
   defp broadcast(channel, message) do
     Phoenix.PubSub.broadcast_from(
       PhoenixReplay.PubSub,

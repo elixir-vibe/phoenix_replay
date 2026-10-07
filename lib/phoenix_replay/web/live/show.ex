@@ -58,6 +58,8 @@ defmodule PhoenixReplay.Web.Live.Show do
         first_render: 0,
         live?: Catalog.live?(id),
         frame_ready?: false,
+        # Assigns the frame's template reads that the recording lacks.
+        unrecorded: [],
         progress: nil,
         load_error?: false,
         channel: channel,
@@ -395,6 +397,9 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   def handle_info({:advance, _stale}, socket), do: {:noreply, socket}
+
+  def handle_info({Channel, {:unrecorded, keys}}, socket),
+    do: {:noreply, assign(socket, :unrecorded, keys)}
 
   def handle_info({Channel, :frame_ready}, %{assigns: %{recording: nil}} = socket) do
     {:noreply, assign(socket, :frame_ready?, true)}
