@@ -22,6 +22,7 @@ PhoenixReplay.Trace.find(view: MyAppWeb.CheckoutLive, event: "submit", limit: 5)
 PhoenixReplay.Trace.find(text: "/orders/42")   # URL, id or event names
 PhoenixReplay.Trace.find(mark: "Checkout completed")   # sessions that reached a mark
 PhoenixReplay.Trace.find(source: "google", medium: "cpc", device_type: "phone")
+PhoenixReplay.Trace.find(release: "abc123")   # sessions of one deploy
 ```
 
 ```bash
@@ -29,7 +30,7 @@ mix phoenix_replay.list --errors --within 24h
 mix phoenix_replay.list --view MyAppWeb.CheckoutLive --event submit --limit 5
 ```
 
-Each `PhoenixReplay.Recording.Summary` has `id`, `view`, `url`, `connected_at` (Unix ms), `duration_ms`, `event_count`, `error_count`, `event_names` (`handle_event/3` names), `marks` (moments reached, by name, with counts), `source`, `medium` and `campaign` (where the visit came from, `"(direct)"` and `"(none)"` when nothing referred it), `device`, `device_type`, `browser`, `viewport`, `tab`, and `live?`. Sessions of one browser tab share `tab`: `find(tab: tab)` is the user's journey across LiveViews.
+Each `PhoenixReplay.Recording.Summary` has `id`, `view`, `url`, `connected_at` (Unix ms), `duration_ms`, `event_count`, `error_count`, `event_names` (`handle_event/3` names), `marks` (moments reached, by name, with counts), `source`, `medium` and `campaign` (where the visit came from, `"(direct)"` and `"(none)"` when nothing referred it), `device`, `device_type`, `browser`, `release` (the deploy it was recorded on), `viewport`, `tab`, and `live?`. Sessions of one browser tab share `tab`: `find(tab: tab)` is the user's journey across LiveViews.
 
 ## 2. Read what happened
 
@@ -53,7 +54,7 @@ Each event has `index` (the player's), `at` (ms from the session's start), `type
 - `:telemetry`: a collected query or request: `event`, `summary` (the SQL), `measurements`, `metadata`, `error`
 - `:log`: `level`, `message`, `metadata`; `:exit`: the crash `reason`, as `Exception.format_exit/1` writes it, cut to a length
 - `:state`: client state the browser reported, form controls under the `"phx_replay:inputs"` key as `%{selector => %{name => value}}`
-- `:viewport`: `width`, `height`, `dpr`, and when the browser reports them `angle`, `color_scheme`, `reduced_motion`, `contrast`, `pointer`
+- `:viewport`: `width`, `height`, `dpr`, and when the browser reports them `angle`, `color_scheme`, `reduced_motion`, `contrast`, `pointer`, `hover`
 
 ## 3. Look at the view at a moment
 
@@ -78,6 +79,7 @@ The interactions are a script for a `Phoenix.LiveViewTest`: `live/2` on the reco
 
 ## Things to know
 
+- A recording replays with today's code, not the code it was made with. `{:ok, recording} = PhoenixReplay.Trace.fetch(id)`, and its `code` says which that was: `release`, the MD5 of its view and LiveComponents, and the versions of the dependencies that render; `PhoenixReplay.Recording.Code.changes(recording.code)` lists what differs now. Before blaming the current code, check whether the bug's module changed since: it may be fixed already, or the replay may not show what the user saw. The player notes "Code changed", and "Not in recording: @name" for assigns today's template reads that the recording lacks, rendered as `nil`.
 - Values the sanitizer filtered read `"[FILTERED]"`, and redacted ones are masked. Never try to recover them, and keep personal data out of what you write down.
 - Indexes count every listed event, collected ones included, and match the dashboard's. Pointer batches are not listed.
 - A recording only holds sessions in live sessions with `PhoenixReplay.Recorder`. Nothing was recorded if the page is outside them, a sample left the session out (`sample_rate`, `keep`), or it ran in tests (`sample_rate: 0.0`).
