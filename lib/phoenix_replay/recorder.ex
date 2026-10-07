@@ -174,11 +174,9 @@ defmodule PhoenixReplay.Recorder do
     {:halt, socket}
   end
 
-  defp handle_event(name, params, socket) do
-    %{sanitizer: sanitizer} = socket.private[@private]
-    params = Browser.observe(params)
-    {:cont, record(socket, :event, %{name: name, params: sanitizer.sanitize_params(params)})}
-  end
+  # The app's own events are recorded from LiveView's telemetry, whatever
+  # hooks handle them; see PhoenixReplay.Capture.ViewEvents.
+  defp handle_event(_name, _params, socket), do: {:cont, socket}
 
   defp handle_params(params, uri, socket) do
     %{sanitizer: sanitizer} = socket.private[@private]

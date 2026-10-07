@@ -185,6 +185,22 @@ defmodule PhoenixReplay.RecorderTest do
       assert Timeline.at(recording, Timeline.last_index(recording)).viewport.width == 844
     end
 
+    test "records an event an app hook handled and halted, before the recorder's hooks", %{
+      sessions: sessions
+    } do
+      {:ok, view, _html, id} = Sessions.live(sessions, client_conn(), "/hooked/counter")
+      render_click(view, "inc")
+      render_click(view, "reset", %{"to" => "zero"})
+
+      {:ok, recording} = Buffer.fetch(id)
+
+      assert [{"inc", %{}}, {"reset", %{"to" => "zero"}}] =
+               for(
+                 %Event{type: :event, data: data} <- recording.events,
+                 do: {data.name, data.params}
+               )
+    end
+
     test "records the screen's angle and the media settings, dropping unknown values", %{
       sessions: sessions
     } do

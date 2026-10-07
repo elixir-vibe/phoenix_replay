@@ -22,6 +22,11 @@ defmodule PhoenixReplay.Test.Router do
       live "/async", PhoenixReplay.Test.Live.AsyncPage
     end
 
+    live_session :hooked,
+      on_mount: [{PhoenixReplay.Test.Live.HaltingHook, :default}, PhoenixReplay.Recorder] do
+      live "/hooked/counter", PhoenixReplay.Test.Live.Counter
+    end
+
     live_session :unsampled, on_mount: [{PhoenixReplay.Recorder, sample_rate: 0.0}] do
       live "/unsampled/counter", PhoenixReplay.Test.Live.Counter
     end

@@ -4,7 +4,7 @@ defmodule PhoenixReplay.Capture.Handlers do
 
   Handlers are global and outlive the process that attaches them, so this
   process ties their lifetime to the supervision tree: it attaches
-  `PhoenixReplay.Capture.LiveComponents`, the configured
+  `PhoenixReplay.Capture.ViewEvents`, `PhoenixReplay.Capture.LiveComponents`, the configured
   `PhoenixReplay.Capture.TelemetryEvents` and `PhoenixReplay.Capture.Logs`
   when it starts, and detaches them when it stops. It traps exits so it
   detaches them on shutdown, and detaches leftovers before attaching, so a
@@ -17,7 +17,7 @@ defmodule PhoenixReplay.Capture.Handlers do
   use GenServer
 
   alias PhoenixReplay.Config
-  alias PhoenixReplay.Capture.{LiveComponents, Logs, TelemetryEvents}
+  alias PhoenixReplay.Capture.{LiveComponents, Logs, TelemetryEvents, ViewEvents}
 
   @doc "Starts the handler owner registered under its module name."
   @spec start_link(Config.t()) :: GenServer.on_start()
@@ -28,6 +28,7 @@ defmodule PhoenixReplay.Capture.Handlers do
   def init(config) do
     Process.flag(:trap_exit, true)
     detach()
+    :ok = ViewEvents.attach()
     :ok = LiveComponents.attach()
     :ok = TelemetryEvents.attach(config)
     :ok = Logs.attach(config)
@@ -38,6 +39,7 @@ defmodule PhoenixReplay.Capture.Handlers do
   def terminate(_reason, nil), do: detach()
 
   defp detach do
+    :ok = ViewEvents.detach()
     :ok = LiveComponents.detach()
     :ok = TelemetryEvents.detach()
     :ok = Logs.detach()
