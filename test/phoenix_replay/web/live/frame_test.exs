@@ -146,26 +146,38 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     assert render(view) =~ ~s(<span id="count"></span>)
   end
 
-  test "sends the root layout rendered with each moment's assigns, when it changes" do
-    replay_with(Replay)
+  test "sends the app's root layout rendered with each moment's assigns, when it changes" do
     recording = save(Fixtures.counter_recording(id: "rooted", clicks: 1))
 
-    {:ok, view, _html} = live(build_conn(), "/replay/rooted/frame?channel=c-root")
-
-    assert_push_event(view, "phx_replay:root", %{
-      layout: "<!DOCTYPE html>" <> _layout,
-      attributes: %{"data-count" => "0", "data-none" => nil}
-    })
+    {:ok, view, _html} = live(build_conn(), "/app/replay/rooted/frame?channel=c-root")
+    assert_push_event(view, "phx_replay:root", %{layout: layout, attributes: %{}})
+    assert layout =~ ~s(<html lang="en" data-count="0">)
 
     last = length(recording.events) - 1
     seek("c-root", last)
     render(view)
-    assert_push_event(view, "phx_replay:root", %{attributes: %{"data-count" => "1"}})
+    assert_push_event(view, "phx_replay:root", %{layout: layout})
+    assert layout =~ ~s(data-count="1")
 
     # Unchanged, the frame's script is not told again.
     seek("c-root", last)
     render(view)
     refute_push_event(view, "phx_replay:root", %{})
+  end
+
+  test "sends nothing for the dashboard's own layout, but the app's root attributes" do
+    {:ok, view, _html} =
+      live(build_conn(), "/replay/#{save(Fixtures.counter_recording(id: "plain")).id}/frame")
+
+    refute_push_event(view, "phx_replay:root", %{})
+
+    replay_with(Replay)
+    {:ok, view, _html} = live(build_conn(), "/replay/plain/frame?channel=c-plain")
+
+    assert_push_event(view, "phx_replay:root", %{
+      layout: nil,
+      attributes: %{"data-count" => "0", "data-none" => nil}
+    })
   end
 
   test "renders an assign the recording lacks as nil, and tells the player" do

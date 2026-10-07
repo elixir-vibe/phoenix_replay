@@ -63,4 +63,10 @@ defmodule PhoenixReplay.Test.Router do
 
     phoenix_replay "/replay", authorize: PhoenixReplay.Test.Authorization, as: :restricted_replay
   end
+
+  scope "/app" do
+    pipe_through :browser
+
+    phoenix_replay "/replay", frame_layout: {PhoenixReplay.Test.Layouts, :root}, as: :app_replay
+  end
 end

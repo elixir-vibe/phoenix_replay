@@ -45,6 +45,8 @@ defmodule PhoenixReplay.Web.Live.Frame do
   @private :phoenix_replay_frame
   @stage :phoenix_replay_stage
   @channel :phoenix_replay_channel
+  # No root layout or attributes to send, as a frame starts.
+  @no_root %{layout: nil, attributes: %{}}
   # Assigns rendered as nil when the recording lacks them, at most.
   @max_unrecorded 5
 
@@ -132,7 +134,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
   end
 
   defp private(nil),
-    do: %{recording: nil, timeline: nil, migrations: [], keys: [], inputs: %{}, root: nil}
+    do: %{recording: nil, timeline: nil, migrations: [], keys: [], inputs: %{}, root: @no_root}
 
   defp private(recording),
     do: %{
@@ -142,7 +144,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
       migrations: Migration.pending(Migration.all(recording.view), migrated(recording)),
       keys: [],
       inputs: %{},
-      root: nil
+      root: @no_root
     }
 
   defp migrated(%{code: %{migration: version}}), do: version
@@ -211,8 +213,9 @@ defmodule PhoenixReplay.Web.Live.Frame do
     end
   end
 
+  # credo:disable-for-next-line ExSlop.Check.Warning.BlanketRescue
   defp root_layout(socket) do
-    case Context.fetch(socket).frame_layout do
+    case app_layout(socket) do
       {module, function} ->
         assigns = Map.merge(socket.assigns, %{inner_content: "", live_module: __MODULE__})
 
@@ -225,10 +228,25 @@ defmodule PhoenixReplay.Web.Live.Frame do
         nil
     end
   rescue
-    # An assign the layout reads outside a request, such as `@conn`, or a
-    # value it cannot take.
-    _exception in [KeyError, ArgumentError, FunctionClauseError] -> nil
+    # The app's layout is foreign code, rendered without `@conn` and with partial assigns.
+    # reach:disable-next-line bare_rescue -- foreign layout code rendered with partial assigns
+    _exception -> nil
   end
+
+  # The app's own root layout, when the frame renders in one: the
+  # dashboard's, whose attributes never change, has nothing to send.
+  defp app_layout(socket) do
+    context = Context.fetch(socket)
+
+    case context.frame_layout do
+      {Layouts, :frame} -> nil
+      {PhoenixReplay.Web.Export.Access, :frame_layout} -> export_layout(context.config.export)
+      layout -> layout
+    end
+  end
+
+  defp export_layout(%{frame_layout: {_module, _function} = layout}), do: layout
+  defp export_layout(_export), do: nil
 
   defp root_attributes(socket) do
     %{view: view} = socket.assigns[@private]
