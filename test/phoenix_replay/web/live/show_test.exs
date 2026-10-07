@@ -245,10 +245,11 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert assigns(view).index == 2
     render_hook(view, "error", %{"direction" => "next"})
     assert assigns(view).index == 5
+    # Past the last error, back to the first, and before it, to the last.
     render_hook(view, "error", %{"direction" => "next"})
-    assert assigns(view).index == 5
-    render_hook(view, "error", %{"direction" => "previous"})
     assert assigns(view).index == 2
+    render_hook(view, "error", %{"direction" => "previous"})
+    assert assigns(view).index == 5
   end
 
   test "gives marks a lane of their own and jumps between them" do
@@ -298,6 +299,8 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
     assert assigns(view).index == 5
     render_hook(view, "mark", %{"direction" => "previous"})
     assert assigns(view).index == 3
+    render_hook(view, "mark", %{"direction" => "previous"})
+    assert assigns(view).index == 5
   end
 
   test "shows its keyboard shortcuts on its controls and in a sheet" do
