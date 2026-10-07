@@ -750,6 +750,26 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       assert has_element?(view, ~s(#replay-rotate[aria-checked="false"]))
     end
 
+    test "replays the color scheme the user had" do
+      recording = Fixtures.counter_recording(id: "dark")
+
+      Storage.save(Fixtures.storage(), %{
+        recording
+        | client:
+            client(
+              %{width: 390, height: 844, dpr: 3, color_scheme: :dark, pointer: :coarse},
+              nil
+            )
+      })
+
+      {:ok, view, _html} = live(build_conn(), "/replay/dark")
+      assert has_element?(view, ~s(#replay-frame[data-color-scheme="dark"]))
+      assert has_element?(view, ~s(#replay-frame[style="color-scheme: dark"]))
+
+      open_tab(view, "Visit")
+      assert has_element?(view, "#replay-settings", "Dark theme · Touch screen")
+    end
+
     test "shows how the visit started" do
       recording = Fixtures.counter_recording(id: "visit")
 

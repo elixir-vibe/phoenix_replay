@@ -21,6 +21,7 @@ Pointer, touch and form recording, marks, video export, and a richer player and 
 - `phx_replay:start` and `phx_replay:stop` window events, and a `data-phx-replay` attribute on `<html>`, tell browser code when a page is recorded.
 - The player draws the recorded cursor, taps and touches over the replay, and scrolls the page as the user did.
 - The player's **View** menu: Fit, Actual size, Rotate, and Follow scroll. **Rotate** turns the shown device to look at it the other way round; when the user turned their phone, the replay shows it turning.
+- The recorder captures the user's color scheme, reduced motion, contrast and pointer type with the viewport. The replay shows the page in the user's color scheme, and the Visit tab lists the rest.
 - The **State** tab shows what each event changed, such as `tasks[id: 2].done: false → true`.
 - A details pane for the playing or pinned event, with telemetry measurements. Slow queries and calls stand out.
 - SQL, assigns and metadata are syntax-highlighted.

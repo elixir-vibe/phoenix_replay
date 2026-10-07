@@ -52,6 +52,9 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
         <p :if={!@viewport} title={@user_agent}>
           {Client.device(@user_agent) || "Unknown browser"}
         </p>
+        <p :if={settings = settings(@viewport)} id="replay-settings" class="mt-0.5 text-muted">
+          {settings}
+        </p>
       </section>
 
       <section :if={@journey} id="replay-journey" aria-labelledby="replay-journey-heading">
@@ -133,4 +136,22 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
   end
 
   defp heading, do: "mb-1.5 text-xs font-medium tracking-wide text-muted uppercase"
+
+  # The media settings the page's CSS could see, as the browser reported
+  # them at this moment; the replay applies the color scheme.
+  defp settings(nil), do: nil
+
+  defp settings(viewport) do
+    [
+      color_scheme: %{dark: "Dark theme", light: "Light theme"},
+      reduced_motion: %{true => "Reduced motion"},
+      contrast: %{more: "More contrast", less: "Less contrast"},
+      pointer: %{coarse: "Touch screen", fine: "Mouse or trackpad", none: "No pointer"}
+    ]
+    |> Enum.flat_map(fn {name, labels} -> List.wrap(labels[viewport[name]]) end)
+    |> case do
+      [] -> nil
+      labels -> Enum.join(labels, " · ")
+    end
+  end
 end

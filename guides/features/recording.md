@@ -24,7 +24,7 @@ A recording is a list of `PhoenixReplay.Recording.Event` structs, each with a mi
 | `:telemetry` | A telemetry event captured by a [collector](telemetry-and-logs.md) |
 | `:log` | A log message, when [log collection](telemetry-and-logs.md#collecting-logs) is on |
 | `:exit` | The formatted reason of a LiveView that exited abnormally |
-| `:viewport` | The browser's viewport changed: a resized window or a rotated phone |
+| `:viewport` | The browser's viewport changed: a resized window, a rotated phone, or a switch to dark mode |
 
 The recording also keeps the view module, URL, sanitized params and session, and the start time. Everything passes through the configured sanitizer first; see [Privacy and Security](privacy-and-security.md).
 
@@ -48,7 +48,8 @@ socket "/live", Phoenix.LiveView.Socket,
 
 `mix igniter.install phoenix_replay` makes both changes for the setup Phoenix generates. With them, a recording's `PhoenixReplay.Recording.Client` holds:
 
-- **the viewport** — width, height and pixel ratio when the LiveView connected. The player renders the replay at that size, keeping its aspect ratio: **Fit** scales it down until the whole viewport fits the window, centring a phone on a neutral stage, and **100%** shows it at true size in a scrolling box. A rotated phone eases into its new size, unless the viewer prefers reduced motion.
+- **the viewport** — width, height and pixel ratio when the LiveView connected. The player renders the replay at that size, keeping its aspect ratio: **Fit** scales it down until the whole viewport fits the window, centring a phone on a neutral stage, and **100%** shows it at true size in a scrolling box. When a phone turns, the player shows it turning, the way the screen's angle changed, unless the viewer prefers reduced motion.
+- **the media settings** — the color scheme, reduced motion, contrast and the kind of pointer, as the page's CSS saw them, with the viewport. The replayed page takes the recorded color scheme, so its `prefers-color-scheme` rules, and Tailwind's `dark:` classes, show what the user saw; stylesheets from another origin, and script that calls `matchMedia`, still see the viewer's. The Visit tab lists the others.
 - **resizes** — a resized window or a rotated phone is recorded as a `:viewport` event when it settles, a fifth of a second after it stops changing, as long as `replayRecorder` runs; see [Pointer, touches and scrolling](#pointer-touches-and-scrolling). The viewport also travels with each click and key press, which catches changes without `replayRecorder`. Your `handle_event/3` receives the extra `"_replay"` param; recorded params leave it out.
 - **the user agent** — shown in the player as, for example, "Safari on iOS".
 - **the tab** — an id kept in the tab's `sessionStorage`. Navigating to another LiveView starts a new recording; the tab id ties them into one journey, and the player links the previous and next sessions of the tab.

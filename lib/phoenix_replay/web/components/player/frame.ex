@@ -30,6 +30,11 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
   at it the other way round, with the page, the pointer and the scrolling
   as recorded; **Rotate** sends `"rotate"` to toggle it.
 
+  The replayed page takes the recorded color scheme: the frame's
+  `color-scheme`, which Safari's `prefers-color-scheme` follows, and the
+  FrameColorScheme hook, which rewrites the page's media rules for the
+  browsers that do not.
+
   When the session recorded scrolling, `follow_scroll` holds the page
   where the user had scrolled: the frame takes no wheel or touch, and the
   overlay puts the recorded position back after every render. **Follow
@@ -61,7 +66,8 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
         scrolls?: scrolls?,
         following?: scrolls? and assigns.follow_scroll,
         pointer?: assigns.pointer != nil and PointerTrack.any?(assigns.pointer),
-        orientation: viewport && Client.orientation(viewport)
+        orientation: viewport && Client.orientation(viewport),
+        color_scheme: viewport && viewport[:color_scheme]
       )
 
     ~H"""
@@ -212,6 +218,9 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
           id="replay-frame"
           title="Replay"
           src={@src}
+          phx-hook="FrameColorScheme"
+          data-color-scheme={@color_scheme}
+          style={@color_scheme && "color-scheme: #{@color_scheme}"}
           class={["block h-[600px] w-full border-0 lg:h-full", @following? && "pointer-events-none"]}
         ></iframe>
         <%!-- Covers the frame while its page loads and its LiveView connects. --%>
