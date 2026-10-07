@@ -102,7 +102,8 @@ defmodule PhoenixReplay.MixProject do
         priv/static/phoenix_replay.js
         priv/static/*.d.ts
         package.json
-        guides
+        guides/**/*.md
+        guides/**/*.cheatmd
         skills
         mix.exs
         .formatter.exs
