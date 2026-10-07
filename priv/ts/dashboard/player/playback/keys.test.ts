@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { html } from '../test/hooks'
-import { matches, PlayerKeys, type Shortcut, shortcutFor } from './player_keys'
+import { html } from '../../../test/hooks'
+import { matches, PlayerKeys, type Shortcut, shortcutFor } from './keys'
 
 afterEach(() => document.body.replaceChildren())
 

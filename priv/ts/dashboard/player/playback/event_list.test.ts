@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { html, mountHook } from '../test/hooks'
+import { html, mountHook } from '../../../test/hooks'
 import { EventList } from './event_list'
 
 const list = (current: number): HTMLElement =>

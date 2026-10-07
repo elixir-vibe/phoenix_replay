@@ -1,6 +1,6 @@
 import { ViewHook } from 'phoenix_live_view'
 
-import { clamp } from '../timeline'
+import { clamp } from '../../../shared/timeline'
 
 /** Where the details pane's height is kept for the next visit. */
 export const DETAILS_HEIGHT_KEY = 'phoenix_replay:details-height'

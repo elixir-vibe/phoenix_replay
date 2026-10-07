@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { html } from '../test/hooks'
+import { html } from '../../test/hooks'
 import { Floating, floatingTooltips, place } from './floating'
 
 afterEach(() => document.body.replaceChildren())

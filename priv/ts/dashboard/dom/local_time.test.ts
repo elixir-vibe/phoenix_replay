@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { html } from '../test/hooks'
+import { html } from '../../test/hooks'
 import { LocalTime, localText, localTitle } from './local_time'
 
 afterEach(() => document.body.replaceChildren())

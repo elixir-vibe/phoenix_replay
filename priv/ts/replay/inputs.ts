@@ -1,4 +1,4 @@
-import { type InputValues, restoreInputs } from './inputs'
+import { type InputValues, restoreInputs } from '../client/inputs'
 
 /** The event the replay frame receives the recorded form values with. */
 export const INPUTS_EVENT = 'phx:phx_replay:inputs'

@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { html } from '../test/hooks'
+import { html } from '../../../test/hooks'
 import { DETAILS_HEIGHT_KEY, DetailsResizer } from './details_resizer'
 
 afterEach(() => {

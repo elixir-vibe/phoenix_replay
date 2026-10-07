@@ -1,9 +1,9 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import type { Move, Track } from '../client/pointer_track'
-import { html, mountHook } from '../test/hooks'
-import { Pointer, position } from './pointer'
-import { TIME_EVENT } from './scrubber'
+import type { Move, Track } from '../../../shared/pointer_track'
+import { html, mountHook } from '../../../test/hooks'
+import { Pointer, position } from './pointer_overlay'
+import { TIME_EVENT } from '../playback/scrubber'
 
 afterEach(() => {
   document.body.replaceChildren()

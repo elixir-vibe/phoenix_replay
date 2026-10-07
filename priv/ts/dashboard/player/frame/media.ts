@@ -1,6 +1,6 @@
 import { ViewHook } from 'phoenix_live_view'
 
-import { applyMedia, type Media } from '../dom/media'
+import { applyMedia, type Media } from '../../../replay/media'
 
 // Hides the replayed page's scrollbar while it scrolls, as a touch screen
 // overlays its own: a desktop scrollbar would also narrow the page from

@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { html, mountHook } from '../test/hooks'
+import { html, mountHook } from '../../../test/hooks'
 import { Scrubber } from './scrubber'
 
 const scrubber = (data: { at: number; playing?: boolean }): HTMLElement =>

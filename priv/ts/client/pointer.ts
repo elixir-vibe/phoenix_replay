@@ -14,7 +14,7 @@ import {
   type PressKind,
   TOUCH,
   UP
-} from './pointer_track'
+} from '../shared/pointer_track'
 
 /** The settings the server sends; see the `:pointer` option. */
 export interface PointerSettings {

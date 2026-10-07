@@ -25,8 +25,8 @@
  */
 
 import { InputRecorder } from './inputs'
-import { replayInputs } from './replay_inputs'
-import { replayRoot } from './replay_root'
+import { replayInputs } from '../replay/inputs'
+import { replayRoot } from '../replay/root'
 import { type PointerSettings, PointerRecorder, type Push } from './pointer'
 import { type StateSettings, StateRecorder, StateStore } from './state'
 import { ViewportRecorder } from './viewport'

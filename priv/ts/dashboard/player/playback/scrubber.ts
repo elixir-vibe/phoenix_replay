@@ -1,5 +1,5 @@
 import { ViewHook } from 'phoenix_live_view'
-import { clamp, indexAt } from '../timeline'
+import { clamp, indexAt } from '../../../shared/timeline'
 
 /** The window event announcing the playback time, in milliseconds, as `detail`. */
 export const TIME_EVENT = 'phoenix-replay:time'

@@ -9,7 +9,7 @@ import {
   turned,
   TURN_EASING,
   TURN_MS
-} from './device_turn'
+} from './turn'
 
 /** The share of the window's height a fitted frame takes when its box does not set its own. */
 const WINDOW_SHARE = 0.75

@@ -1,7 +1,7 @@
 import { ViewHook } from 'phoenix_live_view'
 
-import { applyMedia, type Media } from '../dom/media'
-import { TIME_EVENT } from './scrubber'
+import { applyMedia, type Media } from '../../replay/media'
+import { TIME_EVENT } from '../player/playback/scrubber'
 
 /** How long a seek may take to render before the export gives up, in milliseconds. */
 const SHOWN_TIMEOUT_MS = 15_000

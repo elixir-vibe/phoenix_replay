@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { mountHook, html } from '../test/hooks'
-import { ExportStage } from './export_stage'
-import { TIME_EVENT } from './scrubber'
+import { mountHook, html } from '../../test/hooks'
+import { ExportStage } from './stage'
+import { TIME_EVENT } from '../player/playback/scrubber'
 
 afterEach(() => {
   document.body.replaceChildren()

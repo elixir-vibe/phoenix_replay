@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { html, mountHook } from '../test/hooks'
-import { FrameViewport } from './frame_viewport'
+import { html, mountHook } from '../../../test/hooks'
+import { FrameViewport } from './viewport'
 
 interface Frame {
   width: number

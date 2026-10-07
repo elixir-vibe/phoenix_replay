@@ -75,7 +75,7 @@ defmodule PhoenixReplay.Web.Components.Core do
   @doc """
   Switches the dashboard between its light and dark themes, overriding the
   system's appearance; the choice is kept in the browser. See
-  `priv/ts/dom/theme.ts`.
+  `priv/ts/dashboard/dom/theme.ts`.
   """
   attr :rest, :global
 
@@ -257,7 +257,7 @@ defmodule PhoenixReplay.Web.Components.Core do
 
   `position` is the side it prefers: Floating UI places it there, or on
   the other side when there is no room, within the window, as it shows;
-  see `priv/ts/dom/floating.ts`.
+  see `priv/ts/dashboard/dom/floating.ts`.
   """
   attr :label, :string, required: true
   attr :keys, :list, default: nil, doc: "key combinations; the tooltip shows the first"

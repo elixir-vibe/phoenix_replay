@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'volt:test'
 
-import { ROOT_EVENT, replayRoot } from './replay_root'
+import { ROOT_EVENT, replayRoot } from './root'
 
 let stop = (): void => {}
 

@@ -31,9 +31,9 @@ ExUnit.start(exclude: exclude)
 # LiveView client. The browser runs under Volt's own supervisor, and Volt is
 # a build-time dependency, so its application is started here.
 {:ok, _apps} = Application.ensure_all_started(:volt)
-Volt.Test.ExUnit.install(exclude: ["client/**", "dom/**", "hooks/**", "test/**"])
+Volt.Test.ExUnit.install(exclude: ["client/**", "replay/**", "dashboard/**", "test/**"])
 
 Volt.Test.ExUnit.install(
-  include: ["client/**/*.test.ts", "dom/**/*.test.ts", "hooks/**/*.test.ts"],
+  include: ["client/**/*.test.ts", "replay/**/*.test.ts", "dashboard/**/*.test.ts"],
   browser: true
 )

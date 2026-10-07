@@ -1,8 +1,8 @@
 import { ViewHook } from 'phoenix_live_view'
 
-import { DOWN, type Move, type Press, TOUCH, type Track } from '../client/pointer_track'
-import { lastAtOrBefore } from '../timeline'
-import { TIME_EVENT } from './scrubber'
+import { DOWN, type Move, type Press, TOUCH, type Track } from '../../../shared/pointer_track'
+import { lastAtOrBefore } from '../../../shared/timeline'
+import { TIME_EVENT } from '../playback/scrubber'
 
 /** Samples further apart are not interpolated between: the pointer rested. */
 const MAX_GAP_MS = 1_000
