@@ -15,6 +15,7 @@ export interface ReplayViewport {
   reduced_motion?: boolean
   contrast?: 'more' | 'less' | 'no-preference'
   pointer?: 'coarse' | 'fine' | 'none'
+  hover?: 'hover' | 'none'
 }
 
 // A recorded value and the media query that matches it.
@@ -31,7 +32,8 @@ const SETTINGS: Record<string, Choice[]> = {
     [false, '(prefers-reduced-motion: no-preference)']
   ],
   contrast: choices('prefers-contrast', ['more', 'less', 'no-preference']),
-  pointer: choices('pointer', ['coarse', 'fine', 'none'])
+  pointer: choices('pointer', ['coarse', 'fine', 'none']),
+  hover: choices('hover', ['hover', 'none'])
 }
 
 const QUERIES = Object.values(SETTINGS).flatMap((values) => values.map(([, query]) => query))

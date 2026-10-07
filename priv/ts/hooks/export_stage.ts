@@ -1,6 +1,6 @@
 import { ViewHook } from 'phoenix_live_view'
 
-import { applyColorScheme } from '../dom/color_scheme'
+import { applyMedia, type Media } from '../dom/media'
 import { TIME_EVENT } from './scrubber'
 
 /** How long a seek may take to render before the export gives up, in milliseconds. */
@@ -12,7 +12,7 @@ export interface Shot {
   at: number
   width: number
   height: number
-  color_scheme?: 'light' | 'dark'
+  media?: Media
 }
 
 declare global {
@@ -58,7 +58,7 @@ export class ExportStage extends ViewHook {
     delete window.phoenixReplayStage
   }
 
-  async show({ index, at, width, height, color_scheme }: Shot): Promise<void> {
+  async show({ index, at, width, height, media }: Shot): Promise<void> {
     const device = this.el.firstElementChild as HTMLElement | null
     if (!device) return
 
@@ -79,7 +79,7 @@ export class ExportStage extends ViewHook {
     }
 
     await this.until(index)
-    applyColorScheme(this.el.querySelector('iframe')?.contentDocument, color_scheme)
+    applyMedia(this.el.querySelector('iframe')?.contentDocument, media)
     window.dispatchEvent(new CustomEvent(TIME_EVENT, { detail: at }))
     // Two frames: one for the page to lay out, one for it to paint.
     await nextFrame()

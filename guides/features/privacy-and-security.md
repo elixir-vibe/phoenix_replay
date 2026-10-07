@@ -88,7 +88,7 @@ Ecto query parameters and URL query strings are left out of collected events unl
 With the client module's `replayParams` and `replayMetadata`, the browser sends, when the LiveView connects and as they change:
 
 - the viewport's width, height and pixel ratio, and the screen's orientation angle,
-- the media settings the page's CSS can see: the color scheme, reduced motion, contrast, and whether the pointer is a finger or a mouse,
+- the media settings the page's CSS can see: the color scheme, reduced motion, contrast, whether the pointer is a finger or a mouse, and whether it hovers,
 - an id for the browser tab, kept in `sessionStorage`, and the page a live navigation came from.
 
 None of these says much on its own, but together with the user agent they narrow down which browser a session came from, as fingerprinting does. They are stored with the recording, and the player's Visit tab shows them. `replayRecorder` adds the pointer, touches and scrolling when `pointer: true`, and the form controls and client state below.

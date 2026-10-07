@@ -13,7 +13,7 @@ import { themeToggle } from './dom/theme'
 import { DetailsResizer } from './hooks/details_resizer'
 import { EventList } from './hooks/event_list'
 import { ExportStage } from './hooks/export_stage'
-import { FrameColorScheme } from './hooks/frame_color_scheme'
+import { FrameMedia } from './hooks/frame_media'
 import { FrameViewport } from './hooks/frame_viewport'
 import { LocalTime } from './hooks/local_time'
 import { PlayerKeys } from './hooks/player_keys'
@@ -33,7 +33,7 @@ const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Sock
     EventList,
     ExportStage,
     Floating,
-    FrameColorScheme,
+    FrameMedia,
     FrameViewport,
     LocalTime,
     PlayerKeys,

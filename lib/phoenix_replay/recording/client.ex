@@ -36,6 +36,33 @@ defmodule PhoenixReplay.Recording.Client do
   @campaign_keys ~w(utm_source utm_medium utm_campaign)
 
   @default_viewport %{width: 1280, height: 800, dpr: 1}
+  # The settings a viewport may carry, and the media features they are.
+  @media_features [
+    color_scheme: "prefers-color-scheme",
+    reduced_motion: "prefers-reduced-motion",
+    contrast: "prefers-contrast",
+    pointer: "pointer",
+    hover: "hover"
+  ]
+
+  @doc """
+  A viewport's media settings as the CSS media features they are, for the
+  replay to apply to the replayed page's media rules: `%{"pointer" =>
+  "coarse", "prefers-color-scheme" => "dark", ...}`, with those the browser
+  did not report left out.
+  """
+  @spec media(PhoenixReplay.Recording.viewport() | nil) :: %{String.t() => String.t()}
+  def media(nil), do: %{}
+
+  def media(viewport) do
+    for {setting, feature} <- @media_features, Map.has_key?(viewport, setting), into: %{} do
+      {feature, media_value(setting, Map.fetch!(viewport, setting))}
+    end
+  end
+
+  defp media_value(:reduced_motion, true), do: "reduce"
+  defp media_value(:reduced_motion, false), do: "no-preference"
+  defp media_value(_setting, value), do: value |> Atom.to_string() |> String.replace("_", "-")
 
   @doc """
   A viewport's orientation as CSS's `orientation` media feature tells it:

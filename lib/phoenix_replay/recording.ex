@@ -43,7 +43,8 @@ defmodule PhoenixReplay.Recording do
           optional(:color_scheme) => :light | :dark,
           optional(:reduced_motion) => boolean(),
           optional(:contrast) => :more | :less | :no_preference,
-          optional(:pointer) => :coarse | :fine | :none
+          optional(:pointer) => :coarse | :fine | :none,
+          optional(:hover) => :hover | :none
         }
 
   @enforce_keys [:id, :view, :connected_at]

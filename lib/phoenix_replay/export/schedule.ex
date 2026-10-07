@@ -22,8 +22,9 @@ defmodule PhoenixReplay.Export.Schedule do
 
   @typedoc """
   One screenshot: the event `index` and the moment `at` of the recording
-  to show, the `viewport` the page had, with its color scheme when it was
-  recorded, and how many `frames` it lasts.
+  to show, the `viewport` the page had, with its media features when they
+  were recorded (see `PhoenixReplay.Recording.Client.media/1`), and how
+  many `frames` it lasts.
   """
   @type shot :: %{
           index: non_neg_integer(),
@@ -31,7 +32,7 @@ defmodule PhoenixReplay.Export.Schedule do
           viewport: %{
             required(:width) => pos_integer(),
             required(:height) => pos_integer(),
-            optional(:color_scheme) => :light | :dark
+            optional(:media) => %{String.t() => String.t()}
           },
           frames: pos_integer()
         }
@@ -234,7 +235,7 @@ defmodule PhoenixReplay.Export.Schedule do
     |> Enum.map(fn [{_key, shot} | _rest] = run ->
       shot
       |> Map.put(:frames, length(run))
-      |> Map.update!(:viewport, &Map.take(&1, [:width, :height, :color_scheme]))
+      |> Map.update!(:viewport, &shown_viewport/1)
     end)
   end
 
@@ -282,4 +283,11 @@ defmodule PhoenixReplay.Export.Schedule do
 
   defp sample_at({at, _index}), do: at
   defp sample_at([at | _rest]), do: at
+
+  defp shown_viewport(viewport) do
+    case Client.media(viewport) do
+      media when media == %{} -> Map.take(viewport, [:width, :height])
+      media -> viewport |> Map.take([:width, :height]) |> Map.put(:media, media)
+    end
+  end
 end

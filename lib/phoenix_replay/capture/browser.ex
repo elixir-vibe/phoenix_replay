@@ -41,7 +41,8 @@ defmodule PhoenixReplay.Capture.Browser do
     color_scheme: %{"light" => :light, "dark" => :dark},
     reduced_motion: %{true => true, false => false},
     contrast: %{"more" => :more, "less" => :less, "no-preference" => :no_preference},
-    pointer: %{"coarse" => :coarse, "fine" => :fine, "none" => :none}
+    pointer: %{"coarse" => :coarse, "fine" => :fine, "none" => :none},
+    hover: %{"hover" => :hover, "none" => :none}
   ]
 
   @doc "Parses a viewport sent by the client, or returns `nil`."

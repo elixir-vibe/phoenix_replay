@@ -772,7 +772,12 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       })
 
       {:ok, view, _html} = live(build_conn(), "/replay/dark")
-      assert has_element?(view, ~s(#replay-frame[data-color-scheme="dark"]))
+
+      assert has_element?(
+               view,
+               ~s(#replay-frame[data-media='{"pointer":"coarse","prefers-color-scheme":"dark"}'])
+             )
+
       assert has_element?(view, ~s(#replay-frame[style="color-scheme: dark"]))
 
       open_tab(view, "Visit")

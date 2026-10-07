@@ -71,7 +71,8 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
         following?: scrolls? and assigns.follow_scroll,
         pointer?: assigns.pointer != nil and PointerTrack.any?(assigns.pointer),
         orientation: viewport && Client.orientation(viewport),
-        color_scheme: viewport && viewport[:color_scheme]
+        color_scheme: viewport && viewport[:color_scheme],
+        media: Client.media(viewport)
       )
 
     ~H"""
@@ -233,8 +234,8 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
           id="replay-frame"
           title="Replay"
           src={@src}
-          phx-hook="FrameColorScheme"
-          data-color-scheme={@color_scheme}
+          phx-hook="FrameMedia"
+          data-media={JSON.encode!(@media)}
           style={@color_scheme && "color-scheme: #{@color_scheme}"}
           class={["block h-[600px] w-full border-0 lg:h-full", @following? && "pointer-events-none"]}
         ></iframe>
