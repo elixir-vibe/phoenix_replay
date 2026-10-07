@@ -15,9 +15,15 @@ defmodule PhoenixReplay.Recording.Code do
     * `migration` — the newest `PhoenixReplay.Migration` the app had,
       whose newer ones replay applies, or `nil` without any.
     * `deps` — the versions of the dependencies that render: Phoenix,
-      LiveView, `phoenix_html`, `phoenix_template`, and any dependency of
-      the view's application built on LiveView, such as a component
-      library.
+      LiveView, `phoenix_html`, `phoenix_template`, and any direct
+      dependency of the view's application built on LiveView, such as a
+      component library. One that comes in through another dependency is
+      not covered.
+
+  Modules and dependencies are kept by name, as strings, not as atoms:
+  stored recordings decode only atoms the node knows, so a module deleted
+  since would otherwise make every recording naming it unreadable. One the
+  node no longer has counts as changed.
 
   Reading them costs a few function calls when a session starts; the
   dependency versions are read once per application.
@@ -25,15 +31,15 @@ defmodule PhoenixReplay.Recording.Code do
 
   @type t :: %{
           release: String.t() | nil,
-          modules: %{module() => String.t()},
+          modules: %{String.t() => String.t()},
           migration: pos_integer() | nil,
-          deps: %{atom() => String.t()}
+          deps: %{String.t() => String.t()}
         }
 
-  @typedoc "What changed since a recording, as `changes/1` tells."
+  @typedoc "What changed since a recording, as `changes/1` tells, by name."
   @type changes :: %{
-          modules: [module()],
-          deps: [{atom(), String.t(), String.t() | nil}]
+          modules: [String.t()],
+          deps: [{String.t(), String.t(), String.t() | nil}]
         }
 
   @rendering [:phoenix, :phoenix_live_view, :phoenix_html, :phoenix_template]
@@ -49,7 +55,7 @@ defmodule PhoenixReplay.Recording.Code do
 
     %{
       release: release || version(app),
-      modules: %{view => md5(view)},
+      modules: %{inspect(view) => md5(view)},
       migration: migration,
       deps: deps(app)
     }
@@ -60,27 +66,42 @@ defmodule PhoenixReplay.Recording.Code do
   def with_modules(nil, _modules), do: nil
 
   def with_modules(code, modules) do
-    added = for module <- modules, hash = md5(module), hash != nil, into: %{}, do: {module, hash}
+    added =
+      for module <- modules, hash = md5(module), hash != nil, into: %{} do
+        {inspect(module), hash}
+      end
+
     %{code | modules: Map.merge(added, code.modules)}
   end
 
   @doc """
-  What changed since the recording was made: its modules whose code is
-  different now, or that are gone, and its rendering dependencies at
-  another version now, as `{dep, then, now}`. A recording made before
+  What changed since the recording was made, by name: its modules whose
+  code is different now, or that are gone, and its rendering dependencies
+  at another version now, as `{dep, then, now}`. A recording made before
   code was recorded has no changes to tell.
   """
   @spec changes(t() | nil) :: changes()
   def changes(nil), do: %{modules: [], deps: []}
 
   def changes(%{modules: modules, deps: deps}) do
-    changed = for {module, hash} <- modules, md5(module) != hash, do: module
+    changed = for {name, hash} <- modules, md5(known("Elixir." <> name)) != hash, do: name
 
     moved =
-      for {dep, then} <- Enum.sort(deps), version(dep) != then, do: {dep, then, version(dep)}
+      for {dep, then} <- Enum.sort(deps), now = version(known(dep)), now != then do
+        {dep, then, now}
+      end
 
     %{modules: Enum.sort(changed), deps: moved}
   end
+
+  # The atom of a name this node knows, or nil.
+  defp known(name) do
+    String.to_existing_atom(name)
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp md5(nil), do: nil
 
   defp md5(module) do
     if Code.ensure_loaded?(module),
@@ -104,7 +125,11 @@ defmodule PhoenixReplay.Recording.Code do
 
     case :persistent_term.get(key, nil) do
       nil ->
-        deps = for dep <- rendering(app), version(dep), into: %{}, do: {dep, version(dep)}
+        deps =
+          for dep <- rendering(app), vsn = version(dep), vsn != nil, into: %{} do
+            {Atom.to_string(dep), vsn}
+          end
+
         :persistent_term.put(key, deps)
         deps
 

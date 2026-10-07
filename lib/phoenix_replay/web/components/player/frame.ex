@@ -293,7 +293,6 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
   end
 
   defp changed_label(%{modules: modules, deps: deps}) do
-    modules = Enum.map(modules, &inspect/1)
     deps = for {dep, then, now} <- deps, do: "#{dep} #{then} → #{now || "removed"}"
     "Changed since recorded: #{Enum.join(modules ++ deps, ", ")}"
   end

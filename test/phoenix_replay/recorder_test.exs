@@ -183,7 +183,7 @@ defmodule PhoenixReplay.RecorderTest do
 
       assert Enum.all?(recording.events, &(not Map.has_key?(&1.data[:params] || %{}, "_replay")))
       # Which code it was made with.
-      assert Map.has_key?(recording.code.modules, PhoenixReplay.Test.Live.Counter)
+      assert Map.has_key?(recording.code.modules, "PhoenixReplay.Test.Live.Counter")
       assert Timeline.at(recording, Timeline.last_index(recording)).viewport.width == 844
     end
 
