@@ -169,7 +169,8 @@ defmodule PhoenixReplay.Web.Live.Show do
       first_render: Timeline.first_render_index(recording),
       marks: Events.marks(recording),
       dropped: Events.dropped_count(recording),
-      journey: Journey.of(socket, recording)
+      journey: Journey.of(socket, recording),
+      code_changes: PhoenixReplay.Recording.Code.changes(recording.code)
     )
     |> hand_over()
     |> filter_events()

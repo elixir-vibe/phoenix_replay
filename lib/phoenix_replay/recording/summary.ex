@@ -34,6 +34,7 @@ defmodule PhoenixReplay.Recording.Summary do
           device: String.t() | nil,
           device_type: Client.device_type() | nil,
           browser: String.t() | nil,
+          release: String.t() | nil,
           source: String.t() | nil,
           medium: String.t() | nil,
           campaign: String.t() | nil,
@@ -68,6 +69,7 @@ defmodule PhoenixReplay.Recording.Summary do
     device: nil,
     device_type: nil,
     browser: nil,
+    release: nil,
     source: nil,
     medium: nil,
     campaign: nil,
@@ -89,6 +91,7 @@ defmodule PhoenixReplay.Recording.Summary do
       device: Client.device(recording.client.user_agent),
       device_type: Client.device_type(recording.client.viewport),
       browser: Client.browser_family(recording.client.user_agent),
+      release: recording.code && recording.code.release,
       saved_at: Keyword.get(opts, :saved_at),
       live?: Keyword.get(opts, :live?, false)
     }

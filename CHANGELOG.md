@@ -35,6 +35,7 @@ Pointer, touch and form recording, marks, video export, and a richer player and 
 - A time window or a calendar date range for the list. Dashboard times are in the viewer's time zone.
 - Video export: turn a recording into an MP4 from the player's menu or with `mix phoenix_replay.export <id>`. Set `export: [endpoint: MyAppWeb.Endpoint]`; it needs `ffmpeg` and the optional `playwright_ex` and `muontrap` dependencies. See `PhoenixReplay.Export`.
 - `PhoenixReplay.Export.Queue.Oban` runs exports in your Oban queue, so they survive restarts and deploys.
+- Each recording keeps which code it was made with: the release, set with `:release` or your app's version, the MD5 of its view and LiveComponents, and the versions of the dependencies that render. The player notes "Code changed" when they differ from the running code, and the list filters by **Release**.
 - `PhoenixReplay.Trace`, `mix phoenix_replay.list` and `mix phoenix_replay.show` read recordings as plain data, for IEx, tests and coding agents. Two agent skills ship in the package's `skills` directory.
 - Optional `child_spec/1` and `histogram/4` callbacks for storage backends.
 

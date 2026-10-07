@@ -8,7 +8,7 @@ defmodule Mix.Tasks.PhoenixReplay.List do
       mix phoenix_replay.list [--errors] [--view MyAppWeb.CheckoutLive]
         [--event save] [--mark my_app.checkout.completed] [--text checkout]
         [--source google] [--medium cpc] [--campaign spring]
-        [--device-type phone|tablet|desktop] [--browser "Mobile Safari"]
+        [--device-type phone|tablet|desktop] [--browser "Mobile Safari"] [--release REL]
         [--within 15m|1h|24h|7d|30d] [--from 2026-10-06T14:00:00Z]
         [--to 2026-10-06T15:00:00Z] [--longer-than 60] [--limit 20]
 
@@ -31,6 +31,7 @@ defmodule Mix.Tasks.PhoenixReplay.List do
     campaign: :string,
     device_type: :string,
     browser: :string,
+    release: :string,
     longer_than: :integer,
     from: :string,
     to: :string,

@@ -66,9 +66,20 @@ defmodule PhoenixReplay.Session.Finalizer do
   def complete(%Recording{} = recording, %Config{} = config, opts \\ []) do
     with {:ok, redacted} <- Redactor.redact_recording(recording, config.redact, opts),
          {:ok, flushed} <- flushed_events(recording.id, config.storage) do
-      {:ok, %{redacted | events: flushed ++ redacted.events}}
+      events = flushed ++ redacted.events
+
+      {:ok,
+       %{
+         redacted
+         | events: events,
+           code: Recording.Code.with_modules(redacted.code, components(events))
+       }}
     end
   end
+
+  # The LiveComponents the session rendered, whose code it was made with too.
+  defp components(events),
+    do: for(%{type: :component, data: %{module: module}} <- events, uniq: true, do: module)
 
   defp attempt(recording, config, attempt) do
     case save(config.storage, recording) do

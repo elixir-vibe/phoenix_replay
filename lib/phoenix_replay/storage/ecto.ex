@@ -44,7 +44,7 @@ if Code.ensure_loaded?(Ecto.Query) do
     @table "phoenix_replay_recordings"
     @marks "phoenix_replay_marks"
     # Criteria and values that are columns of their own.
-    @columns [:view, :source, :medium, :campaign, :device_type, :browser]
+    @columns [:view, :source, :medium, :campaign, :device_type, :browser, :release]
     @summary_fields [
       :id,
       :view,
@@ -58,6 +58,7 @@ if Code.ensure_loaded?(Ecto.Query) do
       :device,
       :device_type,
       :browser,
+      :release,
       :source,
       :medium,
       :campaign,
@@ -75,6 +76,7 @@ if Code.ensure_loaded?(Ecto.Query) do
       :device,
       :device_type,
       :browser,
+      :release,
       :source,
       :medium,
       :campaign,

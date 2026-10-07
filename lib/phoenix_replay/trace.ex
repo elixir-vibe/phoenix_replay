@@ -30,6 +30,7 @@ defmodule PhoenixReplay.Trace do
     :campaign,
     :device_type,
     :browser,
+    :release,
     :within,
     :from,
     :to,
@@ -107,6 +108,7 @@ defmodule PhoenixReplay.Trace do
       `PhoenixReplay.Recording.Client.traffic/1`
     * `:device_type` — `"phone"`, `"tablet"` or `"desktop"`
     * `:browser` — the browser's family, such as `"Mobile Safari"`
+    * `:release` — the release the session was recorded with
     * `:within` — `"15m"`, `"1h"`, `"24h"`, `"7d"` or `"30d"` since the
       session started
     * `:from` and `:to` — a `DateTime` the session started at or after,
@@ -240,6 +242,7 @@ defmodule PhoenixReplay.Trace do
       campaign: filters[:campaign],
       device_type: device_type(filters[:device_type]),
       browser: filters[:browser],
+      release: filters[:release],
       within: within(filters[:within]),
       from: time(:from, filters[:from]),
       to: time(:to, filters[:to]),

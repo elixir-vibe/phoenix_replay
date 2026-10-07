@@ -16,6 +16,8 @@ defmodule PhoenixReplay.Recording.Filter do
       `PhoenixReplay.Recording.Client.traffic/1`
     * `"device_type"` — `"phone"`, `"tablet"` or `"desktop"`
     * `"browser"` — the browser's family, such as `"Mobile Safari"`
+    * `"release"` — the release the session was recorded with; see
+      `PhoenixReplay.Recording.Code`
     * `"within"` — `"15m"`, `"1h"`, `"24h"`, `"7d"` or `"30d"` since the
       session started
     * `"from"` and `"to"` — the session started within this time range,
@@ -49,6 +51,7 @@ defmodule PhoenixReplay.Recording.Filter do
           campaign: String.t() | nil,
           device_type: Client.device_type() | nil,
           browser: String.t() | nil,
+          release: String.t() | nil,
           within: String.t() | nil,
           from: integer() | nil,
           to: integer() | nil,
@@ -68,6 +71,7 @@ defmodule PhoenixReplay.Recording.Filter do
     :campaign,
     :device_type,
     :browser,
+    :release,
     :within,
     :from,
     :to,
@@ -78,7 +82,7 @@ defmodule PhoenixReplay.Recording.Filter do
   ]
 
   # Criteria that match one of a summary's values exactly.
-  @exact [:view, :source, :medium, :campaign, :device_type, :browser]
+  @exact [:view, :source, :medium, :campaign, :device_type, :browser, :release]
 
   @doc "The supported `\"within\"` values, shortest first."
   @spec windows() :: [String.t()]
@@ -97,6 +101,7 @@ defmodule PhoenixReplay.Recording.Filter do
       campaign: text(params["campaign"]),
       device_type: if(params["device_type"] in Client.device_types(), do: params["device_type"]),
       browser: text(params["browser"]),
+      release: text(params["release"]),
       within: if(Map.has_key?(@windows, params["within"]), do: params["within"]),
       from: time(params["from"]),
       to: time(params["to"]),
@@ -120,6 +125,7 @@ defmodule PhoenixReplay.Recording.Filter do
       {"campaign", filter.campaign},
       {"device_type", filter.device_type},
       {"browser", filter.browser},
+      {"release", filter.release},
       {"within", filter.within},
       {"from", filter.from && iso8601(filter.from)},
       {"to", filter.to && iso8601(filter.to)},
@@ -137,9 +143,17 @@ defmodule PhoenixReplay.Recording.Filter do
   see `values_of/2`.
   """
   @type field ::
-          :view | :event | :mark | :source | :medium | :campaign | :device_type | :browser
+          :view
+          | :event
+          | :mark
+          | :source
+          | :medium
+          | :campaign
+          | :device_type
+          | :browser
+          | :release
 
-  @fields [:view, :event, :mark, :source, :medium, :campaign, :device_type, :browser]
+  @fields [:view, :event, :mark, :source, :medium, :campaign, :device_type, :browser, :release]
 
   @doc "The criteria whose values can be listed; see `t:field/0`."
   @spec fields() :: [field()]

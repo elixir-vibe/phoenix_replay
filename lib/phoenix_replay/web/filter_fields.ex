@@ -33,6 +33,7 @@ defmodule PhoenixReplay.Web.FilterFields do
     %{key: :campaign, label: "Campaign", control: :choice, menu: true},
     %{key: :device_type, label: "Device", control: :choice, menu: true},
     %{key: :browser, label: "Browser", control: :choice, menu: true},
+    %{key: :release, label: "Release", control: :choice, menu: true},
     %{key: :longer_than, label: "Duration", control: :duration, menu: true},
     %{key: :min_events, label: "Min events", control: :number, menu: false}
   ]

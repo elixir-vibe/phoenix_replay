@@ -125,6 +125,14 @@ config :phoenix_replay,
 
 On by default; `state: false` records none, and `inputs: false` records everything but form controls. Needs `replayRecorder(liveSocket)` in the browser. See [Recording](recording.md#client-state).
 
+### Releases
+
+```elixir
+config :phoenix_replay, release: System.get_env("GIT_SHA")
+```
+
+The deploy each session is recorded on, shown in the player and filterable in the list; defaults to your app's version. See [Recording](recording.md#older-recordings).
+
 ### How recordings replay
 
 ```elixir

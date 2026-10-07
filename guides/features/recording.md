@@ -92,7 +92,14 @@ The replay needs nothing more. When the dashboard's `:frame_layout` is your root
 
 ### Older recordings
 
-Replay renders today's templates with the assigns recorded then. An assign a recording lacks is rendered as `nil`; see [Limitations](#limitations). When your assigns changed shape since, such as a `:dark_mode` boolean that became a `:theme`, a `PhoenixReplay.Replay` module adapts them before each replayed render. It can also give the replayed page's `<html>` attributes that your layout takes from something other than its assigns:
+Replay renders today's templates with the assigns recorded then. So each recording keeps which code it was made with: the release, the MD5 of its view and LiveComponents, and the versions of the dependencies that render, such as LiveView and component libraries. When any of them differs from the running code, the player notes "Code changed" and names what changed, and its Visit tab shows the release. Name your releases after your deploys, so the list's **Release** filter finds the sessions of one:
+
+```elixir
+# config/runtime.exs
+config :phoenix_replay, release: System.get_env("GIT_SHA")
+```
+
+ An assign a recording lacks is rendered as `nil`; see [Limitations](#limitations). When your assigns changed shape since, such as a `:dark_mode` boolean that became a `:theme`, a `PhoenixReplay.Replay` module adapts them before each replayed render. It can also give the replayed page's `<html>` attributes that your layout takes from something other than its assigns:
 
 ```elixir
 config :phoenix_replay, replay: MyAppWeb.Replay

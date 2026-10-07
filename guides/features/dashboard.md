@@ -56,6 +56,7 @@ The filter bar always has a search, by URL, recording id, event or mark name, so
 - **Source**, **Medium** and **Campaign**, where the visit came from, as analytics tools tell it: the `utm_source`, `utm_medium` and `utm_campaign` it landed with, else the referring site as the source and `referral` as the medium, else `(direct)` and `(none)`. They need the visit's landing, kept by `PhoenixReplay.Plug` with the `:client` config; see [Visit context](recording.md#visit-context),
 - **Device**, phone, tablet or desktop, by the viewport's width,
 - **Browser**, such as Chrome or Mobile Safari,
+- **Release**, the deploy a session was recorded on, as `:release` names it, or your app's version,
 - **Duration**, longer than 10 seconds, a minute, five minutes or a number of seconds you type.
 
 **Started** picks the last 15 minutes, hour, 24 hours, 7 days or 30 days, or a range: pick a day, or a first and a last day, on the calendar, and the times the range starts and ends. Times are in your browser's time zone, which the picker names; hover any time to see it in UTC too.

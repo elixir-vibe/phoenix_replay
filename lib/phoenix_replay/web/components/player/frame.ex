@@ -60,6 +60,11 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
     default: [],
     doc: "assigns the template reads that the recording lacks, shown as nil"
 
+  attr :code_changes, :map,
+    default: %{modules: [], deps: []},
+    doc:
+      "what changed in the code since the recording, from `PhoenixReplay.Recording.Code.changes/1`"
+
   @spec replay_frame(map()) :: Phoenix.LiveView.Rendered.t()
   def replay_frame(assigns) do
     viewport = assigns.viewport
@@ -98,17 +103,32 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
         >
           {@url || "—"}
         </span>
-        <%!-- A newer template reads assigns an older recording lacks; the
-        page shows them unset. --%>
-        <span
-          :if={@unrecorded != []}
-          id="replay-unrecorded"
-          title="The template reads these, but the recording has none, as it was made before: the page shows them unset"
-          class="inline-flex shrink-0 items-center gap-1 rounded-md bg-slow/10 px-2 py-1 text-slow"
+        <%!-- Today's code renders the replay, so what changed since is told. --%>
+        <.tooltip
+          :if={@code_changes != %{modules: [], deps: []}}
+          label={changed_label(@code_changes)}
+          position="bottom"
         >
-          <.icon name="lucide:circle-dashed" class="size-3.5" />
-          Not recorded: {Enum.map_join(@unrecorded, ", ", &"@#{&1}")}
-        </span>
+          <span
+            id="replay-code-changed"
+            tabindex="0"
+            class="inline-flex shrink-0 items-center gap-1 rounded-md bg-slow/10 px-2 py-1 text-slow"
+          >
+            <.icon name="lucide:git-compare" class="size-3.5" /> Code changed
+          </span>
+        </.tooltip>
+        <%!-- The template reads assigns the recording lacks; the page shows
+        them unset. --%>
+        <.tooltip :if={@unrecorded != []} label={unrecorded_label(@code_changes)} position="bottom">
+          <span
+            id="replay-unrecorded"
+            tabindex="0"
+            class="inline-flex shrink-0 items-center gap-1 rounded-md bg-slow/10 px-2 py-1 text-slow"
+          >
+            <.icon name="lucide:circle-dashed" class="size-3.5" />
+            Not in recording: {Enum.map_join(@unrecorded, ", ", &"@#{&1}")}
+          </span>
+        </.tooltip>
         <span
           title="Replayed from recorded assigns: the view renders again, rather than a capture of the screen"
           aria-label="Replayed from recorded assigns"
@@ -271,4 +291,17 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
     </section>
     """
   end
+
+  defp changed_label(%{modules: modules, deps: deps}) do
+    modules = Enum.map(modules, &inspect/1)
+    deps = for {dep, then, now} <- deps, do: "#{dep} #{then} → #{now || "removed"}"
+    "Changed since recorded: #{Enum.join(modules ++ deps, ", ")}"
+  end
+
+  # Why the recording lacks them: the code changed since, or, with the
+  # same code, the sanitizer left them out.
+  defp unrecorded_label(%{modules: []}),
+    do: "Missing from the recording, as your sanitizer may leave out: shown unset"
+
+  defp unrecorded_label(_changes), do: "Added since this was recorded: shown unset"
 end

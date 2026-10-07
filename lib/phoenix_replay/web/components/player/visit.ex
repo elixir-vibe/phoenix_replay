@@ -127,6 +127,16 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
         </.data_list>
       </section>
 
+      <section :if={@recording.code} id="replay-code" aria-labelledby="replay-code-heading">
+        <h3 id="replay-code-heading" class={heading()}>Code</h3>
+        <p :if={@recording.code.release}>
+          Release <code class="font-mono text-xs">{@recording.code.release}</code>
+        </p>
+        <p class="text-muted">
+          {Enum.map_join(Enum.sort(@recording.code.deps), " · ", fn {dep, vsn} -> "#{dep} #{vsn}" end)}
+        </p>
+      </section>
+
       <section aria-labelledby="replay-session-heading">
         <h3 id="replay-session-heading" class={heading()}>Session</h3>
         <code class="font-mono text-xs break-all">{@recording.id}</code>

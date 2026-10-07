@@ -43,6 +43,7 @@ defmodule PhoenixReplay.Recording.FilterTest do
       campaign: "spring",
       device_type: "phone",
       browser: "Firefox",
+      release: "abc123",
       within: "7d",
       from: 1_791_274_440_000,
       to: 1_791_278_040_000,
@@ -116,7 +117,8 @@ defmodule PhoenixReplay.Recording.FilterTest do
         source: "(direct)",
         medium: "(none)",
         device_type: "phone",
-        browser: "Firefox"
+        browser: "Firefox",
+        release: "abc123"
       )
     ]
 
@@ -126,6 +128,7 @@ defmodule PhoenixReplay.Recording.FilterTest do
     assert ids(%{"mark" => "Paid"}, summaries) == ~w(paid)
     assert ids(%{"device_type" => "phone", "browser" => "Firefox"}, summaries) == ~w(phone)
     assert ids(%{"device_type" => "watch"}, summaries) == ~w(paid phone)
+    assert ids(%{"release" => "abc123"}, summaries) == ~w(phone)
     assert ids(%{"longer_than" => "60"}, summaries) == ~w(paid)
     assert ids(%{"q" => "SPRING"}, summaries) == ~w(paid)
 

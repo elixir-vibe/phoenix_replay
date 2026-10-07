@@ -26,7 +26,8 @@ defmodule PhoenixReplay.Recording do
           connected_at: integer(),
           events: [Event.t()],
           dropped: %{String.t() => pos_integer()},
-          client: Client.t()
+          client: Client.t(),
+          code: PhoenixReplay.Recording.Code.t() | nil
         }
 
   @typedoc """
@@ -57,7 +58,9 @@ defmodule PhoenixReplay.Recording do
     session: %{},
     events: [],
     dropped: %{},
-    client: %Client{}
+    client: %Client{},
+    # Which code made the recording; nil for one made before it was kept.
+    code: nil
   ]
 
   @doc """

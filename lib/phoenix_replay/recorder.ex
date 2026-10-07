@@ -122,7 +122,8 @@ defmodule PhoenixReplay.Recorder do
           get_connect_info(socket, :user_agent),
           kept,
           config.client.media
-        )
+        ),
+      code: Recording.Code.of(socket.view, config.release)
     }
 
     :ok = Buffer.open(recording, self(), config)

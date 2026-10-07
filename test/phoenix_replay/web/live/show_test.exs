@@ -756,7 +756,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       refute has_element?(view, "#replay-unrecorded")
 
       send(view.pid, {PhoenixReplay.Web.Player.Channel, {:unrecorded, [:theme, :plan]}})
-      assert has_element?(view, "#replay-unrecorded", "Not recorded: @theme, @plan")
+      assert has_element?(view, "#replay-unrecorded", "Not in recording: @theme, @plan")
     end
 
     test "replays the color scheme the user had" do

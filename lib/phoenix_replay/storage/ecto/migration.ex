@@ -21,7 +21,7 @@ if Code.ensure_loaded?(Ecto.Migration) do
       2. `error_count`, `tab`, `viewport`, `device` and `source`, which
          the dashboard lists and filters by, and `saved_at`, which keeps its
          pages in place
-      3. `medium`, `campaign`, `device_type` and `browser`, and the
+      3. `medium`, `campaign`, `device_type`, `browser` and `release`, and the
          `phoenix_replay_marks` table of the moments each session reached,
          all of which the dashboard filters by, and an index on `view`. Rows saved earlier get their
          source split into source, medium and campaign, and their device
@@ -114,6 +114,7 @@ if Code.ensure_loaded?(Ecto.Migration) do
         add :campaign, :string
         add :device_type, :string
         add :browser, :string
+        add :release, :string
       end
 
       create table(@marks, primary_key: false) do
@@ -139,6 +140,7 @@ if Code.ensure_loaded?(Ecto.Migration) do
         remove :campaign
         remove :device_type
         remove :browser
+        remove :release
       end
     end
 

@@ -99,6 +99,11 @@ defmodule PhoenixReplay.Config do
         * `:attribution` — `:first` keeps the first landing of the visit;
           `:last` replaces it whenever a request carries tracked params
           (default `:first`)
+    * `:release` — the name of the running deploy, such as a commit from
+      your host's environment, recorded with each session, shown in the
+      player and filterable in the list; `nil` (the default) uses the
+      version of the view's application. Only for people: nothing is
+      decided by it; see `PhoenixReplay.Recording.Code`.
     * `:replay` — a `PhoenixReplay.Replay` module adapting how recordings
       replay, such as the assigns older recordings hold, or `nil` (the
       default).
@@ -315,6 +320,7 @@ defmodule PhoenixReplay.Config do
           state: state() | nil,
           client: client(),
           replay: module() | nil,
+          release: String.t() | nil,
           export: export() | nil,
           retention: retention(),
           persist: persist()
@@ -334,6 +340,7 @@ defmodule PhoenixReplay.Config do
             state: @state,
             client: %{headers: [], landing: nil, media: @media},
             replay: nil,
+            release: nil,
             export: nil,
             retention: %{max_age: nil, max_count: nil, interval: 60_000},
             persist: %{attempts: 3, backoff: 1_000}
@@ -442,6 +449,11 @@ defmodule PhoenixReplay.Config do
     IO.warn("config :phoenix_replay, :context is deprecated, use :client", [])
     put({:client, opts}, config)
   end
+
+  defp put({:release, nil}, config), do: %{config | release: nil}
+
+  defp put({:release, release}, config) when is_binary(release) and release != "",
+    do: %{config | release: release}
 
   defp put({:replay, off}, config) when off in @off, do: %{config | replay: nil}
   defp put({:replay, module}, config) when is_atom(module), do: %{config | replay: module}
