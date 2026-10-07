@@ -240,13 +240,9 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
     case context.frame_layout do
       {Layouts, :frame} -> nil
-      {PhoenixReplay.Web.Export.Access, :frame_layout} -> export_layout(context.config.export)
       layout -> layout
     end
   end
-
-  defp export_layout(%{frame_layout: {_module, _function} = layout}), do: layout
-  defp export_layout(_export), do: nil
 
   defp root_attributes(socket) do
     %{view: view} = socket.assigns[@private]
