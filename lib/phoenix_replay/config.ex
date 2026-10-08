@@ -276,7 +276,7 @@ defmodule PhoenixReplay.Config do
           attribution: :first | :last
         }
 
-  @typedoc "A media setting a viewport may carry; see `PhoenixReplay.Recording.viewport/0`."
+  @typedoc "A media setting a viewport may carry; see `t:PhoenixReplay.Recording.viewport/0`."
   @type media :: :color_scheme | :reduced_motion | :contrast | :pointer | :hover
 
   @type client :: %{headers: [String.t()], landing: landing() | nil, media: [media()]}
