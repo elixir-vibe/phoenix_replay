@@ -4,10 +4,10 @@
   "type": "module",
   "module": "./priv/static/phoenix_replay.js",
   "main": "./priv/static/phoenix_replay.js",
-  "types": "./priv/static/types/client/phoenix_replay.d.ts",
+  "types": "./priv/static/phoenix_replay.d.ts",
   "exports": {
     "import": {
-      "types": "./priv/static/types/client/phoenix_replay.d.ts",
+      "types": "./priv/static/phoenix_replay.d.ts",
       "default": "./priv/static/phoenix_replay.js"
     }
   },

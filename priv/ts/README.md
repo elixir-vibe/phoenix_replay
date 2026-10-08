@@ -2,7 +2,7 @@
 
 Grouped by where the code runs, then by feature:
 
-- `client/` — runs in your users' pages: the published `phoenix_replay` module, the recorder, built to `priv/static/phoenix_replay.js` with its declarations in `priv/static/types`.
+- `client/` — runs in your users' pages: the published `phoenix_replay` module, the recorder, built to `priv/static/phoenix_replay.js`, with its declarations in `phoenix_replay.d.ts` beside it.
 - `replay/` — runs in the replay frame, under the dashboard's layout or your app's: puts the page back as it was recorded.
 - `dashboard/` — the dashboard, built to `priv/static/dashboard.js`: the player's frame and playback, the recording list, video export, and DOM helpers.
 - `shared/` — used by the recorder and the dashboard alike.

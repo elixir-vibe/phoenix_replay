@@ -72,7 +72,10 @@ const withViewport = (): { _replay: ReplayViewport } => ({ _replay: viewport() }
  * with each click and key press, so the recording follows resizes. Merge it
  * into your own metadata functions if you have some.
  */
-export const replayMetadata = {
+export const replayMetadata: Record<
+  'click' | 'keydown' | 'keyup',
+  () => { _replay: ReplayViewport }
+> = {
   click: withViewport,
   keydown: withViewport,
   keyup: withViewport

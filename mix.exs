@@ -69,7 +69,7 @@ defmodule PhoenixReplay.MixProject do
         # Keeps video exports in the app's Oban queue; see PhoenixReplay.Export.Queue.Oban.
         {:oban, "~> 2.20", optional: true},
         {:bandit, "~> 1.5", only: :test},
-        {:volt, "~> 0.22", only: [:dev, :test], runtime: false},
+        {:volt, "~> 0.23", only: [:dev, :test], runtime: false},
         {:ex_doc, "~> 0.35", only: :dev, runtime: false},
         {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
         {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -100,7 +100,7 @@ defmodule PhoenixReplay.MixProject do
         priv/fonts/LICENSE
         priv/iconify/manifest.json
         priv/static/phoenix_replay.js
-        priv/static/types
+        priv/static/phoenix_replay.d.ts
         package.json
         guides/**/*.md
         guides/**/*.cheatmd
@@ -182,8 +182,9 @@ defmodule PhoenixReplay.MixProject do
     ]
   end
 
-  # The client module host apps import, as an ES module with a stable name.
-  # Mix runs a task once per invocation, so the second build is a rerun.
+  # The client module host apps import, as an ES module with a stable name,
+  # and its type declarations beside it, phoenix_replay.d.ts. Mix runs a
+  # task once per invocation, so the second build is a rerun.
   defp build_client(_args) do
     Mix.Task.rerun("volt.build", [
       "--entry",
@@ -191,7 +192,8 @@ defmodule PhoenixReplay.MixProject do
       "--format",
       "esm",
       "--name",
-      "phoenix_replay"
+      "phoenix_replay",
+      "--declarations"
     ])
   end
 
@@ -203,10 +205,6 @@ defmodule PhoenixReplay.MixProject do
       "assets.build": [
         "volt.build --tailwind",
         &build_client/1,
-        # The client's declarations, under the layout of priv/ts, which
-        # package.json's types points into.
-        "cmd rm -rf priv/static/types",
-        "cmd npx tsc priv/ts/client/phoenix_replay.ts --declaration --emitDeclarationOnly --rootDir priv/ts --outDir priv/static/types --target es2022 --lib es2022,dom",
         "cmd rm -f priv/static/manifest.json"
       ],
       # The bundle in priv/static is not tracked, so every package builds it.
