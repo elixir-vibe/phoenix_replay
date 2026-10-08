@@ -8,7 +8,7 @@ PhoenixReplay needs Elixir 1.18 or later and Phoenix LiveView 1.1 or later.
 mix igniter.install phoenix_replay
 ```
 
-The installer imports PhoenixReplay's formatter settings, mounts the dashboard at `/dev/replay` behind your `:dev_routes` flag (like Phoenix's LiveDashboard), turns recording off in `config/test.exs`, and ignores the local recordings directory. It also sends [browser context](../features/recording.md#browser-and-journey) to recordings: it adds `:user_agent` to your LiveView socket's `connect_info`, passes PhoenixReplay's client helpers to `LiveSocket` in `assets/js/app.js` when that file still has the setup Phoenix generates, and adds `PhoenixReplay.Plug` to your `:browser` pipeline for [visit context](../features/recording.md#visit-context). It then prints how to record a live session, which is the step below.
+The installer imports PhoenixReplay's formatter settings, mounts the dashboard at `/dev/replay` behind your `:dev_routes` flag (like Phoenix's LiveDashboard), turns recording off in `config/test.exs`, and ignores the local recordings directory. It also sends [browser context](../features/recording.md#browser-and-journey) to recordings: it adds `:user_agent` to your LiveView socket's `connect_info`, passes PhoenixReplay's client helpers to `LiveSocket` and starts `replayRecorder` in `assets/js/app.js` when that file still has the setup Phoenix generates, and adds `PhoenixReplay.Plug` to your `:browser` pipeline for [visit context](../features/recording.md#visit-context). It then prints how to record a live session, which is the step below.
 
 ## Install manually
 
@@ -31,7 +31,7 @@ Add `:phoenix_replay` to `import_deps` in `.formatter.exs`, so `mix format` leav
 
 Turn recording off in `config/test.exs`; see [Testing](#testing).
 
-Optionally, send the browser's viewport, user agent and tab with recordings, as [Browser and journey](../features/recording.md#browser-and-journey) describes.
+Optionally, send the browser's viewport, user agent and tab with recordings, as [Browser and journey](../features/recording.md#browser-and-journey) describes, and start `replayRecorder` to record form input and, with `pointer: true`, the pointer; see [Client state](../features/recording.md#client-state).
 
 ## Record a live session
 
@@ -69,7 +69,7 @@ Recordings can contain business data, so never mount the dashboard on a public r
 
 Start your app, use a recorded page for a while, then navigate away or close the tab. Open `/admin/replay`: the session is listed with its view, page, device, start time, duration, event count and errors. Click its row to replay it.
 
-The player re-renders your view inside an iframe with the assigns recorded at each event. Move through it with the timeline, the event list, or the keyboard: with the timeline focused, `←` and `→` step and `Space` plays or pauses. The **State** tab shows the assigns at each moment, and **Copy link** shares the moment you are looking at.
+The player re-renders your view inside an iframe with the assigns recorded at each event. Move through it with the timeline, the event list, or the keyboard: `←` and `→` step, `Space` plays or pauses, and `?` lists the other shortcuts. The **State** tab shows the assigns at each moment, and **Copy link** shares the moment you are looking at.
 
 ## Testing
 
@@ -93,5 +93,7 @@ and point `:storage` at a temporary directory in `config/test.exs`. Sanitizers a
 
 - [Recording](recording.md) — what is recorded, sampling and limits
 - [Dashboard](dashboard.md) — authorization, filters and the replay frame
+- [Telemetry and Logs](telemetry-and-logs.md) — queries, requests, logs and marks
+- [Privacy and Security](privacy-and-security.md) — sanitizing and redaction
 - [Storage](storage.md) — files, Ecto and retention
 - [Configuration cheatsheet](configuration.cheatmd)

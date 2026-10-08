@@ -11,7 +11,7 @@ This gives a few properties that DOM recording cannot:
 - **Exact.** A replay shows what the server rendered at each step, from the same template, not a reconstruction of browser mutations.
 - **Debuggable.** Next to the rendered page, the player shows the event that caused each step and the assigns behind it. You can see that `validate` ran with a given payload and which assigns changed as a result.
 - **Small.** Assigns changed by each render are stored, not markup. A 30-second session of active form input is a few kilobytes.
-- **No client cost.** Nothing is added to your JavaScript, nothing is uploaded from the browser, and the recorder writes events from the LiveView process without waiting on other processes.
+- **Little client cost.** The server records on its own, writing events from the LiveView process without waiting on other processes. The optional browser recorder adds only what the server cannot see, the pointer and form input, in small batches over the LiveView socket.
 - **Private by construction.** Sensitive values are filtered on the server before they are stored, using the same keys your forms and assigns already use.
 
 ## What it does not record

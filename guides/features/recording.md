@@ -25,6 +25,8 @@ A recording is a list of `PhoenixReplay.Recording.Event` structs, each with a mi
 | `:log` | A log message, when [log collection](telemetry-and-logs.md#collecting-logs) is on |
 | `:exit` | The formatted reason of a LiveView that exited abnormally |
 | `:viewport` | The browser's viewport changed: a resized window, a rotated phone, or a switch to dark mode |
+| `:pointer` | A batch of pointer moves, presses and scroll offsets, when [`:pointer`](#pointer-touches-and-scrolling) is on |
+| `:state` | [Client state](#client-state) reported by the browser, form control values included |
 
 The recording also keeps the view module, URL, sanitized params and session, and the start time. Everything passes through the configured sanitizer first; see [Privacy and Security](privacy-and-security.md).
 

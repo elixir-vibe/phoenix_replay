@@ -9,7 +9,7 @@ This is a web application written using the Phoenix web framework. It is the exa
 
 - The task pages are in the `:recorded` live session, whose `on_mount` includes `PhoenixReplay.Recorder`. Keep new pages that should be recorded in that live session
 - The dashboard is mounted with `phoenix_replay "/replay", frame_layout: {ExampleWeb.Layouts, :root}`, so replays render in the app's own root layout and pick up its Volt-built assets
-- `config/test.exs` keeps recording on and stores recordings in a temporary directory, because `test/features/replay_test.exs` records a session and replays it. Host apps would normally set `sample_rate: 0.0` in tests
+- `config/test.exs` leaves `sample_rate` at its default of `1.0`, so every test session is recorded, and only moves storage to a temporary directory, because `test/features/replay_test.exs` records a session and replays it. Host apps would normally set `sample_rate: 0.0` in tests
 - Changes to the library itself belong in `../lib`; run `mix ci` in the parent directory for its checks
 
 ### Phoenix v1.8 guidelines
