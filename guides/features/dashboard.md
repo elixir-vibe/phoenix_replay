@@ -90,8 +90,8 @@ The player takes these keys anywhere on its page, except while a dialog is open,
 | `←` / `→` | Previous or next event |
 | `Shift` + `←` / `→` | Back or forward 5 seconds |
 | `Home` / `End` | To the start or the end |
-| `E` / `Shift` + `E` | Next or previous error |
-| `M` / `Shift` + `M` | Next or previous [mark](telemetry-and-logs.md#marking-moments) |
+| `E` / `Shift` + `E` | Next or previous error, wrapping around |
+| `M` / `Shift` + `M` | Next or previous [mark](telemetry-and-logs.md#marking-moments), wrapping around |
 | `1` – `4` | Speed 1×, 2×, 5× or 10× |
 | `F` | Fit to the window or show at actual size |
 | `R` | Rotate |

@@ -95,7 +95,10 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   @doc """
   The index of the nearest event after or before `index` for which `fun`
-  holds, such as `PhoenixReplay.Recording.Event.error?/1`, or `nil`.
+  holds, such as `PhoenixReplay.Recording.Event.error?/1`, or `nil` when
+  none does. Past the last one it wraps around to the first, and before
+  the first to the last, as find-next does, so pressing the same key
+  goes through all of them from anywhere.
   """
   @spec nearest_index(Recording.t(), non_neg_integer(), :next | :previous, (Event.t() ->
                                                                               boolean())) ::
@@ -104,10 +107,14 @@ defmodule PhoenixReplay.Web.Player.Events do
     found = for {event, at} <- Enum.with_index(events), fun.(event), do: at
 
     case direction do
-      :next -> Enum.find(found, &(&1 > index))
-      :previous -> found |> Enum.reverse() |> Enum.find(&(&1 < index))
+      :next -> wrapping_find(found, &(&1 > index))
+      :previous -> wrapping_find(Enum.reverse(found), &(&1 < index))
     end
   end
+
+  # The first for which `fun` holds, else the first of all.
+  defp wrapping_find([first | _rest] = indexes, fun), do: Enum.find(indexes, first, fun)
+  defp wrapping_find([], _fun), do: nil
 
   @doc "Whether an event's label contains `query`, ignoring case."
   @spec matches?(Event.t(), String.t()) :: boolean()

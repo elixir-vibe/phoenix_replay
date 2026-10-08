@@ -82,16 +82,25 @@ defmodule PhoenixReplay.Test.Repos do
 
   # QuackDB serves DuckDB from its CLI, paired with the repo; install the
   # binary once with `MIX_ENV=test mix quackdb.install`.
+  #
+  # Each run has a database and a port of its own: `mix ci` runs the tests
+  # twice in a row, and the first run's DuckDB may still be stopping, on
+  # QuackDB's default port, when the second starts.
   defp start_duckdb do
     if Code.ensure_loaded?(DuckDBRepo) do
-      database = "tmp/test/replay.duckdb"
-      File.mkdir_p!(Path.dirname(database))
-      for file <- Path.wildcard(database <> "*"), do: File.rm!(file)
+      dir = Path.join(System.tmp_dir!(), "phoenix_replay_test_#{System.pid()}")
+      File.rm_rf!(dir)
+      File.mkdir_p!(dir)
+      System.at_exit(fn _status -> File.rm_rf(dir) end)
 
       {:ok, _supervisor} =
         Supervisor.start_link(
           QuackDB.Server.child_specs(
-            server: [duckdb: :managed, database: database],
+            server: [
+              duckdb: :managed,
+              database: Path.join(dir, "replay.duckdb"),
+              endpoint: "quack:localhost:#{free_port()}"
+            ],
             client: {DuckDBRepo, pool_size: 2}
           ),
           strategy: :rest_for_one
@@ -101,6 +110,15 @@ defmodule PhoenixReplay.Test.Repos do
       migrate(DuckDBRepo)
       DuckDBRepo
     end
+  end
+
+  # A port the system has just handed out, so no other server holds it.
+  # QuackDB's endpoint listens on IPv6 localhost.
+  defp free_port do
+    {:ok, socket} = :gen_tcp.listen(0, [:inet6, ip: {0, 0, 0, 0, 0, 0, 0, 1}])
+    {:ok, port} = :inet.port(socket)
+    :ok = :gen_tcp.close(socket)
+    port
   end
 
   defp reset_and_start(repo) do

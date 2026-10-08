@@ -43,7 +43,7 @@ defmodule PhoenixReplay.Web.Components.State do
     </div>
     <ul
       id="replay-assigns"
-      class="max-h-[calc(100dvh-12rem)] min-h-60 overflow-y-auto py-2 font-mono text-xs"
+      class="min-h-60 overflow-y-auto py-2 font-mono text-xs max-lg:max-h-[calc(100dvh-12rem)] lg:min-h-0 lg:flex-1"
     >
       <li :for={row <- @rows}>
         <details :if={row.full} class="group">

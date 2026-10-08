@@ -23,8 +23,7 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
   The replayed page at the recorded viewport, keeping its aspect ratio:
   fitted to the window or at 100% in a scrolling box. The FrameViewport
   hook writes the sizes into the ignored style element and the scale into
-  the ignored label, so the frame itself stays server-rendered. `below`
-  names the element kept on screen under it.
+  the ignored label, so the frame itself stays server-rendered.
 
   `rotated` swaps the viewport's width and height, so the page lays itself
   out in the other orientation; **Rotate** sends `"rotate"` to toggle it.
@@ -43,7 +42,6 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
   attr :mode, :string, default: "fit"
   attr :rotated, :boolean, default: false
   attr :follow_scroll, :boolean, default: true
-  attr :below, :string, default: nil
 
   attr :pointer, :map,
     default: nil,
@@ -76,8 +74,7 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
       data-width={@shown && @shown.width}
       data-height={@shown && @shown.height}
       data-mode={@mode}
-      data-below={@below}
-      class="overflow-hidden rounded-xl border border-line bg-surface"
+      class="flex flex-col overflow-hidden rounded-xl border border-line bg-surface lg:min-h-0 lg:flex-1"
     >
       <style id="replay-viewport-style" phx-update="ignore">
       </style>
@@ -215,12 +212,17 @@ defmodule PhoenixReplay.Web.Components.Player.Frame do
           </:item>
         </.menu>
       </div>
-      <div id="replay-viewport-box" class="relative bg-canvas">
+      <%!-- Side by side, the box takes the height the player leaves it, and
+      FrameViewport scales the replay to it; see --frame-fill. --%>
+      <div
+        id="replay-viewport-box"
+        class="relative bg-canvas lg:min-h-0 lg:flex-1 lg:[--frame-fill:1]"
+      >
         <iframe
           id="replay-frame"
           title="Replay"
           src={@src}
-          class={["block h-[600px] w-full border-0", @following? && "pointer-events-none"]}
+          class={["block h-[600px] w-full border-0 lg:h-full", @following? && "pointer-events-none"]}
         ></iframe>
         <%!-- Covers the frame while its page loads and its LiveView connects. --%>
         <div

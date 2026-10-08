@@ -256,7 +256,7 @@ defmodule PhoenixReplay.Web.Live.Show do
     {:noreply, socket |> pause() |> seek(Timeline.last_index(timeline)) |> at_time(duration)}
   end
 
-  # Jumps to the next or previous error, or mark.
+  # Jumps to the next or previous error, or mark, wrapping around.
   def handle_event(to, %{"direction" => direction}, %{assigns: %{recording: %{}}} = socket)
       when to in ~w(error mark) and direction in ~w(next previous) do
     %{recording: recording, index: index} = socket.assigns

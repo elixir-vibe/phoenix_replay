@@ -93,27 +93,6 @@ test('follows a new viewport and mode, and clears the sizes without one', () => 
   expect(measure(el).label).toBe('')
 })
 
-test('keeps the element named by data-below free under the frame', () => {
-  const height = (below?: string): number => {
-    const el = section({ width: 390, height: 4000, maxHeight: 0 })
-    if (below) el.dataset.below = below
-    mountHook(FrameViewport, el)
-    const value = parseFloat(measure(el).box.height)
-    el.remove()
-    return value
-  }
-
-  const alone = height()
-  document.body.insertAdjacentHTML('beforeend', '<div id="controls" style="height: 300px"></div>')
-  const controls = document.getElementById('controls') as HTMLElement
-  const withControls = height('controls')
-  controls.remove()
-
-  // Scales are floored to whole percents, so the difference is about 300 px.
-  expect(alone - withControls).toBeGreaterThan(260)
-  expect(alone - withControls).toBeLessThan(340)
-})
-
 test('scrolls the box back when it goes from 100% to fit', () => {
   const el = section({ width: 1200, height: 800 })
   const { hook } = mountHook(FrameViewport, el)
