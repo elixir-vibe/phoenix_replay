@@ -48,6 +48,7 @@ defmodule Mix.Tasks.PhoenixReplay.Show do
       nil -> Trace.events(recording)
       index -> Trace.state(recording, index)
     end
-    |> IO.inspect(pretty: true, limit: limit, printable_limit: :infinity)
+    # Recorded lists of integers are ids and counts, not text.
+    |> IO.inspect(pretty: true, limit: limit, printable_limit: :infinity, charlists: :as_lists)
   end
 end

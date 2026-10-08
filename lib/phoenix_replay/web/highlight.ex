@@ -1,7 +1,7 @@
 defmodule PhoenixReplay.Web.Highlight do
   @moduledoc """
   Highlights code in the player with `Lumis`: collected SQL, and recorded
-  values as `inspect/2` writes them.
+  values as `PhoenixReplay.Recording.Value.inspect/2` writes them.
 
   Tokens become spans with Lumis's `l-` classes, which the dashboard's
   stylesheet colours from its own palette, so code follows the light and
@@ -9,6 +9,8 @@ defmodule PhoenixReplay.Web.Highlight do
   """
 
   require Logger
+
+  alias PhoenixReplay.Recording.Value
 
   @type language :: :elixir | :sql
 
@@ -45,7 +47,7 @@ defmodule PhoenixReplay.Web.Highlight do
     end
   end
 
-  @doc "Highlights a value as `inspect/2` writes it with `opts`."
+  @doc "Highlights a recorded value as `PhoenixReplay.Recording.Value.inspect/2` writes it."
   @spec term(term(), keyword()) :: Phoenix.HTML.safe()
-  def term(value, opts \\ []), do: value |> inspect(opts) |> code(:elixir)
+  def term(value, opts \\ []), do: value |> Value.inspect(opts) |> code(:elixir)
 end

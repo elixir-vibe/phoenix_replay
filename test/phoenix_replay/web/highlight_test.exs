@@ -10,6 +10,12 @@ defmodule PhoenixReplay.Web.HighlightTest do
     assert html(Highlight.term(%{ok: true})) =~ ~s(<span class="l-boolean">true</span>)
   end
 
+  test "shows a recorded list of small integers as numbers, not a charlist" do
+    shown = html(Highlight.term(%{"ids" => [11]}))
+    assert shown =~ "11"
+    refute shown =~ "~c"
+  end
+
   test "escapes what it highlights" do
     refute html(Highlight.code(~s(SELECT '<script>'), :sql)) =~ "<script>"
     refute html(Highlight.term("<b>")) =~ "<b>"

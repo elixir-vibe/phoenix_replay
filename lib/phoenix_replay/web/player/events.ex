@@ -6,7 +6,7 @@ defmodule PhoenixReplay.Web.Player.Events do
 
   alias PhoenixReplay.Collector
   alias PhoenixReplay.Recording
-  alias PhoenixReplay.Recording.{Client, Event, Label, State, Timeline}
+  alias PhoenixReplay.Recording.{Client, Event, Label, State, Timeline, Value}
   alias PhoenixReplay.Web.{Format, Highlight}
 
   @typedoc "What the event list filters by."
@@ -366,7 +366,7 @@ defmodule PhoenixReplay.Web.Player.Events do
       else: to_string(value)
   end
 
-  defp measurement(_key, value), do: inspect(value)
+  defp measurement(_key, value), do: Value.inspect(value)
 
   defp metadata(metadata) when metadata == %{}, do: nil
   defp metadata(metadata), do: Highlight.term(metadata, pretty: true, limit: 50)
@@ -442,7 +442,7 @@ defmodule PhoenixReplay.Web.Player.Events do
   end
 
   defp component_code(module, id) do
-    id = if is_binary(id), do: id, else: inspect(id)
+    id = if is_binary(id), do: id, else: Value.inspect(id)
 
     {:safe,
      safe([

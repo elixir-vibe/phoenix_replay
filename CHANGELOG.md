@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Lists of small integers, such as `%{"ids" => [11]}`, show as numbers in the player and `mix phoenix_replay.show`, not as charlists like `~c"\v"`.
+
 ## 0.6.1 - 2026-10-08
 
 Documentation brought up to date with 0.6.
