@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 - 2026-10-08
 
 Pointer, touch and form recording, marks, video export, and a richer player and recording list.
 
