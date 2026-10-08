@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.6.2 - 2026-10-09
+
+Two replay fixes: a view's own layout, and lists of integers.
 
 ### Fixed
 
