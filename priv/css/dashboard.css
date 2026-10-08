@@ -1,2 +1,292 @@
 @import "tailwindcss" source(none);
 @source "../../lib/phoenix_replay/web";
+
+/* Dark follows the system unless data-theme on <html> says otherwise. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where(:not([data-theme="light"], [data-theme="light"] *)) {
+      @slot;
+    }
+  }
+}
+
+/* Latin only; other scripts fall back to the system fonts. */
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
+  Components use only these semantic colours, never Tailwind's palette, so
+  dark mode is the one block below.
+*/
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-canvas: #f7f7f8;
+  --color-surface: #ffffff;
+  --color-chrome: #fafafa;
+  --color-hover: #f4f4f5;
+  --color-track: #f1f1f3;
+  --color-line: #e4e4e7;
+  --color-ink: #18181b;
+  --color-on-ink: #ffffff;
+  --color-muted: #5f5f69;
+  --color-faint: #a1a1aa;
+  --color-accent: #e8590c;
+  --color-accent-soft: #fff1e8;
+  --color-error: #c02626;
+  --color-error-soft: #fdecec;
+  --color-live: #15803d;
+  --color-live-soft: #e7f6ec;
+
+  /* Event kinds, for timeline markers and the event list. */
+  --color-kind-event: #d9770f;
+  --color-kind-nav: #2563eb;
+  --color-kind-render: #8b8b96;
+  --color-kind-component: #7c3aed;
+  --color-kind-query: #0f8b7e;
+  --color-kind-log: #6b7280;
+  --color-kind-mark: #db2777;
+  /* Collected events slower than the threshold. */
+  --color-slow: #b45309;
+
+  /* Highlighted code; see PhoenixReplay.Web.Highlight. */
+  --color-code-keyword: #8250df;
+  --color-code-string: #0a7b55;
+  --color-code-atom: #a8510b;
+  --color-code-constant: #1f5fc4;
+  --color-code-module: #0f6c8b;
+  --color-code-function: #953800;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    @variant dark {
+      color-scheme: dark;
+      --color-canvas: #0e0e10;
+      --color-surface: #16161a;
+      --color-chrome: #1b1b20;
+      --color-hover: #1d1d22;
+      --color-track: #202026;
+      --color-line: #2a2a31;
+      --color-ink: #ededf0;
+      --color-on-ink: #0e0e10;
+      --color-muted: #a1a1aa;
+      --color-faint: #6b6b76;
+      --color-accent-soft: rgb(232 89 12 / 0.16);
+      --color-error: #ff7b7b;
+      --color-error-soft: rgb(255 123 123 / 0.12);
+      --color-live: #4ade80;
+      --color-live-soft: rgb(74 222 128 / 0.12);
+      --color-kind-nav: #60a5fa;
+      --color-kind-component: #a78bfa;
+      --color-kind-query: #2dd4bf;
+      --color-kind-log: #9ca3af;
+      --color-kind-mark: #f472b6;
+      --color-slow: #fbbf24;
+      --color-code-keyword: #c4a5ff;
+      --color-code-string: #7ee2b0;
+      --color-code-atom: #f0a868;
+      --color-code-constant: #79b8ff;
+      --color-code-module: #67d4f0;
+      --color-code-function: #ffa657;
+    }
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /*
+    Tailwind 4 leaves buttons with the default arrow. Whatever acts on a
+    click points: buttons and the elements that act like them.
+  */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="switch"],
+  summary,
+  select,
+  label:has(> input[type="checkbox"], > input[type="radio"]) {
+    cursor: pointer;
+  }
+}
+
+/*
+  Lumis writes each token as a span with an `l-` class named after its
+  highlight scope, such as `l-keyword` or `l-string-special-symbol`.
+*/
+@layer components {
+  [class^="l-keyword"] {
+    color: var(--color-code-keyword);
+  }
+
+  .l-string,
+  .l-string-escape {
+    color: var(--color-code-string);
+  }
+
+  /* Atoms and keyword keys. */
+  .l-string-special-symbol,
+  .l-string-special {
+    color: var(--color-code-atom);
+  }
+
+  .l-number,
+  .l-boolean,
+  .l-constant,
+  .l-constant-builtin,
+  .l-variable-parameter {
+    color: var(--color-code-constant);
+  }
+
+  .l-module,
+  .l-type,
+  .l-type-builtin {
+    color: var(--color-code-module);
+  }
+
+  [class^="l-function"] {
+    color: var(--color-code-function);
+  }
+
+  [class^="l-punctuation"],
+  .l-operator {
+    color: var(--color-muted);
+  }
+
+  [class^="l-comment"] {
+    color: var(--color-faint);
+    font-style: italic;
+  }
+}
+
+/*
+  The range calendar of the recording list's time picker, Cally's
+  <calendar-range> and <calendar-month>, in the dashboard's tokens. Its
+  parts are styled from outside its shadow root.
+*/
+@layer components {
+  /* Cally sets its own --color-accent on its elements; ours comes in by
+     another name, from the wrapper. */
+  [data-calendar] {
+    --calendar-today: var(--color-accent);
+  }
+
+  calendar-range::part(header) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.25rem;
+  }
+
+  calendar-range::part(button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-muted);
+  }
+
+  calendar-range::part(button):hover {
+    background: var(--color-hover);
+    color: var(--color-ink);
+  }
+
+  calendar-range::part(heading),
+  calendar-month::part(heading) {
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+
+  calendar-month::part(th) {
+    padding-bottom: 0.25rem;
+    font-size: var(--text-xs);
+    font-weight: 400;
+    color: var(--color-muted);
+  }
+
+  calendar-month::part(button) {
+    border: 0;
+    background: transparent;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink);
+  }
+
+  calendar-month::part(button):hover {
+    background: var(--color-hover);
+  }
+
+  calendar-month::part(today) {
+    color: var(--calendar-today);
+    font-weight: 600;
+  }
+
+  calendar-month::part(outside) {
+    color: var(--color-faint);
+  }
+
+  calendar-month::part(range-start) {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  calendar-month::part(range-end) {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
+
+  calendar-month::part(range-start range-end) {
+    border-radius: var(--radius-md);
+  }
+
+  calendar-month::part(selected),
+  calendar-month::part(range-start),
+  calendar-month::part(range-end) {
+    background: var(--color-ink);
+    color: var(--color-on-ink);
+  }
+
+  /* Every day of a range is selected too; its middle days are lighter. */
+  calendar-month::part(range-inner) {
+    border-radius: 0;
+    background: var(--color-hover);
+    color: var(--color-ink);
+  }
+}

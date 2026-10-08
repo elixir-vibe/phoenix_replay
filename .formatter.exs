@@ -2,8 +2,13 @@ locals_without_parens = [phoenix_replay: 1, phoenix_replay: 2]
 
 [
   plugins: [Volt.Formatter, Phoenix.LiveView.HTMLFormatter],
-  import_deps: [:phoenix],
-  inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}", "priv/ts/**/*.ts"],
+  import_deps: [:phoenix, :ecto, :ecto_sql],
+  inputs: [
+    "{mix,.formatter}.exs",
+    "{config,lib,test}/**/*.{ex,exs}",
+    "lib/**/*.heex",
+    "priv/ts/**/*.ts"
+  ],
   locals_without_parens: locals_without_parens,
   volt: [
     semi: false,

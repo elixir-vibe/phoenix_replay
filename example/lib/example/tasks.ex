@@ -1,6 +1,11 @@
 defmodule Example.Tasks do
   @moduledoc """
   Task management context backed by Ecto + SQLite.
+
+  Creating and completing a task emit `[:example, :task, :created]` and
+  `[:example, :task, :completed]`, the moments a product would track as
+  analytics events. PhoenixReplay collects them as marks; see
+  `config/runtime.exs`.
   """
 
   import Ecto.Query
@@ -13,13 +18,35 @@ defmodule Example.Tasks do
 
   def get_task(id), do: Repo.get(Task, id)
 
+  @doc "Pretends to sync with a remote service, whose table does not exist."
+  def sync do
+    case Repo.query("SELECT id FROM remote_tasks") do
+      {:ok, _result} -> :ok
+      {:error, error} -> {:error, Exception.message(error)}
+    end
+  end
+
+  @doc "Counts open tasks by priority."
+  def open_by_priority do
+    Task
+    |> where([t], not t.completed)
+    |> group_by([t], t.priority)
+    |> select([t], {t.priority, count(t.id)})
+    |> Repo.all()
+    |> Map.new()
+  end
+
   def create_task(attrs) do
     %Task{}
     |> Task.changeset(attrs)
     |> Repo.insert()
     |> tap(fn
-      {:ok, task} -> broadcast({:task_created, task})
-      _ -> :ok
+      {:ok, task} ->
+        mark(:created, task)
+        broadcast({:task_created, task})
+
+      _ ->
+        :ok
     end)
   end
 
@@ -49,8 +76,12 @@ defmodule Example.Tasks do
         |> Task.changeset(%{"completed" => !task.completed})
         |> Repo.update()
         |> tap(fn
-          {:ok, task} -> broadcast({:task_updated, task})
-          _ -> :ok
+          {:ok, task} ->
+            if task.completed, do: mark(:completed, task)
+            broadcast({:task_updated, task})
+
+          _ ->
+            :ok
         end)
     end
   end
@@ -64,6 +95,13 @@ defmodule Example.Tasks do
 
   def subscribe do
     Phoenix.PubSub.subscribe(Example.PubSub, "tasks")
+  end
+
+  defp mark(moment, task) do
+    :telemetry.execute([:example, :task, moment], %{}, %{
+      title: task.title,
+      priority: task.priority
+    })
   end
 
   defp broadcast(message) do

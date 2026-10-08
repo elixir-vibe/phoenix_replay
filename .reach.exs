@@ -10,41 +10,68 @@ app_config = [
 adapter = [
   "Mix.Tasks.PhoenixReplay.*",
   "PhoenixReplay",
+  "PhoenixReplay.Export",
+  "PhoenixReplay.Trace",
+  "PhoenixReplay.Plug",
   "PhoenixReplay.Recorder",
   "PhoenixReplay.Router",
   "PhoenixReplay.Web.*"
 ]
 
+# Session modules follow a recording until it is stored; its buffer is
+# infrastructure that capture writes to.
 orchestrator = [
-  "PhoenixReplay.Recordings",
-  "PhoenixReplay.Retention",
-  "PhoenixReplay.Recorder.Monitor",
-  "PhoenixReplay.Recorder.Persister"
+  "PhoenixReplay.Catalog",
+  "PhoenixReplay.Storage.Retention",
+  "PhoenixReplay.Session.Finalizer",
+  "PhoenixReplay.Session.Flusher",
+  "PhoenixReplay.Session.Monitor",
+  "PhoenixReplay.Session.Recovery",
+  # Video export: the queue and the render of one video.
+  "PhoenixReplay.Export.Queue",
+  "PhoenixReplay.Export.Queue.Local",
+  "PhoenixReplay.Export.Queue.Oban",
+  "PhoenixReplay.Export.Queue.Oban.Worker",
+  "PhoenixReplay.Export.Supervisor",
+  "PhoenixReplay.Export.Video"
 ]
 
 model = [
   "PhoenixReplay.Config",
+  "PhoenixReplay.Export.Job",
+  "PhoenixReplay.Export.Options",
+  "PhoenixReplay.Export.Schedule",
   "PhoenixReplay.Recording",
-  "PhoenixReplay.Recording.Event",
-  "PhoenixReplay.Recording.Summary",
-  "PhoenixReplay.Recording.Timeline",
-  "PhoenixReplay.Recordings.Filter"
+  "PhoenixReplay.Recording.*"
 ]
 
+# Behaviours and their built-in implementations.
 logic = [
   "PhoenixReplay.Authorization",
-  "PhoenixReplay.Sanitizer",
-  "PhoenixReplay.Sanitizer.Default",
+  "PhoenixReplay.Replay*",
+  "PhoenixReplay.Migration",
+  "PhoenixReplay.Collector*",
+  "PhoenixReplay.Redactor*",
+  "PhoenixReplay.Sanitizer*",
+  "PhoenixReplay.Session.TailSampling",
   "PhoenixReplay.Storage.Codec"
 ]
 
 infrastructure = [
   "PhoenixReplay.Application",
-  "PhoenixReplay.Recorder.Buffer",
-  "PhoenixReplay.Recorder.Components",
+  "PhoenixReplay.Capture.*",
+  # Video export's outside processes: the endpoint and Chromium, and ffmpeg.
+  "PhoenixReplay.Export.Encoder",
+  "PhoenixReplay.Export.FFmpeg",
+  "PhoenixReplay.Export.FFmpeg.Output",
+  "PhoenixReplay.Export.Runtime",
+  "PhoenixReplay.Export.Screenshots",
+  "PhoenixReplay.Session.Buffer",
   "PhoenixReplay.Storage",
   "PhoenixReplay.Storage.Ecto",
+  "PhoenixReplay.Storage.Ecto.Migration",
   "PhoenixReplay.Storage.File",
+  "PhoenixReplay.Storage.File.Index",
   "PhoenixReplay.Telemetry"
 ]
 
@@ -89,7 +116,8 @@ infrastructure = [
       {"PhoenixReplay*", app_config, except: ["PhoenixReplay.Config"]},
       {"PhoenixReplay.Recording", ["File.*", ":ets.*", "Phoenix.PubSub.*"]},
       {"PhoenixReplay.Recording.*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]},
-      {"PhoenixReplay.Sanitizer*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]}
+      {"PhoenixReplay.Sanitizer*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]},
+      {"PhoenixReplay.Redactor*", ["File.*", ":ets.*", "Phoenix.PubSub.*"]}
     ]
   ],
   smells: [strict: true]

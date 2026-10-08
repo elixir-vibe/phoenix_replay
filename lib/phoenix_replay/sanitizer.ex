@@ -24,6 +24,12 @@ defmodule PhoenixReplay.Sanitizer do
       end
 
       config :phoenix_replay, sanitizer: MyApp.ReplaySanitizer
+
+  Collected telemetry metadata and log metadata go through
+  `sanitize_params/1` too. A sanitizer runs inside your LiveViews, so it
+  should stay cheap; values that only detection can find, such as an email
+  address in free text, are masked when the recording is saved by a
+  `PhoenixReplay.Redactor`.
   """
 
   @callback sanitize_assigns(map()) :: map()

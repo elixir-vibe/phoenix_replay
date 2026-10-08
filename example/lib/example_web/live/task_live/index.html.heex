@@ -1,31 +1,40 @@
 <div class="mx-auto max-w-2xl px-4 py-10">
-  <header class="mb-8 flex items-center justify-between">
+  <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">Tasks</h1>
       <p class="mt-1 text-sm text-gray-500">
         {length(@tasks)} total · {Enum.count(@tasks, & &1.completed)} completed
       </p>
     </div>
-    <.link
-      patch={~p"/tasks/new"}
-      class="inline-flex h-9 items-center gap-1.5 rounded-md bg-gray-900 px-3.5 text-sm font-medium text-white transition-colors hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
+    <div class="flex items-center gap-2">
+      <ExampleWeb.Theme.toggle theme={@theme} />
+      <button
+        phx-click="sync"
+        class="inline-flex h-9 items-center rounded-md border border-gray-200 px-3.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
       >
-        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-      New Task
-    </.link>
+        Sync
+      </button>
+      <.link
+        patch={~p"/tasks/new"}
+        class="inline-flex h-9 items-center gap-1.5 rounded-md bg-gray-900 px-3.5 text-sm font-medium text-white transition-colors hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        New Task
+      </.link>
+    </div>
   </header>
 
   <nav class="mb-6 flex gap-1 border-b border-gray-200" aria-label="Filter tasks">
@@ -59,6 +68,27 @@
       </span>
     </button>
   </nav>
+
+  <%!-- A note the server never hears about: no phx-change and no JavaScript.
+       PhoenixReplay records what is typed and puts it back in the replay.
+       LiveView leaves the box alone when it re-renders the page. --%>
+  <label id="scratchpad-box" phx-update="ignore" class="mb-6 block">
+    <span class="text-xs font-medium tracking-wide text-gray-500 uppercase">Scratchpad</span>
+    <textarea
+      id="scratchpad"
+      name="scratchpad"
+      rows="2"
+      placeholder="Notes stay in your browser…"
+      class="mt-1.5 block w-full resize-none rounded-md border border-gray-200 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+    ></textarea>
+  </label>
+
+  <%!-- The version changes whenever the tasks do, so the component recounts. --%>
+  <.live_component
+    module={ExampleWeb.TaskLive.StatsComponent}
+    id="task-stats"
+    version={:erlang.phash2(@tasks)}
+  />
 
   <div class="overflow-hidden rounded-lg border border-gray-200">
     <div
@@ -254,3 +284,5 @@
     </div>
   </div>
 </div>
+
+<Layouts.flash_group flash={@flash} />

@@ -40,7 +40,7 @@ defmodule Example.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:volt, "~> 0.20"},
+      {:volt, "~> 0.23"},
       {:phoenix, "~> 1.8.4"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
@@ -62,7 +62,9 @@ defmodule Example.MixProject do
       {:bandit, "~> 1.5"},
       {:ecto_sqlite3, "~> 0.18"},
       {:phoenix_ecto, "~> 4.6"},
-      {:phoenix_replay, path: ".."}
+      {:phoenix_replay, path: ".."},
+      {:playwright_ex, "~> 0.14"},
+      {:muontrap, "~> 1.6"}
     ]
   end
 
@@ -74,7 +76,14 @@ defmodule Example.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
+      # PhoenixReplay's own bundle and client module are not tracked; build them first.
+      setup: [
+        "cmd --cd .. mix assets.build",
+        "deps.get",
+        "ecto.setup",
+        "assets.setup",
+        "assets.build"
+      ],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       # Browser tests load assets through Volt's build manifest.

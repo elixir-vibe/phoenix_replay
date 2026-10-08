@@ -41,6 +41,7 @@ defmodule PhoenixReplay.Router do
         import Phoenix.LiveView.Router, only: [live: 3, live_session: 3]
 
         get "/assets/:asset", PhoenixReplay.Web.Assets, []
+        get "/:id/video/:token", PhoenixReplay.Web.Export.Download, []
 
         live_session dashboard_session, dashboard_opts do
           live "/", PhoenixReplay.Web.Live.Index, :index
@@ -61,15 +62,15 @@ defmodule PhoenixReplay.Router do
   """
   @spec __live_sessions__(String.t(), keyword()) :: {atom(), atom(), keyword(), keyword()}
   def __live_sessions__(base_path, opts) do
-    case Keyword.keys(opts) -- @options do
-      [] -> :ok
-      unknown -> raise ArgumentError, "unknown phoenix_replay options: #{inspect(unknown)}"
-    end
+    Keyword.validate!(opts, @options)
+
+    frame_layout = Keyword.get(opts, :frame_layout, {PhoenixReplay.Web.Layouts, :frame})
 
     context = %{
       base_path: base_path,
       authorize: opts[:authorize],
-      live_socket_path: Keyword.get(opts, :live_socket_path, "/live")
+      live_socket_path: Keyword.get(opts, :live_socket_path, "/live"),
+      frame_layout: frame_layout
     }
 
     on_mount = [{PhoenixReplay.Web.Context, context} | List.wrap(opts[:on_mount])]
@@ -79,7 +80,7 @@ defmodule PhoenixReplay.Router do
      [on_mount: on_mount, root_layout: {PhoenixReplay.Web.Layouts, :dashboard}],
      [
        on_mount: on_mount,
-       root_layout: Keyword.get(opts, :frame_layout, {PhoenixReplay.Web.Layouts, :frame})
+       root_layout: frame_layout
      ]}
   end
 end

@@ -4,7 +4,7 @@
 
 Session recording and replay for Phoenix LiveView. PhoenixReplay records what your LiveViews and LiveComponents did — events, navigation and assigns — and replays a session by re-rendering your own templates with the recorded assigns. No browser recording script, no DOM snapshots.
 
-![PhoenixReplay replaying a form session](https://raw.githubusercontent.com/elixir-vibe/phoenix_replay/master/screenshot.jpg)
+![PhoenixReplay replaying a phone session: a swipe scrolling the replayed page, the mark a tap reached, its queries, and errors on the timeline](https://raw.githubusercontent.com/elixir-vibe/phoenix_replay/master/guides/images/player.jpg)
 
 ```bash
 mix igniter.install phoenix_replay
@@ -44,7 +44,38 @@ live_session :checkout,
 end
 ```
 
+Optionally, the browser sends its viewport, user agent and tab, so a phone session replays at phone size and sessions across LiveViews link into one journey:
+
+```javascript
+import { replayParams, replayMetadata } from "phoenix_replay"
+
+new LiveSocket("/live", Socket, {
+  params: () => ({_csrf_token: csrfToken, ...replayParams()}),
+  metadata: replayMetadata
+})
+```
+
 See the [Recording guide](https://hexdocs.pm/phoenix_replay/recording.html) and [LiveComponents guide](https://hexdocs.pm/phoenix_replay/live-components.html).
+
+## Telemetry and logs
+
+See the queries, HTTP calls and log messages behind each click, listed under the event that caused them — including those from `start_async` and `assign_async` tasks:
+
+```elixir
+config :phoenix_replay,
+  collect: [{PhoenixReplay.Collector.Ecto, repo: MyApp.Repo}, PhoenixReplay.Collector.Finch],
+  logs: [level: :info]
+```
+
+Then record every session and keep the ones that matter — every session with an error or a slow query, and a sample of the rest:
+
+```elixir
+config :phoenix_replay,
+  keep: [rate: 0.05, errors: true, slower_than: 1_000],
+  max_memory: 256 * 1024 * 1024
+```
+
+Any telemetry event can be collected, and collectors are a small behaviour. See the [Telemetry and Logs guide](https://hexdocs.pm/phoenix_replay/telemetry-and-logs.html).
 
 ## Privacy
 
@@ -64,11 +95,17 @@ defmodule MyApp.ReplaySanitizer do
 end
 ```
 
+Values that only detection can find, such as an email address typed into a form or a card number in a log message, are masked when a session is saved, off your users' path. Use your own patterns or [Obscura](https://hexdocs.pm/obscura), an optional dependency:
+
+```elixir
+config :phoenix_replay, redact: {PhoenixReplay.Redactor.Obscura, []}
+```
+
 See the [Privacy and Security guide](https://hexdocs.pm/phoenix_replay/privacy-and-security.html).
 
 ## Dashboard
 
-Browse, filter and replay recordings with a scrubber, keyboard controls and playback speeds. Filters live in the URL, so `/admin/replay?event=checkout&within=24h` is a shareable link. Restrict who sees what with an authorization module:
+Browse, filter and replay recordings in a dashboard that follows your system's light or dark mode. The list pages through storage and holds its place while new sessions arrive; filters live in the URL, so `/admin/replay?event=checkout&within=24h` is a shareable link. The player has a timeline lane per kind of event, the events grouped by the interaction that caused them, the assigns at every moment, and a link to the moment you are looking at. Restrict who sees what with an authorization module:
 
 ```elixir
 phoenix_replay "/replay",
@@ -76,7 +113,17 @@ phoenix_replay "/replay",
   authorize: MyApp.ReplayAuthorization
 ```
 
+![The recording list: sessions of the last day by device, browser and where they came from, with the marks they reached and their errors](https://raw.githubusercontent.com/elixir-vibe/phoenix_replay/master/guides/images/recordings.jpg)
+
 The dashboard ships its own assets and loads your app's own Phoenix and LiveView clients, so it needs nothing from your asset pipeline. See the [Dashboard guide](https://hexdocs.pm/phoenix_replay/dashboard.html).
+
+Export a recording as an MP4 of the page and the pointer, from the player's menu or with `mix phoenix_replay.export <id>`. A headless Chromium films the replay through [`playwright_ex`](https://hexdocs.pm/playwright_ex) and `ffmpeg`, run by [MuonTrap](https://hexdocs.pm/muontrap), encodes it; see [Exporting videos](https://hexdocs.pm/phoenix_replay/dashboard.html#exporting-videos).
+
+## For coding agents
+
+`PhoenixReplay.Trace` reads recordings as plain data, for IEx, scripts and agents: `find/1` by view, event, errors or time, `events/1` as the player lists them, and `state/2` with the assigns at a moment and what changed. `mix phoenix_replay.list` and `mix phoenix_replay.show` print the same from a shell.
+
+The package ships two agent skills, `phoenix-replay-setup` and `phoenix-replay-debugging`, as `SKILL.md` files in `deps/phoenix_replay/skills/`. Point your agent at them, or copy them to wherever it reads skills from.
 
 ## Storage
 
@@ -110,8 +157,13 @@ Full documentation, guides and cheatsheets are available on [HexDocs](https://he
 mix deps.get
 npm ci
 npx playwright install chromium
+mix assets.build
 mix ci
 ```
+
+`mix ci` runs every check, including the video export tests, which film real replays with Chromium and need `ffmpeg`. A plain `mix test` leaves those out; set `PHOENIX_REPLAY_EXPORT_TESTS=1` to run them with it.
+
+The Ecto storage tests run on SQLite, on DuckDB through [QuackDB](https://hexdocs.pm/quackdb) (Elixir 1.19+; install its binary once with `MIX_ENV=test mix quackdb.install`), and on PostgreSQL when `PHOENIX_REPLAY_POSTGRES_URL` names a database.
 
 ## Part of Elixir Vibe
 

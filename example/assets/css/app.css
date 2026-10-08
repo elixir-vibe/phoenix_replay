@@ -47,6 +47,47 @@
   --color-amber-500: #f5a623;
 }
 
+/* Dark when the visitor chose it, or chose the system's theme and the
+   system is dark; see ExampleWeb.Theme. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where([data-theme="system"], [data-theme="system"] *) {
+      @slot;
+    }
+  }
+}
+
+/* Dark turns the palette around, so the templates' colors need no
+   variants of their own. */
+:root {
+  @variant dark {
+    color-scheme: dark;
+    --color-white: #0a0a0a;
+    --color-black: #fafafa;
+    --color-gray-50: #141414;
+    --color-gray-100: #1f1f1f;
+    --color-gray-200: #2e2e2e;
+    --color-gray-300: #404040;
+    --color-gray-400: #6b6b6b;
+    --color-gray-500: #8f8f8f;
+    --color-gray-600: #a8a8a8;
+    --color-gray-700: #c7c7c7;
+    --color-gray-800: #e0e0e0;
+    --color-gray-900: #ededed;
+    --color-gray-950: #fafafa;
+    --color-red-50: #2a1213;
+    --color-red-700: #ff8589;
+    --color-green-50: #0f2419;
+    --color-green-700: #5bd18f;
+    --color-amber-50: #2a1f0a;
+    --color-amber-700: #ffc461;
+  }
+}
+
 @custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
 @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
 @custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);

@@ -31,6 +31,145 @@ defmodule PhoenixReplay.ConfigTest do
     assert_raise ArgumentError, ~r/:sample_rate/, fn -> Config.new(sample_rate: 1.5) end
   end
 
+  test "normalizes collectors" do
+    assert Config.new([]).collect == []
+
+    assert Config.new(
+             collect: [
+               MyCollector,
+               {MyCollector, limit: 5},
+               [:my_app, :checkout, :stop],
+               {[:my_app, :search, :stop], metadata: [:query]}
+             ]
+           ).collect == [
+             {MyCollector, []},
+             {MyCollector, limit: 5},
+             {PhoenixReplay.Collector.Generic, event: [:my_app, :checkout, :stop]},
+             {PhoenixReplay.Collector.Generic,
+              event: [:my_app, :search, :stop], metadata: [:query]}
+           ]
+
+    assert_raise ArgumentError, ~r/configuration :collect: "nope"/, fn ->
+      Config.new(collect: ["nope"])
+    end
+  end
+
+  test "validates tail sampling, logs, redaction and memory" do
+    assert Config.new([]).keep == %{rate: 1.0, errors: false, marks: false, slower_than: nil}
+
+    assert Config.new(keep: [rate: 0, errors: true, marks: true]).keep == %{
+             rate: 0.0,
+             errors: true,
+             marks: true,
+             slower_than: nil
+           }
+
+    assert_raise ArgumentError, ~r/:rate/, fn -> Config.new(keep: [rate: 2]) end
+
+    assert Config.new([]).logs == nil
+    assert Config.new(logs: []).logs == %{level: :info, metadata: [], limit: 1_000}
+    assert_raise ArgumentError, ~r/:level/, fn -> Config.new(logs: [level: :loud]) end
+
+    assert Config.new([]).redact == nil
+    assert Config.new(redact: []).redact == nil
+
+    assert {PhoenixReplay.Redactor.Patterns,
+            patterns: [%Regex{source: "a+"}, %Regex{source: "b"}]} =
+             Config.new(redact: ["a+", ~r/b/]).redact
+
+    assert Config.new(redact: {MyRedactor, x: 1}).redact == {MyRedactor, x: 1}
+    assert Config.new(redact: MyRedactor).redact == {MyRedactor, []}
+
+    assert_raise ArgumentError, ~r/configuration :redact: :email/, fn ->
+      Config.new(redact: [:email])
+    end
+
+    assert Config.new([]).flush == %{events: 200, interval: 5_000}
+    assert Config.new(flush: [events: 50]).flush == %{events: 50, interval: 5_000}
+    assert Config.new(flush: false).flush == nil
+    assert_raise ArgumentError, ~r/:interval/, fn -> Config.new(flush: [interval: 0]) end
+
+    assert Config.new(max_memory: 1_024).max_memory == 1_024
+    assert_raise ArgumentError, ~r/:max_memory/, fn -> Config.new(max_memory: 0) end
+  end
+
+  test "normalizes the client config" do
+    assert Config.new([]).client == %{
+             headers: [],
+             landing: nil,
+             media: [:color_scheme, :reduced_motion, :contrast, :pointer, :hover]
+           }
+
+    context =
+      Config.new(
+        client: [
+          headers: ["Accept-Language", :cf_ipcountry],
+          landing: [params: [:utm, "ref", :click_ids, "ref"], attribution: :last]
+        ]
+      ).client
+
+    assert context.headers == ["accept-language", "cf_ipcountry"]
+
+    assert context.landing == %{
+             params:
+               ~w(utm_source utm_medium utm_campaign utm_term utm_content ref gclid fbclid msclkid),
+             referrer: true,
+             attribution: :last
+           }
+
+    assert_raise ArgumentError, ~r/"cookie"/, fn -> Config.new(client: [headers: ["Cookie"]]) end
+
+    assert_raise ArgumentError, ~r/:params/, fn ->
+      Config.new(client: [landing: [params: [:nope]]])
+    end
+
+    assert_raise ArgumentError, ~r/:attribution/, fn ->
+      Config.new(client: [landing: [attribution: :middle]])
+    end
+
+    # Which media settings are kept, all of them by default.
+    assert Config.new(client: [media: [:color_scheme]]).client.media == [:color_scheme]
+    assert Config.new(client: [media: false]).client.media == []
+    assert_raise ArgumentError, ~r/:media/, fn -> Config.new(client: [media: [:battery]]) end
+  end
+
+  test "takes a module as :replay, not a boolean" do
+    assert Config.new(replay: MyAppWeb.Replay).replay == MyAppWeb.Replay
+    assert Config.new(replay: nil).replay == nil
+    assert_raise ArgumentError, ~r/:replay/, fn -> Config.new(replay: true) end
+  end
+
+  test "reads :context, the client config's former name, with a warning" do
+    warning =
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        assert Config.new(context: [headers: ["DNT"]]).client.headers == ["dnt"]
+      end)
+
+    assert warning =~ ":context is deprecated, use :client"
+  end
+
+  test "records form controls with client state unless told not to" do
+    assert %{inputs: true, debounce: 300} = Config.new([]).state
+    assert %{inputs: false, flush: 1_000} = Config.new(state: [inputs: false]).state
+    assert_raise ArgumentError, ~r/:inputs/, fn -> Config.new(state: [inputs: :yes]) end
+    assert_raise ArgumentError, ~r/:debounce/, fn -> Config.new(state: [debounce: 0]) end
+  end
+
+  test "exports videos only once configured, with an endpoint" do
+    assert Config.new([]).export == nil
+
+    assert %{endpoint: MyAppWeb.Endpoint, fps: 30, idle: 3_000, max_concurrency: 1, hold: 1_000} =
+             Config.new(export: [endpoint: MyAppWeb.Endpoint]).export
+
+    assert Config.new(export: [endpoint: MyAppWeb.Endpoint, idle: nil]).export.idle == nil
+    assert Config.new(export: false).export == nil
+    assert_raise ArgumentError, ~r/:fps/, fn -> Config.new(export: [fps: 0]) end
+
+    assert_raise ArgumentError, ~r/:frame_layout/, fn ->
+      Config.new(export: [frame_layout: "x"])
+    end
+  end
+
   test "rejects unknown keys and invalid values" do
     assert_raise ArgumentError, ~r/:max_events/, fn -> Config.new(max_events: 0) end
     assert_raise ArgumentError, ~r/:unknown/, fn -> Config.new(unknown: true) end
@@ -41,5 +180,29 @@ defmodule PhoenixReplay.ConfigTest do
   test "load/0 reads the application environment" do
     assert %Config{storage: {PhoenixReplay.Storage.File, [path: _]}, persist: %{attempts: 2}} =
              Config.load()
+  end
+
+  test "merges overrides of every nested option onto what is set" do
+    assert Config.new(flush: [events: 50], flush: [interval: 9]).flush == %{
+             events: 50,
+             interval: 9
+           }
+
+    assert Config.new(pointer: [sample: 30], pointer: [flush: 500]).pointer.sample == 30
+    assert Config.new(logs: [level: :warning], logs: [limit: 5]).logs.level == :warning
+    assert Config.new(flush: false, flush: [events: 10]).flush == %{events: 10, interval: 5_000}
+  end
+
+  test "switches options off with nil or false, and on with true" do
+    for key <- [:flush, :logs, :pointer, :redact, :max_memory], off <- [nil, false] do
+      assert Map.fetch!(Config.new([{key, off}]), key) == nil
+    end
+
+    assert Config.new(redact: []).redact == nil
+    assert Config.new(client: [landing: false]).client.landing == nil
+    assert Config.new(logs: true).logs == %{level: :info, metadata: [], limit: 1_000}
+    assert Config.new(flush: [events: 10], flush: true).flush.events == 10
+
+    assert_raise ArgumentError, ~r/:flush: "x"/, fn -> Config.new(flush: "x") end
   end
 end

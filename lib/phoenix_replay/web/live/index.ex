@@ -1,26 +1,45 @@
 defmodule PhoenixReplay.Web.Live.Index do
   @moduledoc """
   Lists recordings, live sessions first, narrowed by a
-  `PhoenixReplay.Recordings.Filter` kept in the URL.
+  `PhoenixReplay.Recording.Filter` kept in the URL.
 
-  Refreshes when `PhoenixReplay.Recordings` broadcasts a change, and every
-  few seconds while live sessions are shown so their counters advance.
+  Reads storage again when `PhoenixReplay.Catalog` broadcasts a change,
+  at most once a second however many sessions start and end, and reads the
+  buffer every few seconds while live sessions are shown, so their counters
+  advance.
+
+  Saved recordings are listed as of a moment, `until`, taken when the list
+  opens or its filter changes, so pages stay put while sessions end. Newer
+  ones are counted in a banner that brings the list up to date.
+
+  Filters beyond the search, the time window and errors are added and
+  changed in a value picker, which offers the values recordings have
+  with how many have each; see `PhoenixReplay.Web.FilterFields`.
   """
 
   use Phoenix.LiveView
 
-  import PhoenixReplay.Web.Components
+  import PhoenixIconify, only: [icon: 1]
+  import PhoenixReplay.Web.Components.Core
+  import PhoenixReplay.Web.Components.Layout
+  import PhoenixReplay.Web.Components.Filters, only: [filter_bar: 1]
+  import PhoenixReplay.Web.Components.RecordingList
 
-  alias PhoenixReplay.Recordings
-  alias PhoenixReplay.Recordings.Filter
-  alias PhoenixReplay.Web.{Context, Layouts}
+  alias PhoenixReplay.Catalog
+  alias PhoenixReplay.Recording.Filter
+  alias PhoenixReplay.Web.{Context, FilterFields, Format, Highlight, Layouts, Params}
 
   @per_page 25
+  # How many values the value picker offers, the most common first.
+  @values 50
   @live_refresh_ms 2_000
+  @reload_window_ms 1_000
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Recordings.subscribe()
+    if connected?(socket), do: Catalog.subscribe()
+    # The player highlights code; the list warms the grammars for it.
+    :ok = Highlight.warm()
     context = Context.fetch(socket)
 
     {:ok,
@@ -30,38 +49,96 @@ defmodule PhoenixReplay.Web.Live.Index do
        context: context,
        page: 1,
        filter: %Filter{},
-       refresh_timer: nil
+       until: nil,
+       refresh_timer: nil,
+       reload_window: nil,
+       reload?: false,
+       editing: nil,
+       values: [],
+       typed: "",
+       utc_offset: utc_offset(socket)
      )}
   end
 
   @impl true
   def handle_params(params, _uri, socket) do
+    filter = Filter.from_params(params)
+
+    until =
+      if filter == socket.assigns.filter and socket.assigns.until,
+        do: socket.assigns.until,
+        else: System.system_time(:millisecond)
+
     {:noreply,
      socket
-     |> assign(page: parse_integer(params["page"], 1), filter: Filter.from_params(params))
+     |> assign(page: max(Params.integer(params["page"], 1), 1), filter: filter, until: until)
+     |> close_filter()
      |> load()}
   end
 
   @impl true
-  def handle_info(message, socket) when message in [:recordings_changed, :refresh] do
-    {:noreply, load(socket)}
-  end
+  # The first change reloads at once; changes within the next second
+  # reload once more when it is over.
+  def handle_info(:recordings_changed, %{assigns: %{reload_window: nil}} = socket),
+    do: {:noreply, reload(socket)}
+
+  def handle_info(:recordings_changed, socket), do: {:noreply, assign(socket, :reload?, true)}
+
+  def handle_info(:reload_window, %{assigns: %{reload?: true}} = socket),
+    do: {:noreply, reload(socket)}
+
+  def handle_info(:reload_window, socket), do: {:noreply, assign(socket, :reload_window, nil)}
+
+  def handle_info(:refresh, socket), do: {:noreply, load_live(socket)}
 
   @impl true
   def handle_event("delete", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.recordings, &(&1.id == id and not &1.live?)) do
+    case Enum.find(socket.assigns.saved, &(&1.id == id)) do
       nil -> {:noreply, socket}
-      summary -> {:noreply, perform(socket, :delete, summary, &Recordings.delete(&1, id))}
+      summary -> {:noreply, perform(socket, :delete, summary, &Catalog.delete(&1, id))}
     end
   end
 
-  def handle_event("filter", params, socket) do
-    path = index_path(socket.assigns.context, Filter.from_params(params), 1)
-    {:noreply, push_patch(socket, to: path, replace: true)}
+  # The search; chips keep the other criteria.
+  def handle_event("filter", params, socket),
+    do: {:noreply, patch_filter(socket, ~w(q), Map.take(params, ~w(q)), replace: true)}
+
+  def handle_event("edit_time", _params, socket),
+    do: {:noreply, assign(socket, editing: :time, values: [], typed: "")}
+
+  # A range of start times, in UTC, from the browser.
+  def handle_event("time_range", params, socket),
+    do: {:noreply, patch_filter(socket, ~w(within from to), Map.take(params, ~w(from to)), [])}
+
+  def handle_event("edit_filter", %{"field" => name}, socket) do
+    case FilterFields.parse(name) do
+      {:ok, field} -> {:noreply, edit_filter(socket, field)}
+      :error -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("type_value", %{"value" => typed}, socket),
+    do: {:noreply, assign(socket, :typed, typed)}
+
+  def handle_event("apply_filter", %{"value" => value}, %{assigns: %{editing: %{}}} = socket) do
+    %{context: context, filter: filter, editing: field} = socket.assigns
+    path = index_path(context, FilterFields.put(filter, field, value), 1)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  def handle_event("close_filter", _params, socket), do: {:noreply, close_filter(socket)}
+
+  def handle_event("show_new", _params, socket) do
+    %{context: context, filter: filter} = socket.assigns
+    socket = assign(socket, :until, System.system_time(:millisecond))
+
+    if socket.assigns.page == 1,
+      do: {:noreply, load(socket)},
+      else: {:noreply, push_patch(socket, to: index_path(context, filter, 1))}
   end
 
   def handle_event("clear", _params, socket) do
-    {:noreply, perform(socket, :clear, nil, &Recordings.clear/1)}
+    {:noreply, perform(socket, :clear, nil, &Catalog.clear/1)}
   end
 
   defp perform(socket, action, subject, fun) do
@@ -77,30 +154,141 @@ defmodule PhoenixReplay.Web.Live.Index do
     end
   end
 
-  defp load(socket) do
-    all =
-      socket.assigns.context.config
-      |> Recordings.list()
-      |> Enum.filter(&Context.allowed?(socket, :list, &1))
+  # The list filtered by `params` in place of the criteria `keys`.
+  defp patch_filter(socket, keys, params, opts) do
+    filter =
+      socket.assigns.filter
+      |> Filter.to_params()
+      |> Map.drop(keys)
+      |> Map.merge(params)
+      |> Filter.from_params()
 
-    summaries = Filter.apply(all, socket.assigns.filter, System.system_time(:millisecond))
-    total = length(summaries)
-    total_pages = max(1, ceil(total / @per_page))
-    page = min(socket.assigns.page, total_pages)
-    recordings = Enum.slice(summaries, (page - 1) * @per_page, @per_page)
+    push_patch(socket, [to: index_path(socket.assigns.context, filter, 1)] ++ opts)
+  end
+
+  # Opens the value picker for `field`, with the values recordings
+  # matching the other criteria have.
+  defp edit_filter(socket, field) do
+    %{context: %{config: config}, filter: filter} = socket.assigns
+
+    values =
+      if field.control == :choice,
+        do:
+          Catalog.values(config, field.key, filter,
+            now: System.system_time(:millisecond),
+            limit: @values,
+            allow: allow(socket)
+          ),
+        else: []
+
+    assign(socket, editing: field, values: values, typed: "")
+  end
+
+  defp close_filter(socket), do: assign(socket, editing: nil, values: [], typed: "")
+
+  defp reload(socket) do
+    window = Process.send_after(self(), :reload_window, @reload_window_ms)
+    socket |> assign(reload_window: window, reload?: false) |> load()
+  end
+
+  defp load(socket), do: socket |> load_stored() |> load_live()
+
+  # What storage holds: the page shown and the counts around it.
+  defp load_stored(socket) do
+    %{context: %{config: config}} = socket.assigns
+    now = System.system_time(:millisecond)
+    allow = allow(socket)
+    count = &(config |> Catalog.query(&1, now: now, limit: 0, allow: allow) |> elem(1))
+    {saved, total, page} = saved_page(socket, now, allow)
+    all = count.(%Filter{})
+
+    assign(socket,
+      page: page,
+      stored: %{saved: saved, total: total, all: all, errors: count.(%Filter{errors: true})},
+      newer: newer(socket, now, allow),
+      activity:
+        Catalog.activity(config, socket.assigns.filter,
+          now: now,
+          allow: allow,
+          utc_offset: socket.assigns.utc_offset
+        ),
+      sampling: Format.sampling(config.sample_rate, config.keep),
+      can_clear?: all > 0 and Context.allowed?(socket, :clear, nil)
+    )
+  end
+
+  # Sessions still in the buffer, running or ended and being saved, merged
+  # with the stored page.
+  defp load_live(socket) do
+    %{filter: filter, page: page, stored: stored} = socket.assigns
+    now = System.system_time(:millisecond)
+
+    {live, ending} =
+      Catalog.live(%Filter{}, now)
+      |> Enum.filter(allow(socket) || fn _summary -> true end)
+      |> Enum.split_with(& &1.live?)
+
+    buffered = MapSet.new(live ++ ending, & &1.id)
+    shown = Filter.select(live ++ ending, filter, now)
 
     socket
     |> assign(
-      page: page,
-      total_pages: total_pages,
-      total: total,
-      any?: all != [],
-      recordings: recordings,
-      views: all |> Enum.map(& &1.view) |> Enum.uniq() |> Enum.sort(),
-      event_names: all |> Enum.flat_map(& &1.event_names) |> Enum.uniq() |> Enum.sort(),
-      can_clear?: all != [] and Context.allowed?(socket, :clear, nil)
+      total_pages: max(1, ceil(stored.total / @per_page)),
+      total: stored.total + length(shown),
+      any?: stored.all + length(live) + length(ending) > 0,
+      now: now,
+      live: if(page == 1, do: Enum.filter(shown, & &1.live?), else: []),
+      saved:
+        if(page == 1, do: Enum.reject(shown, & &1.live?), else: []) ++
+          Enum.reject(stored.saved, &MapSet.member?(buffered, &1.id)),
+      counts: %{
+        all: stored.all + length(live) + length(ending),
+        live: length(live),
+        errors: stored.errors + Enum.count(live ++ ending, &(&1.error_count > 0))
+      }
     )
-    |> schedule_refresh(Enum.any?(recordings, & &1.live?))
+    |> schedule_refresh(live != [])
+  end
+
+  # A page of stored recordings, the last one when the requested page is
+  # past the end.
+  defp saved_page(socket, now, allow) do
+    %{context: %{config: config}, filter: filter, page: page} = socket.assigns
+
+    read =
+      &Catalog.query(config, filter,
+        now: now,
+        until: socket.assigns.until,
+        offset: (&1 - 1) * @per_page,
+        limit: @per_page,
+        allow: allow
+      )
+
+    case read.(page) do
+      {[], total} when page > 1 ->
+        last = max(ceil(total / @per_page), 1)
+        {saved, total} = read.(last)
+        {saved, total, last}
+
+      {saved, total} ->
+        {saved, total, page}
+    end
+  end
+
+  # Saved recordings that started after the list's moment.
+  defp newer(socket, now, allow) do
+    %{context: %{config: config}, filter: filter, until: until} = socket.assigns
+
+    {_none, count} =
+      Catalog.query(config, filter, now: now, since: until, limit: 0, allow: allow)
+
+    count
+  end
+
+  # Without an authorization module every recording is listed, and storage
+  # pages them; with one, each is checked.
+  defp allow(socket) do
+    if socket.assigns.context.authorize, do: &Context.allowed?(socket, :list, &1)
   end
 
   defp schedule_refresh(%{assigns: %{refresh_timer: timer}} = socket, live?) do
@@ -111,6 +299,19 @@ defmodule PhoenixReplay.Web.Live.Index do
 
     assign(socket, :refresh_timer, timer)
   end
+
+  # How far the viewer's time zone is ahead of UTC, in milliseconds, as
+  # the browser said when it connected; UTC before then.
+  defp utc_offset(socket) do
+    case connected?(socket) && get_connect_params(socket)["utc_offset"] do
+      minutes when is_integer(minutes) and abs(minutes) <= 14 * 60 -> :timer.minutes(minutes)
+      _unknown -> 0
+    end
+  end
+
+  # The list narrowed to sessions started from `from` to `to`.
+  defp range_path(context, %Filter{} = filter, {from, to}),
+    do: index_path(context, %Filter{filter | within: nil, from: from, to: to}, 1)
 
   defp index_path(context, filter, page) do
     params = Filter.to_params(filter)
@@ -125,160 +326,102 @@ defmodule PhoenixReplay.Web.Live.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <main class="mx-auto max-w-4xl px-4 py-8">
-      <.flash_error flash={@flash} />
-      <header class="mb-8 flex items-center justify-between">
-        <h1 class="text-2xl font-bold">📹 PhoenixReplay</h1>
-        <div class="flex items-center gap-3 text-sm text-neutral-500">
-          {@total} {if @total == 1, do: "recording", else: "recordings"}
-          <.button
-            :if={@can_clear?}
-            variant="danger"
-            phx-click="clear"
-            data-confirm="Delete every recording?"
-          >
-            Clear all
-          </.button>
-        </div>
+    <.app_bar>
+      <:mark><.icon name="lucide:circle-play" class="size-5 text-accent" /></:mark>
+      <:crumb>PhoenixReplay</:crumb>
+      <:crumb>Recordings</:crumb>
+      <:actions>
+        <a
+          href="https://hexdocs.pm/phoenix_replay"
+          class="hidden rounded-md px-2.5 py-2 text-sm text-muted hover:text-ink sm:block"
+        >
+          Docs
+        </a>
+        <.theme_toggle id="theme-toggle" />
+        <.menu :if={@can_clear?} id="recordings-menu" label="More actions">
+          <:trigger><.icon name="lucide:ellipsis" class="size-4" /></:trigger>
+          <:item tone="danger">
+            <button type="button" phx-click="clear" data-confirm="Delete every recording?">
+              <.icon name="lucide:trash-2" class="size-4" /> Delete all recordings
+            </button>
+          </:item>
+        </.menu>
+      </:actions>
+    </.app_bar>
+
+    <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <.flash flash={@flash} />
+      <header class="mb-5">
+        <h1 class="text-2xl font-semibold tracking-tight">Recordings</h1>
+        <p :if={@any?} class="mt-1.5 text-sm text-muted">
+          {Format.count(@counts.all, "session")} · {@counts.live} live · {@counts.errors} with errors
+        </p>
+        <p
+          :if={@any? and @sampling}
+          id="recordings-sampling"
+          class="mt-1 flex items-center gap-1.5 text-xs text-muted"
+        >
+          <.icon name="lucide:info" class="size-3.5 shrink-0" /> {@sampling}
+        </p>
       </header>
 
-      <form
+      <.filter_bar
         :if={@any?}
-        id="recording-filter"
-        phx-change="filter"
-        phx-submit="filter"
-        class="mb-6 grid grid-cols-2 gap-2 text-sm sm:grid-cols-6"
-      >
-        <input
-          type="search"
-          name="q"
-          value={@filter.query}
-          placeholder="URL or id"
-          aria-label="Search by URL or id"
-          phx-debounce="300"
-          class="col-span-2 rounded-md border border-neutral-200 bg-white px-3 py-1.5"
-        />
-        <select
-          name="view"
-          aria-label="View"
-          class="rounded-md border border-neutral-200 bg-white px-2 py-1.5"
-        >
-          <option value="">All views</option>
-          <option :for={view <- @views} value={view} selected={view == @filter.view}>{view}</option>
-        </select>
-        <input
-          type="text"
-          name="event"
-          value={@filter.event}
-          list="recording-filter-events"
-          placeholder="Event name"
-          aria-label="Triggered event"
-          phx-debounce="300"
-          class="rounded-md border border-neutral-200 bg-white px-3 py-1.5"
-        />
-        <datalist id="recording-filter-events">
-          <option :for={name <- @event_names} value={name} />
-        </datalist>
-        <select
-          name="within"
-          aria-label="Started within"
-          class="rounded-md border border-neutral-200 bg-white px-2 py-1.5"
-        >
-          <option value="">Any time</option>
-          <option
-            :for={window <- Filter.windows()}
-            value={window}
-            selected={window == @filter.within}
+        filter={@filter}
+        path={&index_path(@context, &1, 1)}
+        editing={@editing}
+        values={@values}
+        typed={@typed}
+      />
+
+      <.activity_chart
+        :if={@any?}
+        activity={@activity}
+        path={&range_path(@context, @filter, &1)}
+      />
+
+      <.empty_state :if={@any? and @total == 0} title="No recordings match these filters.">
+        <:icon><.icon name="lucide:search-x" class="size-8" /></:icon>
+        <:action>
+          <.link
+            patch={index_path(@context, %Filter{}, 1)}
+            class="text-sm text-muted underline hover:text-ink"
           >
-            Last {window}
-          </option>
-        </select>
-        <input
-          type="number"
-          name="min_events"
-          min="1"
-          value={@filter.min_events}
-          placeholder="Min events"
-          aria-label="Minimum events"
-          phx-debounce="300"
-          class="rounded-md border border-neutral-200 bg-white px-3 py-1.5"
+            Clear filters
+          </.link>
+        </:action>
+      </.empty_state>
+
+      <.empty_state :if={not @any?} title="No recordings yet.">
+        <:icon><.icon name="lucide:video" class="size-10" /></:icon>
+        Add <code class="font-mono text-ink">on_mount: [PhoenixReplay.Recorder]</code>
+        to a <code class="font-mono text-ink">live_session</code>
+        and use your app.
+      </.empty_state>
+
+      <.new_recordings count={@newer} />
+      <.recording_list
+        live
+        recordings={@live}
+        now={@now}
+        path={&Context.path(@context, [&1.id])}
+        filter_path={&index_path(@context, Map.put(@filter, &1, &2), 1)}
+      />
+      <.recording_list
+        recordings={@saved}
+        now={@now}
+        path={&Context.path(@context, [&1.id])}
+        filter_path={&index_path(@context, Map.put(@filter, &1, &2), 1)}
+        delete="delete"
+      />
+
+      <div class="mt-6">
+        <.pagination
+          page={@page}
+          total_pages={@total_pages}
+          path={&index_path(@context, @filter, &1)}
         />
-      </form>
-
-      <div :if={@any? and @recordings == []} class="py-16 text-center text-neutral-400">
-        <p>No recordings match these filters.</p>
-        <.link
-          patch={index_path(@context, %Filter{}, 1)}
-          class="mt-2 inline-block text-sm text-neutral-600 underline"
-        >
-          Clear filters
-        </.link>
       </div>
-
-      <div :if={not @any?} class="py-16 text-center text-neutral-400">
-        <p class="mb-4 text-5xl">📹</p>
-        <p>No recordings yet.</p>
-        <p class="mt-1 text-sm">
-          Add <code class="font-mono text-neutral-600">on_mount: [PhoenixReplay.Recorder]</code>
-          to a <code class="font-mono text-neutral-600">live_session</code>
-          and use your app.
-        </p>
-      </div>
-
-      <ul class="space-y-3">
-        <li
-          :for={recording <- @recordings}
-          id={"recording-#{recording.id}"}
-          class="flex items-center justify-between gap-4 rounded-lg border border-neutral-200 bg-white px-5 py-4 transition-shadow hover:shadow-md"
-        >
-          <div class="min-w-0">
-            <p class="flex items-center gap-2 font-medium">
-              <span class="truncate">{recording.view}</span>
-              <.live_badge :if={recording.live?} />
-            </p>
-            <p class="mt-1 text-sm text-neutral-500 tabular-nums">
-              {timestamp(recording.connected_at)} · {recording.event_count} events · {duration(
-                recording.duration_ms
-              )}
-            </p>
-          </div>
-          <div class="flex shrink-0 items-center gap-3">
-            <code class="font-mono text-sm text-neutral-400">{String.slice(recording.id, 0, 8)}</code>
-            <.link
-              navigate={Context.path(@context, [recording.id])}
-              class="rounded-md border border-neutral-200 px-2.5 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
-            >
-              Open
-            </.link>
-            <.button
-              :if={!recording.live?}
-              variant="danger"
-              phx-click="delete"
-              phx-value-id={recording.id}
-            >
-              Delete
-            </.button>
-          </div>
-        </li>
-      </ul>
-
-      <nav :if={@total_pages > 1} class="mt-6 flex items-center justify-center gap-3 text-sm">
-        <.link
-          :if={@page > 1}
-          patch={index_path(@context, @filter, @page - 1)}
-          class="text-neutral-600 hover:text-neutral-900"
-        >
-          ← Previous
-        </.link>
-        <span class="text-neutral-400">Page {@page} / {@total_pages}</span>
-        <.link
-          :if={@page < @total_pages}
-          patch={index_path(@context, @filter, @page + 1)}
-          class="text-neutral-600 hover:text-neutral-900"
-        >
-          Next →
-        </.link>
-      </nav>
     </main>
     """
   end

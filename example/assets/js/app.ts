@@ -4,8 +4,10 @@ import 'phoenix_html'
 import { Socket } from 'phoenix'
 import { hooks as colocatedHooks } from 'phoenix-colocated/example'
 import { LiveSocket } from 'phoenix_live_view'
+import { replayMetadata, replayParams, replayRecorder } from 'phoenix_replay'
 
 import topbar from '../vendor/topbar'
+import { ClientSearch } from './client_search'
 
 const csrfToken = document
   .querySelector<HTMLMetaElement>("meta[name='csrf-token']")
@@ -13,8 +15,17 @@ const csrfToken = document
 
 const liveSocket = new LiveSocket('/live', Socket, {
   longPollFallbackMs: 2500,
-  params: { _csrf_token: csrfToken },
-  hooks: { ...colocatedHooks }
+  params: () => ({ _csrf_token: csrfToken, ...replayParams() }),
+  metadata: replayMetadata,
+  hooks: { ...colocatedHooks, ClientSearch }
+})
+
+// The theme the server chose applies at once, and the cookie keeps it for
+// the next page load; see ExampleWeb.Theme.
+window.addEventListener('phx:theme', (event) => {
+  const { theme } = (event as CustomEvent<{ theme: string }>).detail
+  document.documentElement.dataset.theme = theme
+  document.cookie = `theme=${theme}; path=/; max-age=31536000; samesite=lax`
 })
 
 // Show progress bar on live navigation and form submits
@@ -24,6 +35,7 @@ window.addEventListener('phx:page-loading-stop', () => topbar.hide())
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
+replayRecorder(liveSocket)
 
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()

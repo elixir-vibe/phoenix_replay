@@ -12,7 +12,13 @@ defmodule PhoenixReplay.RouterTest do
                as: :admin_replay
              )
 
-    context = %{base_path: "/replay", authorize: MyAuthorization, live_socket_path: "/live"}
+    context = %{
+      base_path: "/replay",
+      authorize: MyAuthorization,
+      live_socket_path: "/live",
+      frame_layout: {MyLayouts, :root}
+    }
+
     assert dashboard[:on_mount] == [{PhoenixReplay.Web.Context, context}, {MyAuth, :admin}]
     assert dashboard[:root_layout] == {PhoenixReplay.Web.Layouts, :dashboard}
     assert frame[:root_layout] == {MyLayouts, :root}

@@ -28,6 +28,10 @@ defmodule PhoenixReplay.Authorization do
 
   Without an `:authorize` module every action is allowed, so protect the
   dashboard route with your router pipeline or `:on_mount` hooks.
+
+  Storage pages the recording list itself only without an `:authorize`
+  module. With one, the dashboard reads every summary and checks `:list`
+  for each, so its pages and counts show exactly what the viewer may see.
   """
 
   alias PhoenixReplay.Recording

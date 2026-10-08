@@ -23,6 +23,18 @@ defmodule PhoenixReplay.Web.AssetsTest do
     end
   end
 
+  test "serves the fonts the stylesheet refers to, next to it" do
+    css = get(build_conn(), "/replay/assets/#{Assets.file_name(:css)}").resp_body
+    fonts = Regex.scan(~r/url\(([^)]+\.woff2)\)/, css, capture: :all_but_first)
+    assert length(fonts) == 2
+
+    for [font] <- fonts do
+      conn = get(build_conn(), "/replay/assets/#{font}")
+      assert conn.status == 200
+      assert Plug.Conn.get_resp_header(conn, "content-type") == ["font/woff2"]
+    end
+  end
+
   test "serves JavaScript through the host's forgery protection" do
     # ConnTest skips CSRF protection by default; browsers do not.
     conn =

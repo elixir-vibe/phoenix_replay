@@ -4,8 +4,15 @@ defmodule PhoenixReplay.Recording do
 
   Holds the session metadata and an ordered list of `PhoenixReplay.Recording.Event`s.
   Use `PhoenixReplay.Recording.Timeline` to reconstruct state at a point in time.
+
+  `dropped` counts collected events left out once a collector reached its
+  `:limit`, keyed by collector name, such as `"my_app.repo.query"` or `"log"`.
+
+  `client` describes the browser and the visit; see
+  `PhoenixReplay.Recording.Client`.
   """
 
+  alias PhoenixReplay.Recording.Client
   alias PhoenixReplay.Recording.Event
 
   @type id :: String.t()
@@ -17,11 +24,52 @@ defmodule PhoenixReplay.Recording do
           params: map(),
           session: map(),
           connected_at: integer(),
-          events: [Event.t()]
+          events: [Event.t()],
+          dropped: %{String.t() => pos_integer()},
+          client: Client.t(),
+          code: PhoenixReplay.Recording.Code.t() | nil
+        }
+
+  @typedoc """
+  The browser's viewport: its size in CSS pixels and pixel ratio, and when
+  the browser reports them, the screen's orientation angle and the media
+  settings the page's CSS could see: the color scheme, reduced motion,
+  contrast and the kind of pointer.
+  """
+  @type viewport :: %{
+          required(:width) => pos_integer(),
+          required(:height) => pos_integer(),
+          required(:dpr) => number(),
+          optional(:angle) => 0 | 90 | 180 | 270,
+          optional(:color_scheme) => :light | :dark,
+          optional(:reduced_motion) => boolean(),
+          optional(:contrast) => :more | :less | :no_preference,
+          optional(:pointer) => :coarse | :fine | :none,
+          optional(:hover) => :hover | :none
         }
 
   @enforce_keys [:id, :view, :connected_at]
-  defstruct [:id, :view, :url, :connected_at, params: %{}, session: %{}, events: []]
+  defstruct [
+    :id,
+    :view,
+    :url,
+    :connected_at,
+    params: %{},
+    session: %{},
+    events: [],
+    dropped: %{},
+    client: %Client{},
+    # Which code made the recording; nil for one made before it was kept.
+    code: nil
+  ]
+
+  @doc """
+  Brings a recording stored by an earlier version up to date.
+  `PhoenixReplay.Storage.Codec` calls it on every recording it decodes.
+  """
+  @spec upgrade(t()) :: t()
+  def upgrade(%__MODULE__{client: client} = recording),
+    do: %{recording | client: Client.upgrade(client)}
 
   @doc "Generates a URL-safe random recording id."
   @spec generate_id() :: id()

@@ -2,7 +2,7 @@ defmodule PhoenixReplay.Web.Live.ReplayComponent do
   @moduledoc """
   Stands in for a recorded LiveComponent in the replay frame.
 
-  `PhoenixReplay.Web.Replay.rewrite/2` puts it in place of each component,
+  `PhoenixReplay.Web.Rendering.rewrite/2` puts it in place of each component,
   so the frame renders the original module's template with the assigns the
   parent passes merged with the assigns recorded for that component. The
   frame refreshes it with `send_update/3` after every seek. Events from the
@@ -11,13 +11,12 @@ defmodule PhoenixReplay.Web.Live.ReplayComponent do
 
   use Phoenix.LiveComponent
 
-  alias PhoenixReplay.Web.Replay
+  alias PhoenixReplay.Web.Rendering
 
   @replay_keys [:__replay_module__, :__replay_id__, :__replay_states__]
-  @unassignable [:flash, :uploads, :streams, :socket, :myself]
 
   @doc "Assigns that route a component through this replay component."
-  @spec replay_assigns(module(), term(), Replay.states()) :: map()
+  @spec replay_assigns(module(), term(), Rendering.states()) :: map()
   def replay_assigns(module, id, states) do
     %{__replay_module__: module, __replay_id__: id, __replay_states__: states}
   end
@@ -37,7 +36,7 @@ defmodule PhoenixReplay.Web.Live.ReplayComponent do
     {:ok,
      socket
      |> assign(replay)
-     |> assign(passed |> Map.merge(recorded) |> Map.drop(@unassignable))}
+     |> assign(passed |> Map.merge(recorded) |> Rendering.assignable())}
   end
 
   @impl true
@@ -45,9 +44,9 @@ defmodule PhoenixReplay.Web.Live.ReplayComponent do
 
   @impl true
   def render(%{__replay_module__: module} = assigns) do
-    case Replay.render_error(module, assigns) do
+    case Rendering.render_error(module, assigns) do
       nil ->
-        assigns |> module.render() |> Replay.rewrite(assigns.__replay_states__)
+        assigns |> module.render() |> Rendering.rewrite(assigns.__replay_states__)
 
       message ->
         assigns = assign(assigns, :message, message)

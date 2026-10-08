@@ -4,7 +4,9 @@ defmodule PhoenixReplay do
 
   PhoenixReplay records each LiveView session as a timeline of events and
   assigns changes, and replays it by re-rendering the view's own template
-  with the recorded assigns. No client-side recording is involved.
+  with the recorded assigns. Recording happens on the server; the optional
+  client module adds what only the browser knows: form controls, client
+  state, the pointer, and the viewport.
 
   Record a live session with `PhoenixReplay.Recorder`:
 

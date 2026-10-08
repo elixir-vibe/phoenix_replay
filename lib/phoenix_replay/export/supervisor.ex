@@ -1,0 +1,31 @@
+defmodule PhoenixReplay.Export.Supervisor do
+  @moduledoc """
+  Supervises video export: `PhoenixReplay.Export.Runtime`, which starts
+  the endpoint and Playwright on demand, `PhoenixReplay.Export.Queue.Local`,
+  which queues jobs, and the task supervisor jobs run under.
+
+  The tasks start after the server, so a server that restarts takes its
+  running jobs with it rather than leaving them to report to nobody.
+  """
+
+  use Supervisor
+
+  @doc "Starts the export supervisor, as the application does."
+  @spec start_link(keyword()) :: Supervisor.on_start()
+  def start_link(_opts), do: Supervisor.start_link(__MODULE__, nil, name: __MODULE__)
+
+  @impl true
+  def init(nil) do
+    Supervisor.init(
+      [
+        PhoenixReplay.Export.Runtime,
+        # Where a running export of PhoenixReplay.Export.Queue.Oban is found
+        # to cancel it, on any node.
+        %{id: :pg, start: {:pg, :start_link, [PhoenixReplay.Export]}},
+        PhoenixReplay.Export.Queue.Local,
+        {Task.Supervisor, name: PhoenixReplay.Export.TaskSupervisor}
+      ],
+      strategy: :rest_for_one
+    )
+  end
+end

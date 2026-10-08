@@ -2,8 +2,10 @@ import Config
 
 config :volt,
   root: ".",
-  entry: "priv/ts/dashboard.ts",
+  entry: "priv/ts/dashboard/dashboard.ts",
   outdir: "priv/static",
+  # Fonts are served next to the stylesheet, under the dashboard's own path.
+  asset_url_prefix: "",
   output_layout: :flat,
   hash: false,
   code_splitting: false,

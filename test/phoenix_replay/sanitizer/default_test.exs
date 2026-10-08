@@ -25,10 +25,45 @@ defmodule PhoenixReplay.Sanitizer.DefaultTest do
            }
   end
 
-  test "drops unreplayable LiveView internals from assigns only" do
-    assigns = %{__changed__: %{}, uploads: %{}, streams: %{}, flash: %{}, count: 1}
-    assert Default.sanitize_assigns(assigns) == %{flash: %{}, count: 1}
-    assert Default.sanitize_params(%{"streams" => 1}) == %{"streams" => 1}
+  test "filters payment, identity and one-time code fields, by whole word where short" do
+    params = %{
+      "card_number" => "4242",
+      "creditCardNumber" => "4242",
+      "card_cvv" => "123",
+      "cvc" => "123",
+      "ssn" => "078",
+      "pinCode" => "1234",
+      "otp" => "999999",
+      "one_time_code" => "999999",
+      # Words that only contain the short names are kept.
+      "shipping" => "fast",
+      "footprint" => "small",
+      "spinner" => "on"
+    }
+
+    assert %{
+             "card_number" => "[FILTERED]",
+             "creditCardNumber" => "[FILTERED]",
+             "card_cvv" => "[FILTERED]",
+             "cvc" => "[FILTERED]",
+             "ssn" => "[FILTERED]",
+             "pinCode" => "[FILTERED]",
+             "otp" => "[FILTERED]",
+             "one_time_code" => "[FILTERED]",
+             "shipping" => "fast",
+             "footprint" => "small",
+             "spinner" => "on"
+           } = Default.sanitize_params(params)
+  end
+
+  test "keeps assigns that only have a short name as a word, which params filter" do
+    values = %{pin: %{lat: 1, lng: 2}, otp_app: :my_app, pin_code: "1234", password: "x"}
+
+    assert %{pin: %{lat: 1}, otp_app: :my_app, pin_code: "1234", password: "[FILTERED]"} =
+             Default.sanitize_assigns(values)
+
+    assert %{pin: "[FILTERED]", otp_app: "[FILTERED]", pin_code: "[FILTERED]"} =
+             Default.sanitize_params(values)
   end
 
   test "recurses into structs, lists and tuples" do

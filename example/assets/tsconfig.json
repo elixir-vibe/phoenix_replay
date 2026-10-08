@@ -7,7 +7,8 @@
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "paths": {
-      "phoenix_live_view": ["../deps/phoenix_live_view"]
+      "phoenix_live_view": ["../deps/phoenix_live_view"],
+      "phoenix_replay": ["../.."]
     }
   },
   "include": ["js/**/*.ts", "vendor/*.d.ts", "../deps/volt/priv/types/client/*.d.ts"]

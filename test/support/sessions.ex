@@ -54,6 +54,14 @@ defmodule PhoenixReplay.Test.Sessions do
     {:ok, view, html, id}
   end
 
+  @doc "Tracks the session of a view mounted another way, such as `live_isolated/3`."
+  @spec track(pid(), struct()) :: PhoenixReplay.Recording.id()
+  def track(tracker, view) do
+    id = :sys.get_state(view.pid).socket.private.phoenix_replay.id
+    :ok = GenServer.call(tracker, {:track, id, view.pid})
+    id
+  end
+
   @doc "Stops a tracked view and returns how its session was finalized."
   @spec stop(pid(), struct()) :: :persisted | :discarded | :failed
   def stop(tracker, view) do
@@ -61,6 +69,10 @@ defmodule PhoenixReplay.Test.Sessions do
     GenServer.stop(view.pid)
     GenServer.call(tracker, {:await, id}, @timeout)
   end
+
+  @doc "Awaits how a tracked session that ended on its own was finalized."
+  @spec await(pid(), PhoenixReplay.Recording.id()) :: :persisted | :discarded | :failed
+  def await(tracker, id), do: GenServer.call(tracker, {:await, id}, @timeout)
 
   @doc "Telemetry handler forwarding finalization events to the tracker."
   @spec handle_telemetry([atom()], map(), map(), pid()) :: :ok

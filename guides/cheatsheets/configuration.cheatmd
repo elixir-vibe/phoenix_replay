@@ -41,7 +41,125 @@ Share of sessions recorded, `0.0` to `1.0`. Default: `1.0`.
 config :phoenix_replay, max_events: 10_000
 ```
 
-Events kept per session. Default: `10_000`.
+LiveView events kept per session. Default: `10_000`.
+
+### Tail sampling
+
+```elixir
+config :phoenix_replay,
+  keep: [rate: 0.05, errors: true, slower_than: 1_000],
+  max_memory: 256 * 1024 * 1024
+```
+
+Decides when a session ends whether it is saved. Default: `rate: 1.0`, no error or slowness rules, no memory limit.
+
+### Telemetry
+
+```elixir
+config :phoenix_replay,
+  collect: [
+    {PhoenixReplay.Collector.Ecto, repo: MyApp.Repo, slower_than: 5},
+    PhoenixReplay.Collector.Finch,
+    {[:my_app, :checkout, :stop], metadata: [:order_id], limit: 100}
+  ]
+```
+
+Default: `[]`. Each collector keeps `1_000` events per session unless `:limit` is set.
+
+### Logs
+
+```elixir
+config :phoenix_replay, logs: [level: :info, metadata: [:request_id]]
+```
+
+Off by default.
+
+### Redaction
+
+```elixir
+config :phoenix_replay, redact: [~r/\b\d{13,19}\b/]
+```
+
+Masks matches in every recorded string when a session is saved.
+
+### Obscura
+
+```elixir
+config :phoenix_replay, redact: {PhoenixReplay.Redactor.Obscura, []}
+```
+
+Detects personal data. Needs `{:obscura, "~> 0.2"}`.
+
+### Writing running sessions
+
+```elixir
+config :phoenix_replay, flush: [events: 200, interval: 5_000]
+```
+
+Writes kept sessions to storage in chunks while they run. `flush: false` saves them only when they end.
+
+### Pointer, touches and scrolling
+
+```elixir
+config :phoenix_replay,
+  pointer: [sample: 50, scroll: 100, flush: 1_000, max_points: 500, limit: 3_600]
+```
+
+Off by default; `pointer: true` uses these defaults. Needs `replayRecorder(liveSocket)` in the browser. See [Recording](recording.md#pointer-touches-and-scrolling).
+
+### Client state
+
+```elixir
+config :phoenix_replay,
+  state: [
+    inputs: true,
+    debounce: 300,
+    flush: 1_000,
+    max_entries: 200,
+    max_key: 64,
+    max_entry_bytes: 8_192,
+    max_bytes: 65_536,
+    limit: 3_600
+  ]
+```
+
+On by default; `state: false` records none, and `inputs: false` records everything but form controls. Needs `replayRecorder(liveSocket)` in the browser. See [Recording](recording.md#client-state).
+
+### Releases
+
+```elixir
+config :phoenix_replay, release: System.get_env("GIT_SHA")
+```
+
+The deploy each session is recorded on, shown in the player and filterable in the list; defaults to your app's version. See [Recording](recording.md#older-recordings).
+
+### How recordings replay
+
+```elixir
+config :phoenix_replay, replay: MyAppWeb.Replay
+```
+
+A `PhoenixReplay.Replay` module giving the replayed page's `<html>` attributes your layout takes from something other than its assigns. Optional: your root layout's attributes follow the replayed assigns by themselves, an assign a recording lacks renders as `nil`, and assigns that changed shape take a `PhoenixReplay.Migration`, found without configuration. See [Recording](recording.md#older-recordings).
+
+### Video export
+
+```elixir
+config :phoenix_replay,
+  export: [
+    endpoint: MyAppWeb.Endpoint,
+    fps: 30,
+    max_dpr: 2,
+    idle: 3_000,
+    hold: 1_000,
+    crf: 23,
+    preset: "veryfast",
+    max_concurrency: 1,
+    ttl: :timer.hours(1),
+    playwright: [executable: "node_modules/.bin/playwright"]
+  ]
+```
+
+Off by default. Needs `{:playwright_ex, "~> 0.14"}` and `{:muontrap, "~> 1.6"}`, with Playwright's Chromium and `ffmpeg`. See [Exporting videos](dashboard.md#exporting-videos).
 
 ### Retention
 
@@ -76,6 +194,42 @@ mix igniter.install phoenix_replay
 config :phoenix_replay, sample_rate: 0.0
 ```
 
+## Browser context
+{: .col-2}
+
+### LiveSocket
+
+```javascript
+import { replayParams, replayMetadata } from "phoenix_replay"
+
+new LiveSocket("/live", Socket, {
+  params: () => ({_csrf_token: csrfToken, ...replayParams()}),
+  metadata: replayMetadata
+})
+```
+
+Viewport, resizes and tab for each recording.
+
+### User agent
+
+```elixir
+socket "/live", Phoenix.LiveView.Socket,
+  websocket: [connect_info: [:user_agent, session: @session_options]]
+```
+
+### Visit context
+
+```elixir
+config :phoenix_replay,
+  client: [
+    headers: ["accept-language"],
+    landing: [params: [:utm, :click_ids]],
+    media: [:color_scheme, :reduced_motion, :contrast, :pointer, :hover]
+  ]
+```
+
+Headers and the landing need `plug PhoenixReplay.Plug` in the `:browser` pipeline. First-touch by default; `attribution: :last` follows the latest campaign. `media` lists the browser's media settings to keep, all by default, `false` for none. `:context` is this option's former name.
+
 ## Live sessions
 {: .col-2}
 
@@ -96,7 +250,7 @@ live_session :checkout,
 end
 ```
 
-Accepts `:sample_rate`, `:max_events` and `:sanitizer`.
+Accepts `:sample_rate`, `:keep`, `:max_events`, `:sanitizer` and `:redact`.
 
 ## Router
 {: .col-2}
@@ -154,17 +308,18 @@ phoenix_replay "/replay", as: :staff_replay
 | `event` | Triggered event name |
 | `within` | `1h`, `24h` or `7d` |
 | `min_events` | Minimum event count |
+| `errors` | `1` for sessions with an error |
 
 ### In code
 
 ```elixir
-alias PhoenixReplay.Recordings
-alias PhoenixReplay.Recordings.Filter
+alias PhoenixReplay.Catalog
+alias PhoenixReplay.Recording.Filter
 
 config = PhoenixReplay.Config.load()
 filter = Filter.from_params(%{"event" => "pay", "within" => "24h"})
 
 config
-|> Recordings.list()
+|> Catalog.list()
 |> Filter.apply(filter, System.system_time(:millisecond))
 ```

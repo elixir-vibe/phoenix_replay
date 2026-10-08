@@ -1,0 +1,137 @@
+<%= if @recording == nil do %>
+  <.app_bar>
+    <:mark><.icon name="lucide:circle-play" class="size-5 text-accent" /></:mark>
+    <:crumb>
+      <.link navigate={Context.path(@context, [])} class="hover:text-accent">PhoenixReplay</.link>
+    </:crumb>
+    <:crumb>Live session</:crumb>
+  </.app_bar>
+  <main class="flex flex-col gap-4 p-4 sm:p-5">
+    <.flash flash={@flash} />
+    <p :if={@load_error?} role="alert" class="text-sm text-error">
+      Could not redact this session, so it is not shown.
+    </p>
+    <div
+      :if={!@load_error?}
+      id="replay-redaction"
+      role="status"
+      class="max-w-md text-sm text-muted"
+    >
+      <p class="mb-2">{redaction_label(@progress)}</p>
+      <.progress label="Redaction" value={redaction_percent(@progress)} />
+    </div>
+    <.replay_frame :if={!@load_error?} src={frame_src(assigns)} ready={@frame_ready?} />
+  </main>
+<% else %>
+  <%!-- Side by side, the player is as tall as the window: the header and
+  any export banner take their height, the frame the rest, and the
+  session panel's lists scroll within it, so the page itself never does.
+  Stacked on narrower screens, the page scrolls. --%>
+  <div class="flex flex-col lg:h-dvh lg:min-h-[32rem]">
+    <.player_header
+      recording={@recording}
+      back={Context.path(@context, [])}
+      duration_ms={@duration_ms}
+      error_count={@error_count}
+      first_error={@first_error}
+      marks={@marks}
+      dropped={@dropped}
+      at={@at}
+      link={Context.path(@context, [@recording.id]) <> "?at=#{@index}&t=#{@at}"}
+      can_export={@exportable?}
+    />
+    <.export_dialog
+      :if={@export_dialog}
+      params={@export_dialog.params}
+      error={@export_dialog.error}
+      max_dpr={@context.config.export.max_dpr}
+    />
+    <.export_status
+      :if={@export}
+      job={@export}
+      download={
+        @export.status == :done &&
+          Context.path(@context, [@recording.id, "video", Download.sign(@socket, @export)])
+      }
+    />
+    <.shortcut_sheet :if={@shortcuts?} />
+    <div id="replay-keys" phx-hook="PlayerKeys" data-shortcuts={Shortcuts.json()} hidden></div>
+    <div class="flex flex-1 flex-wrap items-stretch lg:min-h-0 lg:flex-nowrap">
+      <main class="flex min-w-0 flex-[999_1_40rem] flex-col gap-4 p-4 sm:p-5 lg:min-h-0">
+        <.flash flash={@flash} />
+        <.replay_frame
+          src={frame_src(assigns)}
+          url={@url}
+          viewport={@viewport}
+          mode={@frame_mode}
+          rotated={@rotated?}
+          follow_scroll={@follow_scroll?}
+          pointer={@pointer}
+          ready={@frame_ready?}
+          unrecorded={@unrecorded}
+          code_changes={@code_changes}
+        />
+        <.playback
+          id="replay-playback"
+          recording={@recording}
+          index={@index}
+          at={@at}
+          next_at={@next_at}
+          duration_ms={@duration_ms}
+          playing={@playing != nil}
+          speed={@speed}
+          speeds={@speeds}
+          first={@first_render}
+          slow_ms={Events.slow_ms(@context.config.keep)}
+        />
+      </main>
+      <aside
+        aria-label="Session"
+        class="flex max-w-full min-w-0 flex-[1_1_24rem] flex-col border-l border-line bg-surface lg:min-h-0"
+      >
+        <.tabs
+          id="replay-tabs"
+          label="Session details"
+          tabs={[{"events", "Events"}, {"state", "State"}, {"visit", "Visit"}]}
+          value={@tab}
+          event="tab"
+        />
+        <div
+          id="replay-tabs-panel"
+          role="tabpanel"
+          class="flex min-h-0 flex-1 flex-col lg:overflow-y-auto"
+        >
+          <.event_list
+            :if={@tab == "events"}
+            groups={@event_groups}
+            kinds={@kinds}
+            counts={@kind_counts}
+            error_count={@error_count}
+            index={@index}
+            hidden={@hidden}
+            query={@query}
+            errors_only={@errors_only}
+            details={details_event(assigns)}
+            pinned={@pinned != nil}
+            slow_ms={Events.slow_ms(@context.config.keep)}
+          />
+          <.state
+            :if={@tab == "state"}
+            assigns={@replayed}
+            before={@before}
+            changed={@changed}
+            at={@at}
+          />
+          <.visit
+            :if={@tab == "visit"}
+            recording={@recording}
+            viewport={@viewport}
+            journey={@journey}
+            filter_path={&filtered_list(@context, &1)}
+            migrations={@migrations}
+          />
+        </div>
+      </aside>
+    </div>
+  </div>
+<% end %>

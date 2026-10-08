@@ -18,6 +18,15 @@ if Code.ensure_loaded?(Igniter) do
     3. Turn recording off in `config/test.exs` with `sample_rate: 0.0`, so
        your LiveView tests do not record sessions
     4. Ignore the default recordings directory in `.gitignore`
+    5. Add `PhoenixReplay.Plug` to the `:browser` pipeline, which keeps the
+       request context the `:client` config asks for; it does nothing until then
+    6. Add `:user_agent` to the `:connect_info` of the endpoint's LiveView
+       socket, so recordings name the browser
+    7. Wire PhoenixReplay's client module into `assets/js/app.js` (or
+       `app.ts`), when its `LiveSocket` setup is the one Phoenix generates:
+       `replayParams` and `replayMetadata` send the browser's viewport and
+       tab, and `replayRecorder(liveSocket)` records form controls, client
+       state and, with `:pointer`, the pointer
 
     Choosing which live sessions to record is up to you; the installer
     prints how to add `PhoenixReplay.Recorder` to them. Before using the
@@ -51,6 +60,8 @@ if Code.ensure_loaded?(Igniter) do
       |> ProjectConfig.configure_new("dev.exs", app, [:dev_routes], true)
       |> ProjectConfig.configure_new("test.exs", :phoenix_replay, [:sample_rate], 0.0)
       |> ignore_recordings()
+      |> add_user_agent()
+      |> send_client_context()
       |> Igniter.add_notice(notice())
     end
 
@@ -65,7 +76,9 @@ if Code.ensure_loaded?(Igniter) do
         {igniter, router} ->
           case Phoenix.has_pipeline(igniter, router, :browser) do
             {igniter, true} ->
-              add_routes(igniter, router, app)
+              igniter
+              |> add_routes(router, app)
+              |> add_context_plug(router)
 
             {igniter, false} ->
               Igniter.add_warning(
@@ -124,6 +137,147 @@ if Code.ensure_loaded?(Igniter) do
       else
         igniter
       end
+    end
+
+    # A no-op until :client asks for headers or a landing, so turning it on is config only.
+    defp add_context_plug(igniter, router) do
+      {igniter, _source, zipper} = Igniter.Project.Module.find_module!(igniter, router)
+
+      if Sourceror.Zipper.find(zipper, &match?({:__aliases__, _, [:PhoenixReplay, :Plug]}, &1)) do
+        igniter
+      else
+        Phoenix.append_to_pipeline(igniter, :browser, "plug PhoenixReplay.Plug", router: router)
+      end
+    end
+
+    @transports [:websocket, :longpoll]
+
+    defp add_user_agent(igniter) do
+      case Phoenix.select_endpoint(igniter) do
+        {igniter, nil} ->
+          Igniter.add_notice(igniter, user_agent_notice())
+
+        {igniter, endpoint} ->
+          Igniter.Project.Module.find_and_update_module!(igniter, endpoint, fn zipper ->
+            case Function.move_to_function_call(zipper, :socket, 3, &live_socket?/1) do
+              {:ok, zipper} -> Function.update_nth_argument(zipper, 2, &connect_user_agent/1)
+              :error -> {:warning, user_agent_notice()}
+            end
+          end)
+      end
+    end
+
+    defp live_socket?(zipper), do: Function.argument_equals?(zipper, 0, "/live")
+
+    # Only transports the socket already configures, so none is turned on.
+    # Prepended: keyword entries such as session: must come last.
+    defp connect_user_agent(zipper) do
+      Enum.reduce_while(@transports, {:ok, zipper}, fn transport, {:ok, zipper} ->
+        if Igniter.Code.Keyword.keyword_has_path?(zipper, [transport]) do
+          case Igniter.Code.Keyword.put_in_keyword(
+                 zipper,
+                 [transport, :connect_info],
+                 [:user_agent],
+                 &Igniter.Code.List.prepend_new_to_list(&1, :user_agent)
+               ) do
+            {:ok, zipper} -> {:cont, {:ok, zipper}}
+            _error -> {:halt, {:warning, user_agent_notice()}}
+          end
+        else
+          {:cont, {:ok, zipper}}
+        end
+      end)
+    end
+
+    @live_socket_params ~r/params:\s*\{\s*_csrf_token:\s*csrfToken\s*\},?/
+    @live_socket_connect ~r/^([^\S\n]*)liveSocket\.connect\(\);?[^\S\n]*$/m
+
+    defp send_client_context(igniter) do
+      case Enum.find(["assets/js/app.js", "assets/js/app.ts"], &Igniter.exists?(igniter, &1)) do
+        nil ->
+          Igniter.add_notice(igniter, client_notice())
+
+        path ->
+          Igniter.update_file(igniter, path, fn source ->
+            content = Rewrite.Source.get(source, :content)
+
+            cond do
+              String.contains?(content, "replayParams") ->
+                source
+
+              Regex.match?(@live_socket_params, content) ->
+                Rewrite.Source.update(source, :content, wire_client(content))
+
+              true ->
+                {:warning, client_notice()}
+            end
+          end)
+      end
+    end
+
+    # replayRecorder records nothing until a recorded LiveView asks, so it
+    # is wired whenever the setup connects the socket.
+    defp wire_client(content) do
+      content =
+        String.replace(
+          content,
+          @live_socket_params,
+          "params: () => ({_csrf_token: csrfToken, ...replayParams()}),\n  metadata: replayMetadata,",
+          global: false
+        )
+
+      {content, helpers} =
+        if Regex.match?(@live_socket_connect, content) do
+          {Regex.replace(@live_socket_connect, content, "\\0\n\\1replayRecorder(liveSocket)",
+             global: false
+           ), "replayParams, replayMetadata, replayRecorder"}
+        else
+          {content, "replayParams, replayMetadata"}
+        end
+
+      add_client_import(content, ~s(import { #{helpers} } from "phoenix_replay"))
+    end
+
+    # After the last import, so it lands among the others: the greedy match
+    # runs from the start of the file to the last line starting an import,
+    # then on to its module string, which ends the statement even when the
+    # imported names span several lines.
+    defp add_client_import(content, import) do
+      case Regex.run(~r/\A[\s\S]*^import\b[\s\S]*?["'][^"'\n]+["'];?[^\S\n]*$/m, content) do
+        [imports] -> imports <> "\n" <> import <> String.replace_prefix(content, imports, "")
+        nil -> import <> "\n" <> content
+      end
+    end
+
+    defp user_agent_notice do
+      """
+      To record which browser a session used, add :user_agent to the
+      :connect_info of your endpoint's LiveView socket:
+
+          socket "/live", Phoenix.LiveView.Socket,
+            websocket: [connect_info: [:user_agent, session: @session_options]]
+      """
+    end
+
+    defp client_notice do
+      """
+      To record the browser's viewport and follow users across LiveViews,
+      pass PhoenixReplay's client context to your LiveSocket:
+
+          import { replayParams, replayMetadata, replayRecorder } from "phoenix_replay"
+
+          const liveSocket = new LiveSocket("/live", Socket, {
+            params: () => ({_csrf_token: csrfToken, ...replayParams()}),
+            metadata: replayMetadata
+          })
+          liveSocket.connect()
+          replayRecorder(liveSocket)
+
+      While a session is recorded, replayRecorder records what users type
+      and choose in form controls, state your code reports with
+      replayState(key, changes), and, for live sessions that configure
+      :pointer, the pointer, touches and scrolling.
+      """
     end
 
     defp notice do

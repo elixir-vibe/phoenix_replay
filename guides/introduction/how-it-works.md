@@ -9,24 +9,24 @@
 - `handle_info` records message tags (never message contents),
 - `after_render` records the assigns that changed in the render.
 
-LiveComponents have no `on_mount` hook, so `PhoenixReplay.Recorder.Components` records them from LiveView's component telemetry, which runs in the LiveView process with the component's socket. It records events handled by components, the assigns each update or event changed, and component removals.
+LiveComponents have no `on_mount` hook, so `PhoenixReplay.Capture.LiveComponents` records them from LiveView's component telemetry, which runs in the LiveView process with the component's socket. It records events handled by components, the assigns each update or event changed, and component removals.
 
 Each event carries a millisecond offset from the start of the session. Recorder state lives in `socket.private`, so your assigns are untouched.
 
 ## Buffering
 
-Events are written by the LiveView process straight into an ETS table, `PhoenixReplay.Recorder.Buffer`, with no message passing on the hot path. The view and its components share one counter per session, so events stay in order.
+Events are written by the LiveView process straight into an ETS table, `PhoenixReplay.Session.Buffer`, with no message passing on the hot path. The view and its components share one counter per session, so events stay in order.
 
 The table is owned by the application rather than a worker process, so in-progress recordings survive any worker restart.
 
 ## Saving
 
-`PhoenixReplay.Recorder.Monitor` monitors each recorded process. When it exits, the session is either discarded, when the user never interacted, or saved by `PhoenixReplay.Recorder.Persister` in a supervised task, with retries. The session leaves the buffer once the task finishes, and `PhoenixReplay.Telemetry` reports the outcome. When the monitor restarts, it re-attaches to every buffered session.
+`PhoenixReplay.Session.Monitor` monitors each recorded process. When it exits, the session is either discarded, when the user never interacted, or saved by `PhoenixReplay.Session.Finalizer` in a supervised task, with retries. The session leaves the buffer once the task finishes, and `PhoenixReplay.Telemetry` reports the outcome. When the monitor restarts, it re-attaches to every buffered session.
 
-`PhoenixReplay.Retention` deletes stored recordings beyond the configured age or count.
+`PhoenixReplay.Storage.Retention` deletes stored recordings beyond the configured age or count.
 
 ## Replaying
 
 The player page, `PhoenixReplay.Web.Live.Show`, owns playback: it schedules each step after the recorded gap, divided by the playback speed. It drives a frame, an iframe running `PhoenixReplay.Web.Live.Frame`, over a private PubSub channel per viewer.
 
-The frame assigns the recorded assigns at the current position and renders your view's template. Before LiveView diffs the result, `PhoenixReplay.Web.Replay` rewrites the rendered tree so every LiveComponent renders through `PhoenixReplay.Web.Live.ReplayComponent` with its recorded assigns. Templates that fail with the recorded assigns show a placeholder instead of crashing the frame, and events from the replayed template are ignored.
+The frame assigns the recorded assigns at the current position and renders your view's template. Before LiveView diffs the result, `PhoenixReplay.Web.Rendering` rewrites the rendered tree so every LiveComponent renders through `PhoenixReplay.Web.Live.ReplayComponent` with its recorded assigns. Templates that fail with the recorded assigns show a placeholder instead of crashing the frame, and events from the replayed template are ignored.

@@ -1,0 +1,150 @@
+defmodule PhoenixReplay.Recording.Code do
+  @moduledoc """
+  Which code a recording was made with, as its `code`, so the player can
+  say what changed since.
+
+  Replay renders today's code with the assigns recorded then. A recording
+  keeps:
+
+    * `release` — the name of the deploy, from the `:release` config, such
+      as a commit, or the version of the view's application. For people
+      and the recording list's filter; nothing is decided by it.
+    * `modules` — the MD5 of each module that rendered the session, its
+      view and its LiveComponents, as `module_info(:md5)` gives it, which
+      changes whenever the module's code does.
+    * `migration` — the newest `PhoenixReplay.Migration` the app had,
+      whose newer ones replay applies, or `nil` without any.
+    * `deps` — the versions of the dependencies that render: Phoenix,
+      LiveView, `phoenix_html`, `phoenix_template`, and any direct
+      dependency of the view's application built on LiveView, such as a
+      component library. One that comes in through another dependency is
+      not covered.
+
+  Modules and dependencies are kept by name, as strings, not as atoms:
+  stored recordings decode only atoms the node knows, so a module deleted
+  since would otherwise make every recording naming it unreadable. One the
+  node no longer has counts as changed.
+
+  Reading them costs a few function calls when a session starts; the
+  dependency versions are read once per application.
+  """
+
+  @type t :: %{
+          release: String.t() | nil,
+          modules: %{String.t() => String.t()},
+          migration: pos_integer() | nil,
+          deps: %{String.t() => String.t()}
+        }
+
+  @typedoc "What changed since a recording, as `changes/1` tells, by name."
+  @type changes :: %{
+          modules: [String.t()],
+          deps: [{String.t(), String.t(), String.t() | nil}]
+        }
+
+  @rendering [:phoenix, :phoenix_live_view, :phoenix_html, :phoenix_template]
+
+  @doc """
+  The code `view` runs now: the release named `release`, or its
+  application's version, the view's MD5, the rendering dependencies, and
+  `migration`, the newest migration version the app has.
+  """
+  @spec of(module(), String.t() | nil, pos_integer() | nil) :: t()
+  def of(view, release, migration \\ nil) do
+    app = Application.get_application(view)
+
+    %{
+      release: release || version(app),
+      modules: %{inspect(view) => md5(view)},
+      migration: migration,
+      deps: deps(app)
+    }
+  end
+
+  @doc "Adds the MD5 of `modules`, such as the LiveComponents a session rendered."
+  @spec with_modules(t() | nil, [module()]) :: t() | nil
+  def with_modules(nil, _modules), do: nil
+
+  def with_modules(code, modules) do
+    added =
+      for module <- modules, hash = md5(module), hash != nil, into: %{} do
+        {inspect(module), hash}
+      end
+
+    %{code | modules: Map.merge(added, code.modules)}
+  end
+
+  @doc """
+  What changed since the recording was made, by name: its modules whose
+  code is different now, or that are gone, and its rendering dependencies
+  at another version now, as `{dep, then, now}`. A recording made before
+  code was recorded has no changes to tell.
+  """
+  @spec changes(t() | nil) :: changes()
+  def changes(nil), do: %{modules: [], deps: []}
+
+  def changes(%{modules: modules, deps: deps}) do
+    changed = for {name, hash} <- modules, md5(known("Elixir." <> name)) != hash, do: name
+
+    moved =
+      for {dep, then} <- Enum.sort(deps), now = version(known(dep)), now != then do
+        {dep, then, now}
+      end
+
+    %{modules: Enum.sort(changed), deps: moved}
+  end
+
+  # The atom of a name this node knows, or nil.
+  defp known(name) do
+    String.to_existing_atom(name)
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp md5(nil), do: nil
+
+  defp md5(module) do
+    if Code.ensure_loaded?(module),
+      do: module.module_info(:md5) |> Base.encode16(case: :lower)
+  end
+
+  defp version(nil), do: nil
+
+  defp version(app) do
+    case Application.spec(app, :vsn) do
+      nil -> nil
+      vsn -> List.to_string(vsn)
+    end
+  end
+
+  # Read once per application: they change only with a restart.
+  defp deps(nil), do: %{}
+
+  defp deps(app) do
+    key = {__MODULE__, :deps, app}
+
+    case :persistent_term.get(key, nil) do
+      nil ->
+        deps =
+          for dep <- rendering(app), vsn = version(dep), vsn != nil, into: %{} do
+            {Atom.to_string(dep), vsn}
+          end
+
+        :persistent_term.put(key, deps)
+        deps
+
+      deps ->
+        deps
+    end
+  end
+
+  # The usual rendering dependencies, and those of the app built on LiveView.
+  defp rendering(app) do
+    built_on_live_view =
+      for dep <- Application.spec(app, :applications) || [],
+          :phoenix_live_view in (Application.spec(dep, :applications) || []),
+          do: dep
+
+    Enum.uniq(@rendering ++ built_on_live_view)
+  end
+end
