@@ -11,6 +11,8 @@ defmodule PhoenixReplay.Recording.Diff do
   whole value with its changes marked.
   """
 
+  alias PhoenixReplay.Recording.Value
+
   @typedoc "A step into a value: a map key or struct field, a list index, or a list item's id."
   @type step :: {:key, term()} | {:index, non_neg_integer()} | {:id, term()}
 
@@ -26,7 +28,7 @@ defmodule PhoenixReplay.Recording.Diff do
   @context 2
 
   # Values compared whole: their fields mean nothing apart.
-  @whole PhoenixReplay.Recording.Value.opaque_structs()
+  @whole Value.opaque_structs()
 
   @doc "The places where `after_value` differs from `before`, in order."
   @spec changes(term(), term()) :: [change()]
@@ -38,7 +40,7 @@ defmodule PhoenixReplay.Recording.Diff do
   """
   @spec lines(term(), term(), keyword()) :: [line()]
   def lines(before, after_value, inspect_opts \\ []) do
-    split = &(&1 |> inspect([pretty: true] ++ inspect_opts) |> String.split("\n"))
+    split = &(&1 |> Value.inspect([pretty: true] ++ inspect_opts) |> String.split("\n"))
 
     split.(before)
     |> List.myers_difference(split.(after_value))
@@ -147,7 +149,7 @@ defmodule PhoenixReplay.Recording.Diff do
   defp id(_item), do: nil
 
   defp step({:key, key}, acc) when is_atom(key), do: "#{acc}.#{key}"
-  defp step({:key, key}, acc), do: "#{acc}[#{inspect(key)}]"
+  defp step({:key, key}, acc), do: "#{acc}[#{Value.inspect(key)}]"
   defp step({:index, index}, acc), do: "#{acc}[#{index}]"
   defp step({:id, id}, acc), do: "#{acc}[id: #{short_id(id)}]"
 
@@ -155,7 +157,7 @@ defmodule PhoenixReplay.Recording.Diff do
   defp short_id(id) when is_binary(id) and byte_size(id) > 12,
     do: ~s("#{String.slice(id, 0, 8)}…")
 
-  defp short_id(id), do: inspect(id, limit: 3, printable_limit: 24)
+  defp short_id(id), do: Value.inspect(id, limit: 3, printable_limit: 24)
 
   # Keeps the changed lines and a little context around them.
   defp fold(lines) do

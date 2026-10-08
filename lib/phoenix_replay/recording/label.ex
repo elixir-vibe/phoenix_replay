@@ -6,7 +6,7 @@ defmodule PhoenixReplay.Recording.Label do
   message.
   """
 
-  alias PhoenixReplay.Recording.{Client, Event, State}
+  alias PhoenixReplay.Recording.{Client, Event, State, Value}
 
   @doc "One line describing `event`, as the player's event list shows it."
   @spec of(Event.t()) :: String.t()
@@ -22,7 +22,7 @@ defmodule PhoenixReplay.Recording.Label do
 
   def of(%Event{type: :params, data: %{uri: uri}}), do: "navigate → #{uri}"
   def of(%Event{type: :info, data: %{tag: nil}}), do: "handle_info"
-  def of(%Event{type: :info, data: %{tag: tag}}), do: "handle_info #{inspect(tag)}"
+  def of(%Event{type: :info, data: %{tag: tag}}), do: "handle_info #{Value.inspect(tag)}"
   def of(%Event{type: :render, data: %{assigns: assigns}}), do: assigns_label(assigns)
 
   def of(%Event{type: :component, data: %{module: module, id: id, assigns: assigns}}),
@@ -61,7 +61,7 @@ defmodule PhoenixReplay.Recording.Label do
   @doc "A LiveComponent as `Module#id`."
   @spec component(module(), term()) :: String.t()
   def component(module, id) when is_binary(id), do: "#{inspect(module)}##{id}"
-  def component(module, id), do: "#{inspect(module)}##{inspect(id)}"
+  def component(module, id), do: "#{inspect(module)}##{Value.inspect(id)}"
 
   defp assigns_label(assigns) do
     "assigns " <> (assigns |> Map.keys() |> Enum.sort() |> Enum.map_join(", ", &to_string/1))
@@ -96,5 +96,5 @@ defmodule PhoenixReplay.Recording.Label do
   defp field_label({field, value}), do: "#{field} #{state_value(value)}"
 
   defp state_value(value) when is_binary(value), do: inspect(String.slice(value, 0, 40))
-  defp state_value(value), do: value |> inspect(limit: 5) |> String.slice(0, 40)
+  defp state_value(value), do: value |> Value.inspect(limit: 5) |> String.slice(0, 40)
 end

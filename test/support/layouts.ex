@@ -1,5 +1,8 @@
 defmodule PhoenixReplay.Test.Layouts do
-  @moduledoc "An app's root layout, whose `<html>` follows an assign, as a theme would."
+  @moduledoc """
+  An app's root layout, whose `<html>` follows an assign, as a theme
+  would, and a view layout with navigation.
+  """
   use Phoenix.Component
 
   def root(assigns) do
@@ -9,6 +12,13 @@ defmodule PhoenixReplay.Test.Layouts do
       <head></head>
       <body>{@inner_content}</body>
     </html>
+    """
+  end
+
+  def app(assigns) do
+    ~H"""
+    <nav>Menu</nav>
+    {@inner_content}
     """
   end
 end

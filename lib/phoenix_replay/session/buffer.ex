@@ -171,10 +171,16 @@ defmodule PhoenixReplay.Session.Buffer do
 
   @doc "Sets the session's URL. Only the recording process writes its metadata row."
   @spec put_url(Recording.id(), String.t()) :: :ok
-  def put_url(id, url) do
+  def put_url(id, url), do: update_recording(id, &%{&1 | url: url})
+
+  @doc "Sets the layout the session's view renders in; see `PhoenixReplay.Recording`."
+  @spec put_layout(Recording.id(), Recording.layout()) :: :ok
+  def put_layout(id, layout), do: update_recording(id, &%{&1 | layout: layout})
+
+  defp update_recording(id, fun) do
     case :ets.lookup(@table, {id, :meta}) do
       [{key, pid, recording}] ->
-        :ets.insert(@table, {key, pid, %{recording | url: url}})
+        :ets.insert(@table, {key, pid, fun.(recording)})
 
       [] ->
         :ok

@@ -26,7 +26,14 @@ defmodule PhoenixReplay.Web.Rendering do
 
   @doc """
   Renders a recorded view with `assigns`: with its `replay_render/1` when
-  it defines one, with `render/1` otherwise.
+  it defines one, with `render/1` otherwise, inside its layout, as
+  LiveView renders it.
+
+  `:layout` is the layout the recording kept, `PhoenixReplay.Recording`'s
+  `layout`: a `{module, template}` pair of names, or `false` for none.
+  Without it, as in recordings made before it was kept, the view renders
+  in the layout its `use Phoenix.LiveView, layout: ...` names. A layout
+  module that no longer exists is left out.
 
   `replay_render/1` is an optional callback for views whose live render
   depends on code in the browser, such as a client-side component whose
@@ -42,12 +49,53 @@ defmodule PhoenixReplay.Web.Rendering do
   previous step, so a value that went back to what was recorded would stay
   stale on the page.
   """
-  @spec render(module(), map()) :: Phoenix.LiveView.Rendered.t()
-  def render(view, assigns) do
+  @spec render(module(), map(), keyword()) :: Phoenix.LiveView.Rendered.t()
+  def render(view, assigns, opts \\ []) do
+    loaded? = Code.ensure_loaded?(view)
+
     # The callback of PhoenixReplay.Replay.View is optional, so it is looked up.
-    if Code.ensure_loaded?(view) and function_exported?(view, :replay_render, 1),
-      do: view.replay_render(Map.put(assigns, :__changed__, nil)),
-      else: view.render(assigns)
+    inner =
+      if loaded? and function_exported?(view, :replay_render, 1),
+        do: view.replay_render(Map.put(assigns, :__changed__, nil)),
+        else: view.render(assigns)
+
+    case layout(view, loaded?, Keyword.get(opts, :layout)) do
+      {module, template} -> in_layout(inner, module, template, assigns)
+      nil -> inner
+    end
+  end
+
+  defp layout(_view, _loaded?, false), do: nil
+
+  defp layout(_view, _loaded?, {module, template}) do
+    module = String.to_existing_atom("Elixir." <> module)
+    if Code.ensure_loaded?(module), do: {module, template}
+  rescue
+    # A layout module renamed or deleted since the session was recorded.
+    ArgumentError -> nil
+  end
+
+  defp layout(view, loaded?, nil) do
+    if loaded? and function_exported?(view, :__live__, 0) do
+      case view.__live__()[:layout] do
+        {module, template} -> {module, to_string(template)}
+        _none -> nil
+      end
+    end
+  end
+
+  # As LiveView renders a view's layout: with the view as `@inner_content`.
+  defp in_layout(inner, module, template, assigns) do
+    assigns = Map.put(assigns, :inner_content, inner)
+
+    # `replay_render/1` renders without change tracking, with `__changed__`
+    # nil; only a tracked render marks the content as changed.
+    assigns =
+      if is_map(assigns[:__changed__]),
+        do: put_in(assigns.__changed__[:inner_content], true),
+        else: assigns
+
+    Phoenix.Template.render(module, template, "html", assigns)
   end
 
   @doc """
@@ -58,9 +106,9 @@ defmodule PhoenixReplay.Web.Rendering do
   missing assign or keeps the first line of the message; the full message
   is logged at the debug level.
   """
-  @spec render_error(module(), map()) :: String.t() | nil
-  def render_error(module, assigns) do
-    case render_check(module, assigns) do
+  @spec render_error(module(), map(), keyword()) :: String.t() | nil
+  def render_error(module, assigns, opts \\ []) do
+    case render_check(module, assigns, opts) do
       :ok -> nil
       {:missing, key} -> "the recording has no @#{key}"
       {:error, description} -> description
@@ -71,12 +119,13 @@ defmodule PhoenixReplay.Web.Rendering do
   Renders `module` with `assigns`, as `render_error/2` does, telling an
   assign the recording lacks, such as one the template began to read after
   the session was recorded, from other failures: `{:missing, key}`, or
-  `{:error, description}`.
+  `{:error, description}`. Takes `render/3`'s options.
   """
-  @spec render_check(module(), map()) :: :ok | {:missing, atom()} | {:error, String.t()}
+  @spec render_check(module(), map(), keyword()) ::
+          :ok | {:missing, atom()} | {:error, String.t()}
   # credo:disable-for-next-line ExSlop.Check.Warning.BlanketRescue
-  def render_check(module, assigns) do
-    module |> render(assigns) |> evaluate()
+  def render_check(module, assigns, opts \\ []) do
+    module |> render(assigns, opts) |> evaluate()
     :ok
   rescue
     # reach:disable-next-line bare_rescue -- recorded templates are foreign code rendered with partial assigns

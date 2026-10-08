@@ -175,6 +175,8 @@ phoenix_replay "/replay", frame_layout: {MyAppWeb.Layouts, :root}
 
 Your root layout loads your own JavaScript in the frame. `replayRecorder` records nothing there, since the frame's LiveView is not recorded, but it is what puts recorded form values back into the replayed page, so keep it in the script your layout loads. Your hooks run in the frame too; a view whose live render depends on them can render without them in `replay_render/1`, see [Client state](recording.md#rendering-what-the-browser-did).
 
+A view's own layout is replayed around it with the recorded assigns, its flash messages included: the layout it rendered in live, whether its `use Phoenix.LiveView, layout: ...` names it or `mount/3` or an `on_mount` hook returned it with `layout:`. Recordings made before the layout was kept replay in the one the view's `use` names today.
+
 Interaction in the frame is ignored: recorded templates keep their `phx-click` bindings, but the frame does not act on them.
 
 ## Assets

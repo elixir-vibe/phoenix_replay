@@ -10,6 +10,12 @@ defmodule PhoenixReplay.Recording do
 
   `client` describes the browser and the visit; see
   `PhoenixReplay.Recording.Client`.
+
+  `layout` is the layout the view rendered in live, as module and template
+  names: the one `mount/3` or an `on_mount` hook returned with `layout:`,
+  else the one its `use Phoenix.LiveView, layout: ...` names, or `false`
+  for none. It is `nil` in recordings made before it was kept, which
+  replay in the layout the view names today.
   """
 
   alias PhoenixReplay.Recording.Client
@@ -27,8 +33,12 @@ defmodule PhoenixReplay.Recording do
           events: [Event.t()],
           dropped: %{String.t() => pos_integer()},
           client: Client.t(),
-          code: PhoenixReplay.Recording.Code.t() | nil
+          code: PhoenixReplay.Recording.Code.t() | nil,
+          layout: layout() | nil
         }
+
+  @typedoc "A layout by module and template name, such as `{\"MyAppWeb.Layouts\", \"app\"}`, or `false` for none."
+  @type layout :: {String.t(), String.t()} | false
 
   @typedoc """
   The browser's viewport: its size in CSS pixels and pixel ratio, and when
@@ -60,7 +70,8 @@ defmodule PhoenixReplay.Recording do
     dropped: %{},
     client: %Client{},
     # Which code made the recording; nil for one made before it was kept.
-    code: nil
+    code: nil,
+    layout: nil
   ]
 
   @doc """

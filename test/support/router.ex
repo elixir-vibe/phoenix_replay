@@ -20,6 +20,7 @@ defmodule PhoenixReplay.Test.Router do
       live "/form", PhoenixReplay.Test.Live.Form
       live "/cart", PhoenixReplay.Test.Live.Cart
       live "/async", PhoenixReplay.Test.Live.AsyncPage
+      live "/layout", PhoenixReplay.Test.Live.LayoutPage
     end
 
     live_session :hooked,

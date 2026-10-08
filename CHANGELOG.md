@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A LiveView replays inside its own layout, with its navigation and flash messages: the one its `use Phoenix.LiveView, layout: ...` names, or one `mount/3` or an `on_mount` hook returned with `layout:`. Recordings keep which layout the view rendered in.
+- Lists of small integers, such as `%{"ids" => [11]}`, show as numbers in the player and `mix phoenix_replay.show`, not as charlists like `~c"\v"`.
+
 ## 0.6.1 - 2026-10-08
 
 Documentation brought up to date with 0.6.

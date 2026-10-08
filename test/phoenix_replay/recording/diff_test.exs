@@ -80,4 +80,9 @@ defmodule PhoenixReplay.Web.Player.DiffTest do
     assert {:ins, "  a: 2"} in rest
     assert Diff.lines(:same, :same) == [{:skip, 1}]
   end
+
+  test "writes lists of small integers as numbers" do
+    assert [{:del, "[11]"}, {:ins, "[12]"}] = Diff.lines([11], [12])
+    assert Diff.path(:ids, id: [11]) == "ids[id: [11]]"
+  end
 end

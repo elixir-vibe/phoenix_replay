@@ -11,7 +11,7 @@ defmodule PhoenixReplay.Web.Components.State do
   import PhoenixIconify, only: [icon: 1]
 
   alias PhoenixReplay.Web.{Format, Highlight}
-  alias PhoenixReplay.Recording.Diff
+  alias PhoenixReplay.Recording.{Diff, Value}
 
   # A value expands only when its row cannot show all of it: when the
   # one-line preview leaves something out, or is longer than a row holds.
@@ -158,8 +158,8 @@ defmodule PhoenixReplay.Web.Components.State do
   end
 
   defp state_row({key, value}, before, changed?) do
-    preview = inspect(value, limit: 8, printable_limit: 80)
-    full = inspect(value, pretty: true, limit: 50)
+    preview = Value.inspect(value, limit: 8, printable_limit: 80)
+    full = Value.inspect(value, pretty: true, limit: 50)
     expand? = full != preview or String.length(preview) > @short_value
 
     # What the current event changed, when the assign was there before it:
