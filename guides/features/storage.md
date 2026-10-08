@@ -91,7 +91,7 @@ Implement `PhoenixReplay.Storage`: `save/2`, `fetch/2`, `list/1`, `delete/2` and
 
 Two optional callbacks let a backend serve the dashboard without listing everything:
 
-  * `query/3` reads a page of summaries matching a `PhoenixReplay.Recording.Filter`, with an offset, a limit and start-time bounds, and counts every match
-  * `values/4` counts the values of a filter field, such as views or event names, among the recordings matching the rest of a filter, for the dashboard's value picker
+- `query/3` reads a page of summaries matching a `PhoenixReplay.Recording.Filter`, with an offset, a limit and start-time bounds, and counts every match
+- `values/4` counts the values of a filter field, such as views or event names, among the recordings matching the rest of a filter, for the dashboard's value picker
 
 Without them, both are worked out from `list/1`. The optional `append/3`, `fetch_partial/2` and `partials/1` take running sessions in chunks.

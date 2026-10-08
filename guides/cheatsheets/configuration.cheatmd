@@ -51,7 +51,7 @@ config :phoenix_replay,
   max_memory: 256 * 1024 * 1024
 ```
 
-Decides when a session ends whether it is saved. Default: `rate: 1.0`, no error or slowness rules, no memory limit.
+Decides when a session ends whether it is saved; `marks: true` also keeps every session with a mark. Default: `rate: 1.0`, no error, slowness or mark rules, no memory limit.
 
 ### Telemetry
 
@@ -200,15 +200,18 @@ config :phoenix_replay, sample_rate: 0.0
 ### LiveSocket
 
 ```javascript
-import { replayParams, replayMetadata } from "phoenix_replay"
+import { replayParams, replayMetadata, replayRecorder } from "phoenix_replay"
 
-new LiveSocket("/live", Socket, {
+const liveSocket = new LiveSocket("/live", Socket, {
   params: () => ({_csrf_token: csrfToken, ...replayParams()}),
   metadata: replayMetadata
 })
+
+liveSocket.connect()
+replayRecorder(liveSocket)
 ```
 
-Viewport, resizes and tab for each recording.
+Viewport, media settings and tab for each recording; `replayRecorder` adds form input, client state, resizes and, with `pointer: true`, the pointer.
 
 ### User agent
 
@@ -303,23 +306,25 @@ phoenix_replay "/replay", as: :staff_replay
 
 | Parameter | Matches |
 |---|---|
-| `q` | Text in URL or id |
+| `q` | Text in URL, id, event or mark names, source or campaign |
 | `view` | View module name |
 | `event` | Triggered event name |
-| `within` | `1h`, `24h` or `7d` |
+| `mark` | A mark the session reached |
+| `source`, `medium`, `campaign` | Where the visit came from |
+| `device_type` | `phone`, `tablet` or `desktop` |
+| `browser` | Browser family, such as `Mobile Safari` |
+| `release` | The release it was recorded on |
+| `within` | `15m`, `1h`, `24h`, `7d` or `30d` |
+| `from`, `to` | Start time range, ISO 8601 in UTC |
+| `longer_than` | Minimum duration in seconds |
 | `min_events` | Minimum event count |
 | `errors` | `1` for sessions with an error |
+| `tab` | One browser tab's sessions |
 
 ### In code
 
 ```elixir
-alias PhoenixReplay.Catalog
-alias PhoenixReplay.Recording.Filter
-
-config = PhoenixReplay.Config.load()
-filter = Filter.from_params(%{"event" => "pay", "within" => "24h"})
-
-config
-|> Catalog.list()
-|> Filter.apply(filter, System.system_time(:millisecond))
+PhoenixReplay.Trace.find(event: "pay", within: "24h", errors: true)
 ```
+
+Takes the same filters as keywords. See `PhoenixReplay.Trace`.

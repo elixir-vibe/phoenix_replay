@@ -144,7 +144,7 @@ live_session :checkout,
 end
 ```
 
-The dashboard's **Errors** filter, or `?errors=1`, lists the sessions that had one.
+The dashboard's **With errors** filter, or `?errors=1`, lists the sessions that had one.
 
 ## Redaction
 

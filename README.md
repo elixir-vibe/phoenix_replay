@@ -2,7 +2,7 @@
 
 [![Hex.pm](https://img.shields.io/hexpm/v/phoenix_replay.svg)](https://hex.pm/packages/phoenix_replay) [![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/phoenix_replay)
 
-Session recording and replay for Phoenix LiveView. PhoenixReplay records what your LiveViews and LiveComponents did — events, navigation and assigns — and replays a session by re-rendering your own templates with the recorded assigns. No browser recording script, no DOM snapshots.
+Session recording and replay for Phoenix LiveView. PhoenixReplay records what your LiveViews and LiveComponents did — events, navigation and assigns — and replays a session by re-rendering your own templates with the recorded assigns. No DOM snapshots: assigns and events are recorded on the server, and an optional browser recorder adds the pointer, touches, scrolling and form input.
 
 ![PhoenixReplay replaying a phone session: a swipe scrolling the replayed page, the mark a tap reached, its queries, and errors on the timeline](https://raw.githubusercontent.com/elixir-vibe/phoenix_replay/master/guides/images/player.jpg)
 
@@ -29,7 +29,7 @@ end
 
 ## Why PhoenixReplay
 
-Browser session recorders capture the DOM and ship every keystroke from the client. A LiveView already knows its state: its template is a function of its assigns. PhoenixReplay records assigns on the server, where they are produced, and replays them through the same template — so a replay shows exactly what the server rendered, a 30-second form session takes a few kilobytes, and nothing changes in your JavaScript.
+Browser session recorders capture the DOM and ship every keystroke from the client. A LiveView already knows its state: its template is a function of its assigns. PhoenixReplay records assigns on the server, where they are produced, and replays them through the same template — so a replay shows exactly what the server rendered, and a 30-second form session takes a few kilobytes.
 
 See [Why PhoenixReplay](https://hexdocs.pm/phoenix_replay/why-phoenix-replay.html) and [How It Works](https://hexdocs.pm/phoenix_replay/how-it-works.html).
 
@@ -44,16 +44,21 @@ live_session :checkout,
 end
 ```
 
-Optionally, the browser sends its viewport, user agent and tab, so a phone session replays at phone size and sessions across LiveViews link into one journey:
+In the browser, `replayParams` and `replayMetadata` send the viewport, so a phone session replays at phone size, and link sessions across LiveViews into one journey. `replayRecorder` records what only the browser sees: form input, and with `pointer: true`, the pointer, touches and scrolling. The installer adds all three:
 
 ```javascript
-import { replayParams, replayMetadata } from "phoenix_replay"
+import { replayParams, replayMetadata, replayRecorder } from "phoenix_replay"
 
-new LiveSocket("/live", Socket, {
+const liveSocket = new LiveSocket("/live", Socket, {
   params: () => ({_csrf_token: csrfToken, ...replayParams()}),
   metadata: replayMetadata
 })
+
+liveSocket.connect()
+replayRecorder(liveSocket)
 ```
+
+Mark the moments that matter, such as a signup or a checkout, by collecting a telemetry event with `mark: true`; see [Marking moments](https://hexdocs.pm/phoenix_replay/telemetry-and-logs.html#marking-moments).
 
 See the [Recording guide](https://hexdocs.pm/phoenix_replay/recording.html) and [LiveComponents guide](https://hexdocs.pm/phoenix_replay/live-components.html).
 
@@ -95,7 +100,7 @@ defmodule MyApp.ReplaySanitizer do
 end
 ```
 
-Values that only detection can find, such as an email address typed into a form or a card number in a log message, are masked when a session is saved, off your users' path. Use your own patterns or [Obscura](https://hexdocs.pm/obscura), an optional dependency:
+Values that only detection can find, such as an email address typed into a form or a card number in a log message, are masked when the session is saved, not while users wait. Use your own patterns or [Obscura](https://hexdocs.pm/obscura), an optional dependency:
 
 ```elixir
 config :phoenix_replay, redact: {PhoenixReplay.Redactor.Obscura, []}
@@ -105,7 +110,7 @@ See the [Privacy and Security guide](https://hexdocs.pm/phoenix_replay/privacy-a
 
 ## Dashboard
 
-Browse, filter and replay recordings in a dashboard that follows your system's light or dark mode. The list pages through storage and holds its place while new sessions arrive; filters live in the URL, so `/admin/replay?event=checkout&within=24h` is a shareable link. The player has a timeline lane per kind of event, the events grouped by the interaction that caused them, the assigns at every moment, and a link to the moment you are looking at. Restrict who sees what with an authorization module:
+Filter sessions by device, browser, where they came from, marks, errors and time; every filter is a shareable URL. The player shows each event with the queries, logs and assigns behind it, and draws the user's pointer over the replay. Restrict who sees what with an authorization module:
 
 ```elixir
 phoenix_replay "/replay",
@@ -115,13 +120,13 @@ phoenix_replay "/replay",
 
 ![The recording list: sessions of the last day by device, browser and where they came from, with the marks they reached and their errors](https://raw.githubusercontent.com/elixir-vibe/phoenix_replay/master/guides/images/recordings.jpg)
 
-The dashboard ships its own assets and loads your app's own Phoenix and LiveView clients, so it needs nothing from your asset pipeline. See the [Dashboard guide](https://hexdocs.pm/phoenix_replay/dashboard.html).
+The dashboard needs nothing from your asset pipeline. See the [Dashboard guide](https://hexdocs.pm/phoenix_replay/dashboard.html).
 
-Export a recording as an MP4 of the page and the pointer, from the player's menu or with `mix phoenix_replay.export <id>`. A headless Chromium films the replay through [`playwright_ex`](https://hexdocs.pm/playwright_ex) and `ffmpeg`, run by [MuonTrap](https://hexdocs.pm/muontrap), encodes it; see [Exporting videos](https://hexdocs.pm/phoenix_replay/dashboard.html#exporting-videos).
+Export a recording as an MP4, from the player or with `mix phoenix_replay.export <id>`. It needs `ffmpeg` and the optional [`playwright_ex`](https://hexdocs.pm/playwright_ex) and [`muontrap`](https://hexdocs.pm/muontrap) dependencies; see [Exporting videos](https://hexdocs.pm/phoenix_replay/dashboard.html#exporting-videos).
 
 ## For coding agents
 
-`PhoenixReplay.Trace` reads recordings as plain data, for IEx, scripts and agents: `find/1` by view, event, errors or time, `events/1` as the player lists them, and `state/2` with the assigns at a moment and what changed. `mix phoenix_replay.list` and `mix phoenix_replay.show` print the same from a shell.
+`PhoenixReplay.Trace` reads recordings as plain data from IEx, tests and scripts, and `mix phoenix_replay.list` and `mix phoenix_replay.show` do the same from a shell.
 
 The package ships two agent skills, `phoenix-replay-setup` and `phoenix-replay-debugging`, as `SKILL.md` files in `deps/phoenix_replay/skills/`. Point your agent at them, or copy them to wherever it reads skills from.
 
@@ -167,14 +172,7 @@ The Ecto storage tests run on SQLite, on DuckDB through [QuackDB](https://hexdoc
 
 ## Part of Elixir Vibe
 
-PhoenixReplay records LiveView sessions as assigns timelines, making every session replayable and every bug reproducible.
-
-It is one building block of a larger stack — tools that make AI-generated
-software checkable: structural search, dependence analysis, duplication and
-slop detection, session replay, and ecosystem-wide code search. See the
-[Elixir Vibe](https://github.com/elixir-vibe) organization for the rest, and
-[Building Blocks for the Future Web](https://github.com/elixir-vibe/building-blocks)
-for the thesis, architecture, and roadmap that tie them together.
+PhoenixReplay is one building block of a larger stack — tools that make AI-generated software checkable: structural search, dependence analysis, duplication and slop detection, session replay, and ecosystem-wide code search. See the [Elixir Vibe](https://github.com/elixir-vibe) organization for the rest, and [Building Blocks for the Future Web](https://github.com/elixir-vibe/building-blocks) for the thesis, architecture, and roadmap that tie them together.
 
 ## License
 
