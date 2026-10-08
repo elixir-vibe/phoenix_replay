@@ -15,7 +15,7 @@ defmodule PhoenixReplay.Export.Video do
 
   # Only called once `PhoenixReplay.Export.available/1` found Playwright.
   @compile {:no_warn_undefined, Screenshots}
-  alias PhoenixReplay.Recording.{PointerTrack, Timeline}
+  alias PhoenixReplay.Recording.Timeline
 
   @captured 0.9
 
@@ -106,22 +106,16 @@ defmodule PhoenixReplay.Export.Video do
     end
   end
 
-  # Rotated, the pointer and the scrolling fit only the recorded layout;
-  # without the pointer the page still scrolls as recorded.
+  # Without the pointer the page still scrolls as recorded.
   defp plan(recording, export, %Options{} = options) do
     {playback, track} = Timeline.for_playback(recording)
 
-    track =
-      cond do
-        options.rotated -> PointerTrack.empty()
-        options.pointer -> track
-        true -> %{track | moves: [], presses: []}
-      end
+    track = if options.pointer, do: track, else: %{track | moves: [], presses: []}
 
     opts =
       export
       |> Map.take([:fps, :idle, :max_dpr, :hold])
-      |> Map.merge(Map.take(options, [:from, :to, :rotated]))
+      |> Map.merge(Map.take(options, [:from, :to]))
       |> Keyword.new()
 
     Schedule.new(playback, track, opts)

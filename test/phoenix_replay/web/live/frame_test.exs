@@ -101,6 +101,111 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     assert values == %{}
   end
 
+  defmodule Replay do
+    @moduledoc false
+    @behaviour PhoenixReplay.Replay
+
+    @impl true
+    def root_attributes(_view, assigns),
+      do: %{"data-count" => assigns[:count], "data-none" => nil}
+  end
+
+  defp replay_with(module) do
+    Application.put_env(:phoenix_replay, :replay, module)
+    on_exit(fn -> Application.delete_env(:phoenix_replay, :replay) end)
+  end
+
+  test "migrates an older recording's assigns with the app's migrations" do
+    # See PhoenixReplay.Test.ReplayMigrations.ClicksToCount.
+    save(%PhoenixReplay.Recording{
+      id: "renamed",
+      view: PhoenixReplay.Test.Live.Counter,
+      connected_at: System.system_time(:millisecond),
+      events: [
+        %Event{at: 0, type: :mount, data: %{assigns: %{}}},
+        %Event{at: 5, type: :render, data: %{assigns: %{clicks: 7}}}
+      ]
+    })
+
+    {:ok, view, _html} = live(build_conn(), "/replay/renamed/frame?channel=c-renamed")
+    assert render(view) =~ ~s(<span id="count">7</span>)
+
+    # Made after the migration, a recording is left as it is.
+    save(%PhoenixReplay.Recording{
+      id: "current",
+      view: PhoenixReplay.Test.Live.Counter,
+      connected_at: System.system_time(:millisecond),
+      code: %{release: nil, modules: %{}, deps: %{}, migration: 20_261_007_120_000},
+      events: [
+        %Event{at: 0, type: :mount, data: %{assigns: %{}}},
+        %Event{at: 5, type: :render, data: %{assigns: %{clicks: 7}}}
+      ]
+    })
+
+    {:ok, view, _html} = live(build_conn(), "/replay/current/frame?channel=c-current")
+    assert render(view) =~ ~s(<span id="count"></span>)
+  end
+
+  test "sends the app's root layout rendered with each moment's assigns, when it changes" do
+    recording = save(Fixtures.counter_recording(id: "rooted", clicks: 1))
+
+    {:ok, view, _html} = live(build_conn(), "/app/replay/rooted/frame?channel=c-root")
+    assert_push_event(view, "phx_replay:root", %{layout: layout, attributes: %{}})
+    assert layout =~ ~s(<html lang="en" data-count="0">)
+
+    last = length(recording.events) - 1
+    seek("c-root", last)
+    render(view)
+    assert_push_event(view, "phx_replay:root", %{layout: layout})
+    assert layout =~ ~s(data-count="1")
+
+    # Unchanged, the frame's script is not told again.
+    seek("c-root", last)
+    render(view)
+    refute_push_event(view, "phx_replay:root", %{})
+  end
+
+  test "sends nothing for the dashboard's own layout, but the app's root attributes" do
+    {:ok, view, _html} =
+      live(build_conn(), "/replay/#{save(Fixtures.counter_recording(id: "plain")).id}/frame")
+
+    refute_push_event(view, "phx_replay:root", %{})
+
+    replay_with(Replay)
+    {:ok, view, _html} = live(build_conn(), "/replay/plain/frame?channel=c-plain")
+
+    assert_push_event(view, "phx_replay:root", %{
+      layout: nil,
+      attributes: %{"data-count" => "0", "data-none" => nil}
+    })
+  end
+
+  test "renders an assign the recording lacks as nil, and tells the player" do
+    # As a session recorded before the template began to read @count.
+    save(%PhoenixReplay.Recording{
+      id: "older",
+      view: PhoenixReplay.Test.Live.Counter,
+      connected_at: System.system_time(:millisecond),
+      events: [
+        %Event{at: 0, type: :mount, data: %{assigns: %{}}},
+        %Event{at: 5, type: :render, data: %{assigns: %{other: 1}}}
+      ]
+    })
+
+    :ok = Channel.subscribe("c-older")
+    {:ok, view, _html} = live(build_conn(), "/replay/older/frame?channel=c-older")
+
+    assert_receive {Channel, {:unrecorded, [:count]}}
+    html = render(view)
+    refute html =~ "Could not render"
+    assert html =~ ~s(<span id="count"></span>)
+
+    # Moving on, it stays unrecorded: the player is not told otherwise.
+    seek("c-older", 1)
+    render(view)
+    refute_receive {Channel, {:unrecorded, _keys}}
+  end
+
   test "tells an export's stage when each position has rendered" do
     save(Fixtures.counter_recording(id: "staged", clicks: 1))
 

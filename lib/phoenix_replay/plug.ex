@@ -3,7 +3,7 @@ defmodule PhoenixReplay.Plug do
   Keeps request context for the visit, so recordings can carry it.
 
   LiveView sees only some request details when it connects. This plug
-  sees every request of the visit, copies what `:context` asks for into
+  sees every request of the visit, copies what the `:client` config asks for into
   the session, and `PhoenixReplay.Recorder` adds it to each recording's
   `client` on the connected mount. Add it to the pipeline your live
   sessions use, after `:fetch_session`:
@@ -15,7 +15,7 @@ defmodule PhoenixReplay.Plug do
         plug PhoenixReplay.Plug
       end
 
-  With no `:context` configured, it does nothing.
+  With no headers or landing configured in `:client`, it does nothing.
 
   ## What it keeps
 
@@ -53,7 +53,7 @@ defmodule PhoenixReplay.Plug do
 
   @impl true
   def call(conn, _opts) do
-    case Config.load().context do
+    case Config.load().client do
       %{headers: [], landing: nil} -> conn
       context -> keep(conn, context)
     end

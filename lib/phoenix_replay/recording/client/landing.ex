@@ -1,7 +1,7 @@
 defmodule PhoenixReplay.Recording.Client.Landing do
   @moduledoc """
   The first request of a visit, kept by `PhoenixReplay.Plug` when
-  `:context` asks for it: its path, when it happened, the campaign params
+  the `:client` config asks for it: its path, when it happened, the campaign params
   it carried and the site that referred it.
   """
 

@@ -13,7 +13,9 @@ defmodule PhoenixReplay.Web.Export.Router do
   @context %{
     base_path: "/_phoenix_replay",
     authorize: nil,
-    live_socket_path: "/_phoenix_replay/live"
+    live_socket_path: "/_phoenix_replay/live",
+    # Set when a page mounts, from the :export configuration; see Access.
+    frame_layout: nil
   }
 
   pipeline :stage do

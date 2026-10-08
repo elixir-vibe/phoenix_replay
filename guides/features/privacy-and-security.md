@@ -83,6 +83,16 @@ Sessions still running are redacted when the dashboard opens them, so they show 
 
 Ecto query parameters and URL query strings are left out of collected events unless you enable them.
 
+## What the browser sends
+
+With the client module's `replayParams` and `replayMetadata`, the browser sends, when the LiveView connects and as they change:
+
+- the viewport's width, height and pixel ratio, and the screen's orientation angle,
+- the media settings the page's CSS can see: the color scheme, reduced motion, contrast, whether the pointer is a finger or a mouse, and whether it hovers,
+- an id for the browser tab, kept in `sessionStorage`, and the page a live navigation came from.
+
+None of these says much on its own, but together with the user agent they narrow down which browser a session came from, as fingerprinting does. The replay applies the media settings to the page, so a dark-mode or phone session looks as it did; keep fewer with `client: [media: [:color_scheme]]`, or none with `client: [media: false]`. They are stored with the recording, and the player's Visit tab shows them. `replayRecorder` adds the pointer, touches and scrolling when `pointer: true`, and the form controls and client state below.
+
 ## Form controls and client state
 
 When the client module's `replayRecorder` runs, what users type and choose in form controls is recorded by default, with or without `phx-change`, and so is state your code reports with `replayState`. Both pass through `sanitize_params/1` under the control's name or the reported key, like event params.

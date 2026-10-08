@@ -8,7 +8,7 @@ defmodule ExampleWeb.SearchLive do
   """
 
   use ExampleWeb, :live_view
-  @behaviour PhoenixReplay.Replayable
+  @behaviour PhoenixReplay.Replay.View
 
   alias Example.Tasks
 
@@ -54,7 +54,7 @@ defmodule ExampleWeb.SearchLive do
 
   # In a replay the filtering script does not run: the query it reported
   # is in `@phoenix_replay_state`.
-  @impl PhoenixReplay.Replayable
+  @impl PhoenixReplay.Replay.View
   def replay_render(assigns) do
     assigns
     |> Phoenix.Component.assign(

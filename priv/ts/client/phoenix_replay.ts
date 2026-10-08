@@ -17,16 +17,21 @@
  * `./recorder`.
  */
 
-import { type ReplayViewport, viewport } from './viewport'
+import type { ReplayViewport } from '../shared/payloads'
+import { viewport } from './viewport'
 
 export { RECORDING_ATTRIBUTE, replayRecorder, START_EVENT, STOP_EVENT } from './recorder'
-export type { RecordSettings, RecorderSocket, StartDetail } from './recorder'
-export type { PointerSettings } from './pointer'
+export type { RecorderSocket } from './recorder'
 export { IGNORE_ATTRIBUTE, INPUTS_KEY } from './inputs'
 export { replayState, STATE_EVENT } from './state'
-export type { StateReport, StateSettings } from './state'
-
-export type { ReplayViewport } from './viewport'
+export type { StateReport } from './state'
+export type {
+  PointerSettings,
+  RecordSettings,
+  ReplayViewport,
+  StartDetail,
+  StateSettings
+} from '../shared/payloads'
 
 const TAB_KEY = 'phoenix_replay:tab'
 
@@ -67,7 +72,10 @@ const withViewport = (): { _replay: ReplayViewport } => ({ _replay: viewport() }
  * with each click and key press, so the recording follows resizes. Merge it
  * into your own metadata functions if you have some.
  */
-export const replayMetadata = {
+export const replayMetadata: Record<
+  'click' | 'keydown' | 'keyup',
+  () => { _replay: ReplayViewport }
+> = {
   click: withViewport,
   keydown: withViewport,
   keyup: withViewport

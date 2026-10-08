@@ -1,5 +1,5 @@
 defmodule PhoenixReplay.PlugTest do
-  # Reads :context from the application environment, which tests change.
+  # Reads :client from the application environment, which tests change.
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
@@ -14,14 +14,14 @@ defmodule PhoenixReplay.PlugTest do
 
   setup context do
     on_exit(fn ->
-      Application.delete_env(:phoenix_replay, :context)
+      Application.delete_env(:phoenix_replay, :client)
       Storage.clear(Fixtures.storage())
     end)
 
     Sessions.setup_sessions(context)
   end
 
-  defp configure(context), do: Application.put_env(:phoenix_replay, :context, context)
+  defp configure(context), do: Application.put_env(:phoenix_replay, :client, context)
 
   defp request(path, headers \\ [], session \\ %{}, method \\ :get) do
     conn = Plug.Test.init_test_session(build_conn(method, path), session)
@@ -33,7 +33,7 @@ defmodule PhoenixReplay.PlugTest do
 
   defp kept(conn), do: get_session(conn, "phoenix_replay")
 
-  test "keeps nothing without :context" do
+  test "keeps nothing without :client" do
     conn = request("/?utm_source=x", [{"accept-language", "en"}])
 
     assert kept(conn) == nil

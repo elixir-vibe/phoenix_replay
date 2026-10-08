@@ -17,7 +17,7 @@ defmodule PhoenixReplay.Web.Player.Journey do
           tab_path: String.t(),
           position: pos_integer(),
           total: pos_integer(),
-          previous: String.t() | false,
+          previous: String.t() | nil,
           next: String.t() | nil
         }
 
@@ -44,7 +44,7 @@ defmodule PhoenixReplay.Web.Player.Journey do
           tab_path: Context.path(context, []) <> "?" <> URI.encode_query(%{"tab" => tab}),
           position: index + 1,
           total: length(sessions),
-          previous: index > 0 && Context.path(context, [Enum.at(sessions, index - 1).id]),
+          previous: if(index > 0, do: Context.path(context, [Enum.at(sessions, index - 1).id])),
           next: (next = Enum.at(sessions, index + 1)) && Context.path(context, [next.id])
         }
 

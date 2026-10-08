@@ -24,7 +24,7 @@ A recording is a list of `PhoenixReplay.Recording.Event` structs, each with a mi
 | `:telemetry` | A telemetry event captured by a [collector](telemetry-and-logs.md) |
 | `:log` | A log message, when [log collection](telemetry-and-logs.md#collecting-logs) is on |
 | `:exit` | The formatted reason of a LiveView that exited abnormally |
-| `:viewport` | The browser's viewport changed: a resized window or a rotated phone |
+| `:viewport` | The browser's viewport changed: a resized window, a rotated phone, or a switch to dark mode |
 
 The recording also keeps the view module, URL, sanitized params and session, and the start time. Everything passes through the configured sanitizer first; see [Privacy and Security](privacy-and-security.md).
 
@@ -48,7 +48,8 @@ socket "/live", Phoenix.LiveView.Socket,
 
 `mix igniter.install phoenix_replay` makes both changes for the setup Phoenix generates. With them, a recording's `PhoenixReplay.Recording.Client` holds:
 
-- **the viewport** — width, height and pixel ratio when the LiveView connected. The player renders the replay at that size, keeping its aspect ratio: **Fit** scales it down until the whole viewport fits the window, centring a phone on a neutral stage, and **100%** shows it at true size in a scrolling box. A rotated phone eases into its new size, unless the viewer prefers reduced motion.
+- **the viewport** — width, height and pixel ratio when the LiveView connected. The player renders the replay at that size, keeping its aspect ratio: **Fit** scales it down until the whole viewport fits the window, centring a phone on a neutral stage, and **100%** shows it at true size in a scrolling box. When a phone turns, the player shows it turning, the way the screen's angle changed, unless the viewer prefers reduced motion.
+- **the media settings** — the color scheme, reduced motion, contrast, the kind of pointer and whether it hovers, as the page's CSS saw them, with the viewport. The replayed page takes them, so its `prefers-color-scheme`, `prefers-reduced-motion`, `prefers-contrast`, `pointer` and `hover` rules, and Tailwind's `dark:`, `motion-reduce:`, `contrast-more:`, `pointer-coarse:` and `hover:` classes, show what the user saw: a phone session replays without hover styles. Stylesheets from another origin, and script that calls `matchMedia`, still see the viewer's. The Visit tab lists them.
 - **resizes** — a resized window or a rotated phone is recorded as a `:viewport` event when it settles, a fifth of a second after it stops changing, as long as `replayRecorder` runs; see [Pointer, touches and scrolling](#pointer-touches-and-scrolling). The viewport also travels with each click and key press, which catches changes without `replayRecorder`. Your `handle_event/3` receives the extra `"_replay"` param; recorded params leave it out.
 - **the user agent** — shown in the player as, for example, "Safari on iOS".
 - **the tab** — an id kept in the tab's `sessionStorage`. Navigating to another LiveView starts a new recording; the tab id ties them into one journey, and the player links the previous and next sessions of the tab.
@@ -56,11 +57,11 @@ socket "/live", Phoenix.LiveView.Socket,
 
 ### Visit context
 
-Some context exists only on the HTTP requests of a visit, not on the LiveView socket: headers such as `Accept-Language`, the external `Referer` a visitor arrived from, and the campaign params of the page they landed on, which later LiveViews no longer see. `PhoenixReplay.Plug` keeps what `:context` asks for in the session, and every recording of the visit carries it:
+Some context exists only on the HTTP requests of a visit, not on the LiveView socket: headers such as `Accept-Language`, the external `Referer` a visitor arrived from, and the campaign params of the page they landed on, which later LiveViews no longer see. `PhoenixReplay.Plug` keeps what the `:client` config asks for in the session, and every recording of the visit carries it:
 
 ```elixir
 config :phoenix_replay,
-  context: [
+  client: [
     headers: ["accept-language", "cf-ipcountry"],
     landing: [params: [:utm, :click_ids, "ref"], referrer: true]
   ]
@@ -77,11 +78,44 @@ end
 - **`landing`** — the visit's first `GET`: its path, time, tracked query params and `Referer`. `:utm` and `:click_ids` expand to the usual parameter names. The referrer loses its query string unless `referrer: :full`, since query strings often carry tokens.
 - **Attribution** is first-touch: the landing is kept for the whole visit. `attribution: :last` replaces it whenever a request carries tracked params, to see which campaign brought someone back.
 
-A visit lasts as long as the session cookie. The plug rewrites the session only when the kept context changes, and does nothing until `:context` is configured; the installer adds it to the `:browser` pipeline. The player shows the campaign, the referrer's host and the landing page, with the params and headers under "Visit details".
+A visit lasts as long as the session cookie. The plug rewrites the session only when the kept context changes, and does nothing until `:client` asks for headers or a landing; the installer adds it to the `:browser` pipeline. The player shows the campaign, the referrer's host and the landing page, with the params and headers under "Visit details".
 
 Headers such as `x-forwarded-for` or `cf-connecting-ip` hold IP addresses, which are personal data in many jurisdictions; capture them only when you need them. Captured headers and the landing go through the [redactor](privacy-and-security.md#redacting-values) when a recording is saved.
 
 The client module is `deps/phoenix_replay/priv/static/phoenix_replay.js`, with types; bundlers that resolve packages from `deps`, as Phoenix's esbuild and Volt setups do, import it as `"phoenix_replay"`.
+
+### Themes
+
+A theme the user chooses in your app, rather than in their system, belongs on the server, like any setting, so recordings carry it: keep it in the session, give your LiveViews an `@theme` assign in an `on_mount` hook, and render it in your root layout, such as `<html data-theme={@theme}>`. A theme kept only in `localStorage` never reaches the server, so the replay cannot show it.
+
+The replay needs nothing more. When the dashboard's `:frame_layout` is your root layout, the replay renders it again with each moment's assigns and gives the replayed page's `<html>` and `<body>` the attributes it renders then, as your layout would have live. The example app's `ExampleWeb.Theme` keeps a light, dark or system theme this way. A theme that follows the system is replayed from the recorded color scheme.
+
+### Older recordings
+
+Replay renders today's templates with the assigns recorded then. So each recording keeps which code it was made with: the release, the MD5 of its view and LiveComponents, and the versions of the dependencies that render, such as LiveView and component libraries. When any of them differs from the running code, the player notes "Code changed" and names what changed, and its Visit tab shows the release. Name your releases after your deploys, so the list's **Release** filter finds the sessions of one:
+
+```elixir
+# config/runtime.exs
+config :phoenix_replay, release: System.get_env("GIT_SHA")
+```
+
+An assign a recording lacks needs nothing: it renders as `nil`, and the player notes it; see [Limitations](#limitations). An assign that changed shape since, such as a `:dark_mode` boolean that became a `:theme`, takes a migration, as a database's rows do: a module with a timestamp version, found among your app's modules with nothing to configure.
+
+```elixir
+defmodule MyAppWeb.ReplayMigrations.DarkModeToTheme do
+  use PhoenixReplay.Migration, version: 20261007120000
+
+  @impl true
+  def up(MyAppWeb.TaskLive.Index, %{dark_mode: dark?} = assigns),
+    do: Map.put_new(assigns, :theme, if(dark?, do: "dark", else: "light"))
+
+  def up(_view_or_component, assigns), do: assigns
+end
+```
+
+Each recording keeps the newest version it was made with, and replay applies the newer migrations, in order, to its view's and LiveComponents' assigns; the Visit tab lists them. See `PhoenixReplay.Migration`.
+
+For a root layout whose `<html>` attributes come from something other than its assigns, a `PhoenixReplay.Replay` module, configured as `:replay`, gives them. How one LiveView renders in a replay is `PhoenixReplay.Replay.View`'s `replay_render/1`, below.
 
 ## Pointer, touches and scrolling
 
@@ -186,12 +220,12 @@ A library that wants to know anyway can: `replayRecorder` dispatches `phx_replay
 
 ### Rendering what the browser did
 
-The replay merges the state recorded up to the current moment into a reserved assign, `@phoenix_replay_state`: a map of each key to its merged fields, string keys throughout, empty before any report. A view whose live render depends on code in the browser defines `replay_render/1`, the optional callback of `PhoenixReplay.Replayable`, which the replay calls instead of `render/1` with the same assigns plus that one:
+The replay merges the state recorded up to the current moment into a reserved assign, `@phoenix_replay_state`: a map of each key to its merged fields, string keys throughout, empty before any report. A view whose live render depends on code in the browser defines `replay_render/1`, the optional callback of `PhoenixReplay.Replay.View`, which the replay calls instead of `render/1` with the same assigns plus that one:
 
 ```elixir
-@behaviour PhoenixReplay.Replayable
+@behaviour PhoenixReplay.Replay.View
 
-@impl PhoenixReplay.Replayable
+@impl PhoenixReplay.Replay.View
 def replay_render(assigns) do
   query = get_in(assigns.phoenix_replay_state, ["search", "query"])
 
@@ -269,3 +303,7 @@ Replay reconstructs the assigns of LiveViews and LiveComponents. It does not rec
 - streams and uploads, whose contents are not kept in assigns,
 - what your JavaScript did with client state, such as rows a script filtered, unless the view renders it with `replay_render/1`; see [Client state](#client-state),
 - focus, and `Phoenix.LiveView.JS` commands applied on the client.
+
+Replay renders today's templates with the assigns recorded then. When a template reads an assign a recording lacks, such as one added after the session was recorded, the replay renders it as `nil`, which most templates take as unset, and the player notes "Not in recording: @name". A template that cannot take `nil` there still shows a placeholder for that moment.
+
+Recordings name modules as atoms: the view, its LiveComponents, and structs in assigns. They are read back only with atoms the node knows, so a recording that names a module deleted or renamed since can no longer be read; rename a LiveView or LiveComponent only once its recordings no longer matter. Which code each recording was made with is kept by name, so that much stays readable.

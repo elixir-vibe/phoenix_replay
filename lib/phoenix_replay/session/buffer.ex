@@ -26,9 +26,10 @@ defmodule PhoenixReplay.Session.Buffer do
       written only by the process flushing it
     * `{{:event_name, id, name}}` — one per `handle_event/3` name seen
     * `{{:mark, id, name}, count}` — how many times each mark was reached
-    * `{{:process, pid}, id, started_at, max_events, sanitizer}` — finds
-      the session of the calling process, with what recording an event
-      needs, small enough to read on every event
+    * `{{:process, pid}, id, started_at, max_events, sanitizer, media}` —
+      finds the session of the calling process, with what recording an
+      event needs, small enough to read on every event: `media` lists the
+      media settings the `:client` config keeps
     * `{{:collected, id, name}, count, limit}` — events a collector captured
       for the session, including those beyond its `:limit`
     * `{{id, :state}, draw}` — the session's draw for `keep: [rate: ...]`,
@@ -70,7 +71,7 @@ defmodule PhoenixReplay.Session.Buffer do
       {{id, :last_at}, 0},
       {{id, :state}, draw},
       {{:process, pid}, id, System.monotonic_time(:millisecond), config.max_events,
-       config.sanitizer}
+       config.sanitizer, config.client.media}
     ])
 
     :ok
@@ -80,7 +81,19 @@ defmodule PhoenixReplay.Session.Buffer do
   @spec session(pid()) :: {:ok, Recording.id(), module()} | :error
   def session(pid) do
     case :ets.lookup(@table, {:process, pid}) do
-      [{_key, id, _started_at, _max_events, sanitizer}] -> {:ok, id, sanitizer}
+      [{_key, id, _started_at, _max_events, sanitizer, _media}] -> {:ok, id, sanitizer}
+      [] -> :error
+    end
+  end
+
+  @doc """
+  The media settings the session `pid` records keeps, from the `:client`
+  config, if it records one.
+  """
+  @spec media(pid()) :: {:ok, [Config.media()]} | :error
+  def media(pid) do
+    case :ets.lookup(@table, {:process, pid}) do
+      [{_key, _id, _started_at, _max_events, _sanitizer, media}] -> {:ok, media}
       [] -> :error
     end
   end
@@ -94,7 +107,7 @@ defmodule PhoenixReplay.Session.Buffer do
   @spec record(pid(), Event.type(), map()) :: :ok | :full | :error
   def record(pid, type, data) do
     case :ets.lookup(@table, {:process, pid}) do
-      [{_key, id, started_at, max_events, _sanitizer}] ->
+      [{_key, id, started_at, max_events, _sanitizer, _media}] ->
         if :ets.update_counter(@table, {id, :seq}, {3, 1}) <= max_events,
           do: write(id, started_at, type, data),
           else: :full
@@ -116,8 +129,11 @@ defmodule PhoenixReplay.Session.Buffer do
 
   def attribute([pid | rest]) do
     case :ets.lookup(@table, {:process, pid}) do
-      [{_key, id, started_at, _max_events, sanitizer}] -> {:ok, {id, started_at}, sanitizer}
-      [] -> attribute(rest)
+      [{_key, id, started_at, _max_events, sanitizer, _media}] ->
+        {:ok, {id, started_at}, sanitizer}
+
+      [] ->
+        attribute(rest)
     end
   end
 
@@ -314,7 +330,7 @@ defmodule PhoenixReplay.Session.Buffer do
   @doc "Removes the session and all of its events."
   @spec close(Recording.id()) :: :ok
   def close(id) do
-    :ets.match_delete(@table, {{:process, :_}, id, :_, :_, :_})
+    :ets.match_delete(@table, {{:process, :_}, id, :_, :_, :_, :_})
     :ets.match_delete(@table, {{:collected, id, :_}, :_, :_})
     :ets.match_delete(@table, {{:event_name, id, :_}})
     :ets.match_delete(@table, {{:mark, id, :_}, :_})

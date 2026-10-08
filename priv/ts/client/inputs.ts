@@ -19,18 +19,13 @@
  */
 
 import { replayState } from './state'
+import type { InputValue, InputValues } from '../shared/payloads'
 
 /** The state key form control values are reported under. */
 export const INPUTS_KEY = 'phx_replay:inputs'
 
 /** Excludes an element and everything inside it from input capture. */
 export const IGNORE_ATTRIBUTE = 'data-phx-replay-ignore'
-
-/** A control's value: text, whether it is checked, or the options chosen. */
-export type InputValue = string | boolean | string[]
-
-/** The values recorded under `INPUTS_KEY`: `{selector: {name: value}}`. */
-export type InputValues = Record<string, Record<string, InputValue>>
 
 type Control = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
 

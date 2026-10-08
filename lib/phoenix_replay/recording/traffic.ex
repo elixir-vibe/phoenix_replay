@@ -9,7 +9,7 @@ defmodule PhoenixReplay.Recording.Traffic do
     * `:campaign` — its `utm_campaign`, or `nil`
 
   All are `nil` when the visit's landing was not kept, without
-  `PhoenixReplay.Plug` and `:context`. See
+  `PhoenixReplay.Plug` and the `:client` config. See
   `PhoenixReplay.Recording.Client.traffic/1`.
   """
 

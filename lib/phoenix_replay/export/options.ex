@@ -8,8 +8,6 @@ defmodule PhoenixReplay.Export.Options do
     * `:skip_idle` — shorten stretches without activity to the `:idle`
       configured
     * `:pointer` — draw the pointer; the page scrolls as recorded either way
-    * `:rotated` — show the other orientation than recorded, without the
-      pointer or the recorded scrolling, which fit only the recorded layout
     * `:size` — `:recorded`, the recorded pixel ratio up to `:max_dpr`;
       `:one`, one pixel per CSS pixel; or `:half`, half of that
     * `:fps` — frames per second: 15, 30 or 60
@@ -38,7 +36,6 @@ defmodule PhoenixReplay.Export.Options do
           to: non_neg_integer() | nil,
           skip_idle: boolean(),
           pointer: boolean(),
-          rotated: boolean(),
           size: size(),
           fps: pos_integer(),
           quality: quality()
@@ -48,7 +45,6 @@ defmodule PhoenixReplay.Export.Options do
             to: nil,
             skip_idle: true,
             pointer: true,
-            rotated: false,
             size: :recorded,
             fps: 30,
             quality: :balanced
@@ -64,7 +60,7 @@ defmodule PhoenixReplay.Export.Options do
   @doc """
   Reads options from string params, as a form or command-line flags send
   them, onto the defaults: `"from"` and `"to"` in seconds, `"skip_idle"`,
-  `"pointer"` and `"rotated"` as `"true"` or `"false"`, `"size"` as
+  and `"pointer"` as `"true"` or `"false"`, `"size"` as
   `"recorded"`, `"1x"` or `"half"`, `"fps"`, and `"quality"` as `"small"`,
   `"balanced"` or `"best"`. Missing params keep the defaults.
   """
@@ -85,7 +81,6 @@ defmodule PhoenixReplay.Export.Options do
            to: to,
            skip_idle: flag(params["skip_idle"], defaults.skip_idle),
            pointer: flag(params["pointer"], true),
-           rotated: flag(params["rotated"], false),
            fps: fps,
            size: size,
            quality: quality
@@ -116,7 +111,6 @@ defmodule PhoenixReplay.Export.Options do
       to: map["to"],
       skip_idle: map["skip_idle"],
       pointer: map["pointer"],
-      rotated: map["rotated"],
       size: Map.fetch!(%{"recorded" => :recorded, "one" => :one, "half" => :half}, map["size"]),
       fps: map["fps"],
       quality:

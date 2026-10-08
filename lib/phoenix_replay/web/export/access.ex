@@ -9,7 +9,7 @@ defmodule PhoenixReplay.Web.Export.Access do
 
   It also points the frame at your endpoint for its stylesheet, and
   renders the frame in the `:frame_layout` the `:export` configuration
-  names.
+  names, which it puts in the frame's context too.
   """
 
   import Phoenix.LiveView, only: [put_private: 3]
@@ -27,7 +27,8 @@ defmodule PhoenixReplay.Web.Export.Access do
 
   @doc """
   Mounts the stage or frame only with a valid token for the recording in
-  the path, and points the frame's stylesheet at your endpoint.
+  the path, and points the frame's stylesheet at your endpoint and its
+  context at the layout it renders in.
   """
   @spec on_mount(:default, map(), map(), Phoenix.LiveView.Socket.t()) ::
           {:cont, Phoenix.LiveView.Socket.t()}
@@ -35,10 +36,13 @@ defmodule PhoenixReplay.Web.Export.Access do
     with token when is_binary(token) <- params["token"],
          {:ok, id} <- Runtime.verify(Endpoint, token),
          true <- params["id"] in [nil, id] do
+      export = Config.load().export
+
       {:cont,
        socket
        |> put_private(@private, id)
-       |> Context.put_endpoint(Config.load().export.endpoint)}
+       |> Context.put_endpoint(export.endpoint)
+       |> Context.put_frame_layout(export.frame_layout || {Layouts, :frame})}
     else
       _invalid -> raise NotFoundError, id: params["id"]
     end

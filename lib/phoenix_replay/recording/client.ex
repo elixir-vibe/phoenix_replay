@@ -9,9 +9,9 @@ defmodule PhoenixReplay.Recording.Client do
       lists `:user_agent` in its `:connect_info`
     * `:tab` — an id of the browser tab, shared by the tab's sessions
     * `:navigated_from` — the URL of the LiveView that live-navigated here
-    * `:headers` — request headers listed in `:context`, kept by
+    * `:headers` — request headers listed in the `:client` config, kept by
       `PhoenixReplay.Plug`
-    * `:landing` — the visit's first request, when `:context` asks for it;
+    * `:landing` — the visit's first request, when the `:client` config asks for it;
       see `PhoenixReplay.Recording.Client.Landing`
 
   Its functions describe the device, named from its user agent with
@@ -36,12 +36,44 @@ defmodule PhoenixReplay.Recording.Client do
   @campaign_keys ~w(utm_source utm_medium utm_campaign)
 
   @default_viewport %{width: 1280, height: 800, dpr: 1}
+  # The settings a viewport may carry, and the media features they are.
+  @media_features [
+    color_scheme: "prefers-color-scheme",
+    reduced_motion: "prefers-reduced-motion",
+    contrast: "prefers-contrast",
+    pointer: "pointer",
+    hover: "hover"
+  ]
+
+  @doc """
+  A viewport's media settings as the CSS media features they are, for the
+  replay to apply to the replayed page's media rules: `%{"pointer" =>
+  "coarse", "prefers-color-scheme" => "dark", ...}`, with those the browser
+  did not report left out.
+  """
+  @spec media(PhoenixReplay.Recording.viewport() | nil) :: %{String.t() => String.t()}
+  def media(nil), do: %{}
+
+  def media(viewport) do
+    for {setting, feature} <- @media_features, Map.has_key?(viewport, setting), into: %{} do
+      {feature, media_value(setting, Map.fetch!(viewport, setting))}
+    end
+  end
+
+  defp media_value(:reduced_motion, true), do: "reduce"
+  defp media_value(:reduced_motion, false), do: "no-preference"
+  defp media_value(_setting, value), do: value |> Atom.to_string() |> String.replace("_", "-")
 
   @doc """
   A viewport's orientation as CSS's `orientation` media feature tells it:
   portrait when it is at least as tall as it is wide.
   """
-  @spec orientation(%{width: pos_integer(), height: pos_integer()}) :: :portrait | :landscape
+  @spec orientation(%{
+          :width => pos_integer(),
+          :height => pos_integer(),
+          optional(atom()) => term()
+        }) ::
+          :portrait | :landscape
   def orientation(%{width: width, height: height}) when height >= width, do: :portrait
   def orientation(_viewport), do: :landscape
 

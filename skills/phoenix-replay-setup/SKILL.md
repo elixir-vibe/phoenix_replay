@@ -38,7 +38,7 @@ live_session :default, on_mount: [PhoenixReplay.Recorder] do
 end
 ```
 
-Put it after the app's own hooks, such as authentication: a visit they halt is then never recorded, and the recorded mount includes what they assigned. Per-session options override the global configuration: `{PhoenixReplay.Recorder, sample_rate: 0.1, pointer: true}`.
+Put it after the app's own hooks, such as authentication: a visit they halt is then never recorded, and the recorded mount includes what they assigned. Events are recorded from LiveView's telemetry, so an app hook that handles an event and halts does not hide it, wherever it sits. Per-session options override the global configuration: `{PhoenixReplay.Recorder, sample_rate: 0.1, pointer: true}`.
 
 ## 3. Configure
 
@@ -57,8 +57,15 @@ config :phoenix_replay,
   retention: [max_age: :timer.hours(24 * 7)]
 ```
 
+Name each deploy, so recordings say which code they were made with and the dashboard filters by it; in `config/runtime.exs`, from whatever the host provides, such as `GITHUB_SHA`, Fly's `FLY_IMAGE_REF` or `RELEASE_VSN`:
+
+```elixir
+config :phoenix_replay, release: System.get_env("GIT_SHA")
+```
+
 - Production storage: `storage: {PhoenixReplay.Storage.Ecto, repo: MyApp.Repo}`, with a migration whose `up` calls `PhoenixReplay.Storage.Ecto.Migration.up(version: 3)` and `down` calls `down(version: 3)`. File storage is per node.
-- Assets content-hashed by a bundler such as Volt: render the replay frame in the app's root layout, `phoenix_replay "/replay", frame_layout: {MyAppWeb.Layouts, :root}`.
+- Render the replay frame in the app's root layout, `phoenix_replay "/replay", frame_layout: {MyAppWeb.Layouts, :root}`, when its assets are content-hashed by a bundler such as Volt, or when `<html>` or `<body>` attributes follow assigns, such as a theme: the replay renders the layout again at each moment.
+- Where visits came from: `client: [headers: ["accept-language"], landing: [params: [:utm]]]`, which `PhoenixReplay.Plug` keeps. `client: [media: false]` drops the color scheme and other media settings the browser reports, which the replay otherwise applies.
 - Video export is opt-in: `export: [endpoint: MyAppWeb.Endpoint]`, with `{:playwright_ex, "~> 0.14"}`, `{:muontrap, "~> 1.6"}`, Playwright's Chromium and `ffmpeg`.
 
 `PhoenixReplay.Config` documents every option.
@@ -78,7 +85,9 @@ config :phoenix_replay,
 
 ## Pitfalls
 
-- A view that renders differently because of browser-only code, such as a list a script filters, replays without that code. Report the state with `replayState(key, changes)` and render it with `replay_render/1`, declared by `PhoenixReplay.Replayable`.
+- A view that renders differently because of browser-only code, such as a list a script filters, replays without that code. Report the state with `replayState(key, changes)` and render it with `replay_render/1`, declared by `PhoenixReplay.Replay.View`.
 - Streams and uploads are not replayed: their contents are not kept in assigns.
 - Do not name an assign `:phoenix_replay_state`; the replay uses it.
+- A theme or setting kept only in `localStorage` never reaches the server, so the replay cannot show it. Keep it in the session and an assign, as the example app's `ExampleWeb.Theme` does.
+- Replay renders today's templates with the assigns recorded then. An assign a recording lacks renders as `nil`; one that changed shape, such as a boolean that became a string, takes a `PhoenixReplay.Migration`. Renaming or deleting a LiveView or LiveComponent makes recordings that name it unreadable.
 - Recording state is buffered in memory until a session ends. Set `max_memory:` when recording many long sessions with `keep:` sampling.

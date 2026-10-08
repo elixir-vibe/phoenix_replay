@@ -49,7 +49,7 @@ defmodule PhoenixReplay.Recorder do
       put_private: 3
     ]
 
-  alias PhoenixReplay.{Config, Recording}
+  alias PhoenixReplay.{Config, Migration, Recording}
   alias PhoenixReplay.Capture.{Assigns, Browser, Pointer, State}
   alias PhoenixReplay.Session.{Buffer, Monitor}
 
@@ -117,7 +117,13 @@ defmodule PhoenixReplay.Recorder do
       session: sanitizer.sanitize_params(session),
       connected_at: System.system_time(:millisecond),
       client:
-        Browser.build(get_connect_params(socket), get_connect_info(socket, :user_agent), kept)
+        Browser.build(
+          get_connect_params(socket),
+          get_connect_info(socket, :user_agent),
+          kept,
+          config.client.media
+        ),
+      code: Recording.Code.of(socket.view, config.release, Migration.latest(socket.view))
     }
 
     :ok = Buffer.open(recording, self(), config)
@@ -174,11 +180,9 @@ defmodule PhoenixReplay.Recorder do
     {:halt, socket}
   end
 
-  defp handle_event(name, params, socket) do
-    %{sanitizer: sanitizer} = socket.private[@private]
-    params = Browser.observe(params)
-    {:cont, record(socket, :event, %{name: name, params: sanitizer.sanitize_params(params)})}
-  end
+  # The app's own events are recorded from LiveView's telemetry, whatever
+  # hooks handle them; see PhoenixReplay.Capture.ViewEvents.
+  defp handle_event(_name, _params, socket), do: {:cont, socket}
 
   defp handle_params(params, uri, socket) do
     %{sanitizer: sanitizer} = socket.private[@private]

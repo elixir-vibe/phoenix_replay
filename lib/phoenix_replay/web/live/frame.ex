@@ -19,6 +19,9 @@ defmodule PhoenixReplay.Web.Live.Frame do
   Form control values the browser recorded are pushed to the frame's
   script with a `"phx_replay:inputs"` event after each render, which puts
   them back into the replayed page; see `PhoenixReplay.Recording.State`.
+  So is the root layout rendered again with the replayed assigns, with
+  `"phx_replay:root"`, whose `<html>` and `<body>` attributes the script
+  copies, as the page's root layout renders only once.
 
   LiveComponents in the template render through
   `PhoenixReplay.Web.Live.ReplayComponent` with their recorded assigns; see
@@ -32,6 +35,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   use Phoenix.LiveView
 
+  alias PhoenixReplay.{Migration, Replay}
   alias PhoenixReplay.Recording.{State, Timeline}
   alias PhoenixReplay.Catalog
   alias PhoenixReplay.Web.{Context, Layouts, Rendering}
@@ -40,6 +44,11 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
   @private :phoenix_replay_frame
   @stage :phoenix_replay_stage
+  @channel :phoenix_replay_channel
+  # No root layout or attributes to send, as a frame starts.
+  @no_root %{layout: nil, attributes: %{}}
+  # Assigns rendered as nil when the recording lacks them, at most.
+  @max_unrecorded 5
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do
@@ -66,6 +75,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
     {:ok,
      socket
      |> put_private(@stage, params["stage"] == "1")
+     |> put_private(@channel, if(is_binary(params["channel"]), do: params["channel"]))
      |> put_private(@private, private(recording))
      |> assign(@private, frame)
      |> show_first(), layout: false}
@@ -123,17 +133,37 @@ defmodule PhoenixReplay.Web.Live.Frame do
     """
   end
 
-  defp private(nil), do: %{recording: nil, timeline: nil, keys: [], inputs: %{}}
+  defp private(nil),
+    do: %{recording: nil, timeline: nil, migrations: [], keys: [], inputs: %{}, root: @no_root}
 
   defp private(recording),
-    do: %{recording: recording, timeline: Timeline.new(recording), keys: [], inputs: %{}}
+    do: %{
+      recording: recording,
+      timeline: Timeline.new(recording),
+      # The app's migrations newer than the recording, applied at each moment.
+      migrations: Migration.pending(Migration.all(recording.view), migrated(recording)),
+      keys: [],
+      inputs: %{},
+      root: @no_root
+    }
+
+  defp migrated(%{code: %{migration: version}}), do: version
+  defp migrated(_recording), do: nil
 
   defp show(socket, index) do
-    %{timeline: timeline, keys: previous_keys} = private = socket.private[@private]
+    %{timeline: timeline, keys: previous_keys, migrations: migrations} =
+      private = socket.private[@private]
+
     timeline = Timeline.seek(timeline, index)
-    states = timeline.components
     {flash, recorded} = Map.pop(timeline.assigns, :flash, %{})
-    recorded = Rendering.assignable(recorded)
+    %{view: view} = socket.assigns[@private]
+    recorded = Migration.apply_to(migrations, view, Rendering.assignable(recorded))
+
+    states =
+      Map.new(timeline.components, fn {{module, _id} = key, assigns} ->
+        {key, Migration.apply_to(migrations, module, assigns)}
+      end)
+
     keys = Map.keys(recorded)
 
     socket
@@ -145,6 +175,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
     |> put_private(@private, %{private | timeline: timeline, keys: keys})
     |> check_render()
     |> push_inputs(State.inputs(timeline.assigns[State.assign()]))
+    |> push_root()
     |> push_shown(index)
   end
 
@@ -161,6 +192,61 @@ defmodule PhoenixReplay.Web.Live.Frame do
     socket
     |> push_event("phx_replay:inputs", %{values: inputs})
     |> put_private(@private, %{socket.private[@private] | inputs: inputs})
+  end
+
+  # The root layout renders once, but an app's layout can make `<html>` and
+  # `<body>` follow its assigns, such as a theme. So it is rendered again
+  # with each moment's assigns, and sent when it changed; the frame's
+  # script copies those attributes onto the page. A layout that cannot
+  # render outside a request, such as one reading `@conn`, sends nothing.
+  defp push_root(socket) do
+    root = %{layout: root_layout(socket), attributes: root_attributes(socket)}
+
+    case socket.private[@private] do
+      %{root: ^root} ->
+        socket
+
+      private ->
+        socket
+        |> push_event("phx_replay:root", root)
+        |> put_private(@private, %{private | root: root})
+    end
+  end
+
+  # credo:disable-for-next-line ExSlop.Check.Warning.BlanketRescue
+  defp root_layout(socket) do
+    case app_layout(socket) do
+      {module, function} ->
+        assigns = Map.merge(socket.assigns, %{inner_content: "", live_module: __MODULE__})
+
+        module
+        |> apply(function, [assigns])
+        |> Phoenix.HTML.Safe.to_iodata()
+        |> IO.iodata_to_binary()
+
+      nil ->
+        nil
+    end
+  rescue
+    # The app's layout is foreign code, rendered without `@conn` and with partial assigns.
+    # reach:disable-next-line bare_rescue -- foreign layout code rendered with partial assigns
+    _exception -> nil
+  end
+
+  # The app's own root layout, when the frame renders in one: the
+  # dashboard's, whose attributes never change, has nothing to send.
+  defp app_layout(socket) do
+    context = Context.fetch(socket)
+
+    case context.frame_layout do
+      {Layouts, :frame} -> nil
+      layout -> layout
+    end
+  end
+
+  defp root_attributes(socket) do
+    %{view: view} = socket.assigns[@private]
+    Replay.root_attributes(Context.fetch(socket).config.replay, view, socket.assigns)
   end
 
   defp replace_flash(socket, flash) do
@@ -181,8 +267,43 @@ defmodule PhoenixReplay.Web.Live.Frame do
     socket
   end
 
+  # An assign the template reads but the recording lacks, such as one a
+  # newer template reads in an older recording, is rendered as nil, which
+  # most templates take as unset, and the player is told which. One filled
+  # before stays nil, and unrecorded, until the recording sets it.
   defp check_render(socket) do
     frame = socket.assigns[@private]
-    assign(socket, @private, %{frame | error: Rendering.render_error(frame.view, socket.assigns)})
+    %{keys: recorded} = private = socket.private[@private]
+    carried = Enum.reject(private[:unrecorded] || [], &(&1 in recorded))
+    {socket, unrecorded, error} = fill_unrecorded(socket, frame.view, Enum.reverse(carried))
+
+    socket
+    |> assign(@private, %{frame | error: error})
+    |> tell_unrecorded(Enum.reverse(unrecorded))
   end
+
+  defp fill_unrecorded(socket, view, unrecorded) do
+    case Rendering.render_check(view, socket.assigns) do
+      :ok ->
+        {socket, unrecorded, nil}
+
+      {:missing, key} ->
+        if length(unrecorded) < @max_unrecorded and key not in unrecorded,
+          do: fill_unrecorded(assign(socket, key, nil), view, [key | unrecorded]),
+          else: {socket, unrecorded, "the recording has no @#{key}"}
+
+      {:error, description} ->
+        {socket, unrecorded, description}
+    end
+  end
+
+  defp tell_unrecorded(%{private: %{@channel => channel}} = socket, unrecorded)
+       when is_binary(channel) do
+    if socket.private[@private][:unrecorded] != unrecorded,
+      do: :ok = Channel.unrecorded(channel, unrecorded)
+
+    put_private(socket, @private, Map.put(socket.private[@private], :unrecorded, unrecorded))
+  end
+
+  defp tell_unrecorded(socket, _unrecorded), do: socket
 end

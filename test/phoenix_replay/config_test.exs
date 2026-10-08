@@ -93,16 +93,20 @@ defmodule PhoenixReplay.ConfigTest do
     assert_raise ArgumentError, ~r/:max_memory/, fn -> Config.new(max_memory: 0) end
   end
 
-  test "normalizes request context" do
-    assert Config.new([]).context == %{headers: [], landing: nil}
+  test "normalizes the client config" do
+    assert Config.new([]).client == %{
+             headers: [],
+             landing: nil,
+             media: [:color_scheme, :reduced_motion, :contrast, :pointer, :hover]
+           }
 
     context =
       Config.new(
-        context: [
+        client: [
           headers: ["Accept-Language", :cf_ipcountry],
           landing: [params: [:utm, "ref", :click_ids, "ref"], attribution: :last]
         ]
-      ).context
+      ).client
 
     assert context.headers == ["accept-language", "cf_ipcountry"]
 
@@ -113,15 +117,35 @@ defmodule PhoenixReplay.ConfigTest do
              attribution: :last
            }
 
-    assert_raise ArgumentError, ~r/"cookie"/, fn -> Config.new(context: [headers: ["Cookie"]]) end
+    assert_raise ArgumentError, ~r/"cookie"/, fn -> Config.new(client: [headers: ["Cookie"]]) end
 
     assert_raise ArgumentError, ~r/:params/, fn ->
-      Config.new(context: [landing: [params: [:nope]]])
+      Config.new(client: [landing: [params: [:nope]]])
     end
 
     assert_raise ArgumentError, ~r/:attribution/, fn ->
-      Config.new(context: [landing: [attribution: :middle]])
+      Config.new(client: [landing: [attribution: :middle]])
     end
+
+    # Which media settings are kept, all of them by default.
+    assert Config.new(client: [media: [:color_scheme]]).client.media == [:color_scheme]
+    assert Config.new(client: [media: false]).client.media == []
+    assert_raise ArgumentError, ~r/:media/, fn -> Config.new(client: [media: [:battery]]) end
+  end
+
+  test "takes a module as :replay, not a boolean" do
+    assert Config.new(replay: MyAppWeb.Replay).replay == MyAppWeb.Replay
+    assert Config.new(replay: nil).replay == nil
+    assert_raise ArgumentError, ~r/:replay/, fn -> Config.new(replay: true) end
+  end
+
+  test "reads :context, the client config's former name, with a warning" do
+    warning =
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        assert Config.new(context: [headers: ["DNT"]]).client.headers == ["dnt"]
+      end)
+
+    assert warning =~ ":context is deprecated, use :client"
   end
 
   test "records form controls with client state unless told not to" do
@@ -175,7 +199,7 @@ defmodule PhoenixReplay.ConfigTest do
     end
 
     assert Config.new(redact: []).redact == nil
-    assert Config.new(context: [landing: false]).context.landing == nil
+    assert Config.new(client: [landing: false]).client.landing == nil
     assert Config.new(logs: true).logs == %{level: :info, metadata: [], limit: 1_000}
     assert Config.new(flush: [events: 10], flush: true).flush.events == 10
 

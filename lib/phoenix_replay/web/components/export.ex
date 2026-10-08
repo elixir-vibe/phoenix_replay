@@ -16,13 +16,12 @@ defmodule PhoenixReplay.Web.Components.Export do
 
   @doc """
   The export dialog: the range of the recording, whether idle stretches
-  are shortened and the pointer drawn, the orientation, and the size,
+  are shortened and the pointer drawn, and the size,
   frame rate and quality of the video. `params` are the form's values,
   as `PhoenixReplay.Export.Options.parse/2` reads them.
   """
   attr :params, :map, required: true
   attr :error, :string, default: nil
-  attr :rotatable, :boolean, default: true, doc: "whether the recording has a viewport to rotate"
   attr :max_dpr, :integer, required: true
 
   @spec export_dialog(map()) :: Phoenix.LiveView.Rendered.t()
@@ -51,12 +50,7 @@ defmodule PhoenixReplay.Web.Components.Export do
         <span class="text-muted">Show</span>
         <div class="flex flex-col gap-1.5">
           <.check_field field="skip_idle" params={@params}>Skip inactivity</.check_field>
-          <.check_field field="pointer" params={@params} disabled={@params["rotated"] == "true"}>
-            The pointer
-          </.check_field>
-          <.check_field :if={@rotatable} field="rotated" params={@params}>
-            Rotated to the other orientation
-          </.check_field>
+          <.check_field field="pointer" params={@params}>The pointer</.check_field>
         </div>
 
         <label for="replay-export-size" class="text-muted">Size</label>

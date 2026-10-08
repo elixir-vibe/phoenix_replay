@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from 'volt:test'
 
 import { type Clock, fakeClock } from '../test/clock'
-import type { PointerSettings } from './pointer'
-import type { Batch } from './pointer_track'
+import type { PointerSettings } from '../shared/payloads'
+import type { Batch } from '../shared/pointer_track'
 import { replayRecorder } from './recorder'
 
 let stop = (): void => {}

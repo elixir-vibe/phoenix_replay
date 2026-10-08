@@ -26,10 +26,27 @@ defmodule PhoenixReplay.Recording do
           connected_at: integer(),
           events: [Event.t()],
           dropped: %{String.t() => pos_integer()},
-          client: Client.t()
+          client: Client.t(),
+          code: PhoenixReplay.Recording.Code.t() | nil
         }
 
-  @type viewport :: %{width: pos_integer(), height: pos_integer(), dpr: number()}
+  @typedoc """
+  The browser's viewport: its size in CSS pixels and pixel ratio, and when
+  the browser reports them, the screen's orientation angle and the media
+  settings the page's CSS could see: the color scheme, reduced motion,
+  contrast and the kind of pointer.
+  """
+  @type viewport :: %{
+          required(:width) => pos_integer(),
+          required(:height) => pos_integer(),
+          required(:dpr) => number(),
+          optional(:angle) => 0 | 90 | 180 | 270,
+          optional(:color_scheme) => :light | :dark,
+          optional(:reduced_motion) => boolean(),
+          optional(:contrast) => :more | :less | :no_preference,
+          optional(:pointer) => :coarse | :fine | :none,
+          optional(:hover) => :hover | :none
+        }
 
   @enforce_keys [:id, :view, :connected_at]
   defstruct [
@@ -41,7 +58,9 @@ defmodule PhoenixReplay.Recording do
     session: %{},
     events: [],
     dropped: %{},
-    client: %Client{}
+    client: %Client{},
+    # Which code made the recording; nil for one made before it was kept.
+    code: nil
   ]
 
   @doc """

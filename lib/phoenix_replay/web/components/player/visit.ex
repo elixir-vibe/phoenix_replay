@@ -24,6 +24,7 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
   attr :recording, Recording, required: true
   attr :viewport, :map, default: nil
   attr :journey, :map, default: nil, doc: "the tab's sessions, with URLs"
+  attr :migrations, :list, default: [], doc: "the names of the migrations replay applies"
 
   attr :filter_path, :any,
     required: true,
@@ -51,6 +52,9 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
         </p>
         <p :if={!@viewport} title={@user_agent}>
           {Client.device(@user_agent) || "Unknown browser"}
+        </p>
+        <p :if={settings = settings(@viewport)} id="replay-settings" class="mt-0.5 text-muted">
+          {settings}
         </p>
       </section>
 
@@ -124,6 +128,25 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
         </.data_list>
       </section>
 
+      <section :if={@recording.code} id="replay-code" aria-labelledby="replay-code-heading">
+        <h3 id="replay-code-heading" class={heading()}>Code</h3>
+        <p :if={@recording.code.release}>
+          Release <code class="font-mono text-xs">{@recording.code.release}</code>
+        </p>
+        <p class="text-muted">
+          {Enum.map_join(Enum.sort(@recording.code.deps), " · ", fn {dep, vsn} -> "#{dep} #{vsn}" end)}
+        </p>
+      </section>
+
+      <section
+        :if={@migrations != []}
+        id="replay-migrations"
+        aria-labelledby="replay-migrations-heading"
+      >
+        <h3 id="replay-migrations-heading" class={heading()}>Migrations applied</h3>
+        <p>{Enum.join(@migrations, ", ")}</p>
+      </section>
+
       <section aria-labelledby="replay-session-heading">
         <h3 id="replay-session-heading" class={heading()}>Session</h3>
         <code class="font-mono text-xs break-all">{@recording.id}</code>
@@ -133,4 +156,22 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
   end
 
   defp heading, do: "mb-1.5 text-xs font-medium tracking-wide text-muted uppercase"
+
+  # The media settings the page's CSS could see, as the browser reported
+  # them at this moment; the replay applies the color scheme.
+  defp settings(nil), do: nil
+
+  defp settings(viewport) do
+    [
+      color_scheme: %{dark: "Dark theme", light: "Light theme"},
+      reduced_motion: %{true => "Reduced motion"},
+      contrast: %{more: "More contrast", less: "Less contrast"},
+      pointer: %{coarse: "Touch screen", fine: "Mouse or trackpad", none: "No pointer"}
+    ]
+    |> Enum.flat_map(fn {name, labels} -> List.wrap(labels[viewport[name]]) end)
+    |> case do
+      [] -> nil
+      labels -> Enum.join(labels, " · ")
+    end
+  end
 end

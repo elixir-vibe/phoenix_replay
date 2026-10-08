@@ -44,7 +44,6 @@
       :if={@export_dialog}
       params={@export_dialog.params}
       error={@export_dialog.error}
-      rotatable={@viewport != nil}
       max_dpr={@context.config.export.max_dpr}
     />
     <.export_status
@@ -69,6 +68,8 @@
           follow_scroll={@follow_scroll?}
           pointer={@pointer}
           ready={@frame_ready?}
+          unrecorded={@unrecorded}
+          code_changes={@code_changes}
         />
         <.playback
           id="replay-playback"
@@ -127,6 +128,7 @@
             viewport={@viewport}
             journey={@journey}
             filter_path={&filtered_list(@context, &1)}
+            migrations={@migrations}
           />
         </div>
       </aside>

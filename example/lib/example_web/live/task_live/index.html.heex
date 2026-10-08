@@ -1,5 +1,5 @@
 <div class="mx-auto max-w-2xl px-4 py-10">
-  <header class="mb-8 flex items-center justify-between">
+  <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">Tasks</h1>
       <p class="mt-1 text-sm text-gray-500">
@@ -7,6 +7,7 @@
       </p>
     </div>
     <div class="flex items-center gap-2">
+      <ExampleWeb.Theme.toggle theme={@theme} />
       <button
         phx-click="sync"
         class="inline-flex h-9 items-center rounded-md border border-gray-200 px-3.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"

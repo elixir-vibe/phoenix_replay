@@ -25,9 +25,11 @@
  */
 
 import { InputRecorder } from './inputs'
-import { replayInputs } from './replay_inputs'
-import { type PointerSettings, PointerRecorder, type Push } from './pointer'
-import { type StateSettings, StateRecorder, StateStore } from './state'
+import { replayInputs } from '../replay/inputs'
+import { replayRoot } from '../replay/root'
+import type { RecordSettings, StartDetail } from '../shared/payloads'
+import { PointerRecorder, type Push } from './pointer'
+import { StateRecorder, StateStore } from './state'
 import { ViewportRecorder } from './viewport'
 
 /** Dispatched on `window` when recording starts. */
@@ -43,17 +45,6 @@ const RECORD_EVENT = 'phx_replay:record'
 // The page-loading kinds that stay on the same LiveView: a patch, and an
 // event pushed with page loading. Any other leaves it or rejoins it.
 const SAME_VIEW = new Set(['patch', 'element'])
-
-/** What the server asks the browser to record; `null` records none. */
-export interface RecordSettings {
-  pointer: PointerSettings | null
-  state: StateSettings | null
-}
-
-/** The detail of `phx_replay:start`. */
-export interface StartDetail {
-  state: StateSettings | null
-}
 
 /** The part of LiveSocket replayRecorder uses. */
 export interface RecorderSocket {
@@ -119,13 +110,15 @@ export const replayRecorder = (
   target.addEventListener(`phx:${RECORD_EVENT}`, start)
   target.addEventListener('phx:page-loading-start', leave)
   // In a replay frame rendered in the app's own layout, the app's script is
-  // the one that puts recorded form values back.
+  // the one that puts recorded form values and root attributes back.
   const stopRestoring = replayInputs(target)
+  const stopRooting = replayRoot(target)
 
   return () => {
     stop()
     store.close()
     stopRestoring()
+    stopRooting()
     target.removeEventListener(`phx:${RECORD_EVENT}`, start)
     target.removeEventListener('phx:page-loading-start', leave)
   }

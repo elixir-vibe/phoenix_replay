@@ -44,7 +44,7 @@ defmodule PhoenixReplay.Web.Rendering do
   """
   @spec render(module(), map()) :: Phoenix.LiveView.Rendered.t()
   def render(view, assigns) do
-    # The callback of PhoenixReplay.Replayable is optional, so it is looked up.
+    # The callback of PhoenixReplay.Replay.View is optional, so it is looked up.
     if Code.ensure_loaded?(view) and function_exported?(view, :replay_render, 1),
       do: view.replay_render(Map.put(assigns, :__changed__, nil)),
       else: view.render(assigns)
@@ -59,10 +59,25 @@ defmodule PhoenixReplay.Web.Rendering do
   is logged at the debug level.
   """
   @spec render_error(module(), map()) :: String.t() | nil
-  # credo:disable-for-next-line ExSlop.Check.Warning.BlanketRescue
   def render_error(module, assigns) do
+    case render_check(module, assigns) do
+      :ok -> nil
+      {:missing, key} -> "the recording has no @#{key}"
+      {:error, description} -> description
+    end
+  end
+
+  @doc """
+  Renders `module` with `assigns`, as `render_error/2` does, telling an
+  assign the recording lacks, such as one the template began to read after
+  the session was recorded, from other failures: `{:missing, key}`, or
+  `{:error, description}`.
+  """
+  @spec render_check(module(), map()) :: :ok | {:missing, atom()} | {:error, String.t()}
+  # credo:disable-for-next-line ExSlop.Check.Warning.BlanketRescue
+  def render_check(module, assigns) do
     module |> render(assigns) |> evaluate()
-    nil
+    :ok
   rescue
     # reach:disable-next-line bare_rescue -- recorded templates are foreign code rendered with partial assigns
     exception ->
@@ -70,7 +85,14 @@ defmodule PhoenixReplay.Web.Rendering do
         "PhoenixReplay: #{inspect(module)} failed to render: #{Exception.message(exception)}"
       )
 
-      describe(exception)
+      case exception do
+        %KeyError{key: key, term: %{__changed__: _changed}}
+        when is_atom(key) and key not in @reserved ->
+          {:missing, key}
+
+        exception ->
+          {:error, describe(exception)}
+      end
   end
 
   @doc """

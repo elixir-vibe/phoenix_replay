@@ -182,7 +182,81 @@ defmodule PhoenixReplay.RecorderTest do
                Enum.find(recording.events, &(&1.type == :viewport))
 
       assert Enum.all?(recording.events, &(not Map.has_key?(&1.data[:params] || %{}, "_replay")))
+      # Which code it was made with.
+      assert Map.has_key?(recording.code.modules, "PhoenixReplay.Test.Live.Counter")
       assert Timeline.at(recording, Timeline.last_index(recording)).viewport.width == 844
+    end
+
+    test "records an event an app hook handled and halted, before the recorder's hooks", %{
+      sessions: sessions
+    } do
+      {:ok, view, _html, id} = Sessions.live(sessions, client_conn(), "/hooked/counter")
+      render_click(view, "inc")
+      render_click(view, "reset", %{"to" => "zero"})
+
+      {:ok, recording} = Buffer.fetch(id)
+
+      assert [{"inc", %{}}, {"reset", %{"to" => "zero"}}] =
+               for(
+                 %Event{type: :event, data: data} <- recording.events,
+                 do: {data.name, data.params}
+               )
+    end
+
+    test "keeps only the media settings the :client config asks for", %{sessions: sessions} do
+      Application.put_env(:phoenix_replay, :client, media: [:color_scheme])
+      on_exit(fn -> Application.delete_env(:phoenix_replay, :client) end)
+
+      {:ok, view, _html, id} = Sessions.live(sessions, client_conn(), "/counter")
+
+      sent = %{
+        "width" => 390,
+        "height" => 844,
+        "dpr" => 3,
+        "angle" => 90,
+        "color_scheme" => "dark",
+        "pointer" => "coarse",
+        "hover" => "none"
+      }
+
+      render_click(view, "inc", %{"_replay" => sent})
+      {:ok, recording} = Buffer.fetch(id)
+
+      assert %Event{data: viewport} = Enum.find(recording.events, &(&1.type == :viewport))
+      assert viewport == %{width: 390, height: 844, dpr: 3, angle: 90, color_scheme: :dark}
+    end
+
+    test "records the screen's angle and the media settings, dropping unknown values", %{
+      sessions: sessions
+    } do
+      {:ok, view, _html, id} = Sessions.live(sessions, client_conn(), "/counter")
+
+      dark = %{
+        "width" => 390,
+        "height" => 844,
+        "dpr" => 3,
+        "angle" => 0,
+        "color_scheme" => "dark",
+        "reduced_motion" => true,
+        "contrast" => "brighter",
+        "pointer" => "coarse"
+      }
+
+      render_click(view, "inc", %{"_replay" => dark})
+
+      {:ok, recording} = Buffer.fetch(id)
+
+      assert %Event{data: viewport} = Enum.find(recording.events, &(&1.type == :viewport))
+
+      assert viewport == %{
+               width: 390,
+               height: 844,
+               dpr: 3,
+               angle: 0,
+               color_scheme: :dark,
+               reduced_motion: true,
+               pointer: :coarse
+             }
     end
   end
 end

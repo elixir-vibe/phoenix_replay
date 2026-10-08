@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, test } from 'volt:test'
 
 import { type Clock, fakeClock } from '../test/clock'
-import { INPUTS_KEY, InputRecorder, type InputValues, restoreInputs } from './inputs'
+import type { InputValues } from '../shared/payloads'
+import { INPUTS_KEY, InputRecorder, restoreInputs } from './inputs'
 import { STATE_EVENT, type StateReport } from './state'
 
 let recorder: InputRecorder | undefined

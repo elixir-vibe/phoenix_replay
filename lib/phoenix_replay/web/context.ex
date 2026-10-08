@@ -15,19 +15,21 @@ defmodule PhoenixReplay.Web.Context do
 
   @typedoc """
   The dashboard's path, authorization and socket path from the router,
-  the configuration, and the `endpoint` whose static paths the replay
-  frame loads the stylesheet from, when it is not the socket's own.
+  the replay frame's root layout, the configuration, and the `endpoint`
+  whose static paths the replay frame loads the stylesheet from, when it
+  is not the socket's own.
   """
   @type t :: %__MODULE__{
           base_path: String.t(),
           authorize: module() | nil,
           live_socket_path: String.t(),
+          frame_layout: {module(), atom()} | nil,
           config: Config.t(),
           endpoint: module() | nil
         }
 
   @enforce_keys [:base_path, :live_socket_path, :config]
-  defstruct [:base_path, :authorize, :live_socket_path, :config, :endpoint]
+  defstruct [:base_path, :authorize, :live_socket_path, :frame_layout, :config, :endpoint]
 
   @private :phoenix_replay_context
 
@@ -43,6 +45,12 @@ defmodule PhoenixReplay.Web.Context do
   @spec put_endpoint(Phoenix.LiveView.Socket.t(), module()) :: Phoenix.LiveView.Socket.t()
   def put_endpoint(socket, endpoint),
     do: put_private(socket, @private, %{fetch(socket) | endpoint: endpoint})
+
+  @doc "Sets the root layout the frame renders in, `{module, function}`."
+  @spec put_frame_layout(Phoenix.LiveView.Socket.t(), {module(), atom()}) ::
+          Phoenix.LiveView.Socket.t()
+  def put_frame_layout(socket, layout),
+    do: put_private(socket, @private, %{fetch(socket) | frame_layout: layout})
 
   @doc "Returns the context stored by `on_mount/4`."
   @spec fetch(Phoenix.LiveView.Socket.t()) :: t()

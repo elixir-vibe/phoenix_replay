@@ -20,7 +20,6 @@ defmodule PhoenixReplay.Export.OptionsTest do
       "to" => "4",
       "skip_idle" => "false",
       "pointer" => "false",
-      "rotated" => "true",
       "size" => "half",
       "fps" => "60",
       "quality" => "best"
@@ -32,7 +31,6 @@ defmodule PhoenixReplay.Export.OptionsTest do
               to: 4_000,
               skip_idle: false,
               pointer: false,
-              rotated: true,
               size: :half,
               fps: 60,
               quality: :best

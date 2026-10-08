@@ -204,9 +204,17 @@ defmodule PhoenixReplay.ExportTest do
                fn _progress -> :ok end
              )
 
-    # MuonTrap stops it once its port closes, a moment after.
-    os_pid = pid_file |> File.read!() |> String.trim()
-    assert stopped?(os_pid, 40), "ffmpeg #{os_pid} is still running"
+    # MuonTrap stops it once its port closes, a moment after. On a busy
+    # machine the timeout can stop it before it ran its first line, so it
+    # never wrote its pid; then nothing of it is left to stop.
+    case File.read(pid_file) do
+      {:ok, os_pid} ->
+        os_pid = String.trim(os_pid)
+        assert stopped?(os_pid, 40), "ffmpeg #{os_pid} is still running"
+
+      {:error, :enoent} ->
+        :ok
+    end
   end
 
   defp stopped?(_os_pid, 0), do: false

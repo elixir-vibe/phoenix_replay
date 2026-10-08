@@ -30,8 +30,8 @@ defmodule PhoenixReplay.Web.Live.Show do
   import PhoenixReplay.Web.Components.{Export, Layout, State}
   import PhoenixReplay.Web.Components.Player.{EventList, Frame, Header, Playback, Visit}
 
-  alias PhoenixReplay.Recording.{Event, Filter, PointerTrack, Timeline}
-  alias PhoenixReplay.{Catalog, Export}
+  alias PhoenixReplay.Recording.{Client, Event, Filter, PointerTrack, Timeline}
+  alias PhoenixReplay.{Catalog, Export, Migration}
   alias PhoenixReplay.Export.Options
   alias PhoenixReplay.Web.{Context, Highlight, Layouts, Params}
   alias PhoenixReplay.Web.Export.Download
@@ -58,6 +58,8 @@ defmodule PhoenixReplay.Web.Live.Show do
         first_render: 0,
         live?: Catalog.live?(id),
         frame_ready?: false,
+        # Assigns the frame's template reads that the recording lacks.
+        unrecorded: [],
         progress: nil,
         load_error?: false,
         channel: channel,
@@ -167,7 +169,9 @@ defmodule PhoenixReplay.Web.Live.Show do
       first_render: Timeline.first_render_index(recording),
       marks: Events.marks(recording),
       dropped: Events.dropped_count(recording),
-      journey: Journey.of(socket, recording)
+      journey: Journey.of(socket, recording),
+      code_changes: PhoenixReplay.Recording.Code.changes(recording.code),
+      migrations: migrations_applied(recording)
     )
     |> hand_over()
     |> filter_events()
@@ -312,7 +316,6 @@ defmodule PhoenixReplay.Web.Live.Show do
       "to" => "",
       "skip_idle" => to_string(options.skip_idle),
       "pointer" => "true",
-      "rotated" => to_string(socket.assigns.rotated?),
       "size" => "recorded",
       "fps" => to_string(options.fps),
       "quality" => "balanced"
@@ -397,6 +400,9 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   def handle_info({:advance, _stale}, socket), do: {:noreply, socket}
 
+  def handle_info({Channel, {:unrecorded, keys}}, socket),
+    do: {:noreply, assign(socket, :unrecorded, keys)}
+
   def handle_info({Channel, :frame_ready}, %{assigns: %{recording: nil}} = socket) do
     {:noreply, assign(socket, :frame_ready?, true)}
   end
@@ -423,6 +429,9 @@ defmodule PhoenixReplay.Web.Live.Show do
     :ok = Channel.seek(socket.assigns.channel, timeline.index)
 
     assign(socket,
+      # Turned to look at it, the device turns back when the recording turns.
+      rotated?:
+        socket.assigns.rotated? and not turned?(socket.assigns[:viewport], timeline.viewport),
       timeline: timeline,
       index: timeline.index,
       at: if(timeline.event, do: timeline.event.at, else: 0),
@@ -434,6 +443,17 @@ defmodule PhoenixReplay.Web.Live.Show do
       changed: Event.changed_keys(timeline.event)
     )
   end
+
+  # The app's migrations replay applies to this recording, by name.
+  defp migrations_applied(recording) do
+    stamp = recording.code && recording.code[:migration]
+
+    for {_version, migration} <- Migration.pending(Migration.all(recording.view), stamp),
+        do: migration |> Module.split() |> List.last()
+  end
+
+  defp turned?(%{} = before, %{} = now), do: Client.orientation(before) != Client.orientation(now)
+  defp turned?(_before, _now), do: false
 
   # The next event's offset, or the end of the recording after the last.
   defp next_at(timeline, duration_ms) do
