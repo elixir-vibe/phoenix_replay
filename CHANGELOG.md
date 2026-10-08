@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.1 - 2026-10-08
+
+Documentation brought up to date with 0.6.
+
+### Fixed
+
+- The README and guides show `replayRecorder` in the browser setup, and no longer say that nothing changes in your JavaScript.
+- The configuration cheatsheet lists every recording list filter, and its code example uses `PhoenixReplay.Trace.find/1`.
+- How It Works describes how events, the root layout, migrations and missing assigns are recorded and replayed in 0.6.
+
 ## 0.6.0 - 2026-10-08
 
 Pointer, touch and form recording, marks, video export, and a richer player and recording list.
