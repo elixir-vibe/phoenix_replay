@@ -16,6 +16,10 @@ defmodule PhoenixReplay.Export.Runtime do
   alias PhoenixReplay.Config
   alias PhoenixReplay.Export.Options
 
+  # Only called once `PhoenixReplay.Export.available/1` found PlaywrightEx,
+  # an optional dependency.
+  @compile {:no_warn_undefined, PlaywrightEx.Supervisor}
+
   @endpoint PhoenixReplay.Web.Export.Endpoint
   @playwright PhoenixReplay.Export.Playwright
   @secret {__MODULE__, :secret}

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Compiling an app without the optional `playwright_ex` no longer warns that `PlaywrightEx.Supervisor.connection_name/1` is undefined.
+
 ## 0.6.2 - 2026-10-09
 
 Two replay fixes: a view's own layout, and lists of integers.
