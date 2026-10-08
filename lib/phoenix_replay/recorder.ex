@@ -132,6 +132,7 @@ defmodule PhoenixReplay.Recorder do
     state = %{
       id: recording.id,
       url?: false,
+      layout?: false,
       sanitizer: sanitizer,
       pointer: config.pointer,
       state: config.state
@@ -204,7 +205,9 @@ defmodule PhoenixReplay.Recorder do
 
   defp handle_info(message, socket), do: {:cont, record(socket, :info, %{tag: tag(message)})}
 
-  defp after_render(%{assigns: %{__changed__: changed}} = socket) when map_size(changed) > 0 do
+  defp after_render(socket), do: socket |> capture_layout() |> record_render()
+
+  defp record_render(%{assigns: %{__changed__: changed}} = socket) when map_size(changed) > 0 do
     %{sanitizer: sanitizer} = socket.private[@private]
 
     case socket.assigns |> Map.take(Map.keys(changed)) |> Assigns.view(sanitizer) do
@@ -213,7 +216,23 @@ defmodule PhoenixReplay.Recorder do
     end
   end
 
-  defp after_render(socket), do: socket
+  defp record_render(socket), do: socket
+
+  # The layout is settled by the first render: `mount/3` or an `on_mount`
+  # hook may have returned one with `layout:`, which LiveView keeps in
+  # `:live_layout`, over the one the view's `use` names.
+  defp capture_layout(%{private: %{@private => %{layout?: false} = state}} = socket) do
+    layout =
+      case Map.get(socket.private, :live_layout, socket.view.__live__()[:layout]) do
+        {module, template} -> {inspect(module), to_string(template)}
+        _none -> false
+      end
+
+    :ok = Buffer.put_layout(state.id, layout)
+    put_private(socket, @private, %{state | layout?: true})
+  end
+
+  defp capture_layout(socket), do: socket
 
   defp record(socket, type, data) do
     Buffer.record(self(), type, data)

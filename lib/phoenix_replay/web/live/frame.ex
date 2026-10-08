@@ -9,8 +9,9 @@ defmodule PhoenixReplay.Web.Live.Frame do
   the layout and the fallback template need.
 
   A view whose live render depends on code in the browser can define
-  `replay_render/1`, which the frame calls in place of `render/1`; see
-  `PhoenixReplay.Web.Rendering.render/2`.
+  `replay_render/1`, which the frame calls in place of `render/1`, and the
+  view renders in the layout the recording kept; see
+  `PhoenixReplay.Web.Rendering.render/3`.
 
   Opened with `stage=1`, as `PhoenixReplay.Web.Export.Stage` opens it, the
   frame pushes a `"phx_replay:shown"` event with the index after each
@@ -67,6 +68,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
 
     frame = %{
       view: recording && recording.view,
+      layout: recording && recording.layout,
       assets: Layouts.frame_assets(context, context.endpoint || socket.endpoint),
       components: %{},
       error: nil
@@ -96,7 +98,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
       {:noreply,
        socket
        |> put_private(@private, private(recording))
-       |> update(@private, &%{&1 | view: recording.view})
+       |> update(@private, &%{&1 | view: recording.view, layout: recording.layout})
        |> show_first()}
     else
       {:noreply, socket}
@@ -121,8 +123,10 @@ defmodule PhoenixReplay.Web.Live.Frame do
     """
   end
 
-  def render(%{@private => %{error: nil, view: view, components: states}} = assigns),
-    do: view |> Rendering.render(assigns) |> Rendering.rewrite(states)
+  def render(
+        %{@private => %{error: nil, view: view, layout: layout, components: states}} = assigns
+      ),
+      do: view |> Rendering.render(assigns, layout: layout) |> Rendering.rewrite(states)
 
   def render(assigns) do
     ~H"""
@@ -275,21 +279,21 @@ defmodule PhoenixReplay.Web.Live.Frame do
     frame = socket.assigns[@private]
     %{keys: recorded} = private = socket.private[@private]
     carried = Enum.reject(private[:unrecorded] || [], &(&1 in recorded))
-    {socket, unrecorded, error} = fill_unrecorded(socket, frame.view, Enum.reverse(carried))
+    {socket, unrecorded, error} = fill_unrecorded(socket, frame, Enum.reverse(carried))
 
     socket
     |> assign(@private, %{frame | error: error})
     |> tell_unrecorded(Enum.reverse(unrecorded))
   end
 
-  defp fill_unrecorded(socket, view, unrecorded) do
-    case Rendering.render_check(view, socket.assigns) do
+  defp fill_unrecorded(socket, frame, unrecorded) do
+    case Rendering.render_check(frame.view, socket.assigns, layout: frame.layout) do
       :ok ->
         {socket, unrecorded, nil}
 
       {:missing, key} ->
         if length(unrecorded) < @max_unrecorded and key not in unrecorded,
-          do: fill_unrecorded(assign(socket, key, nil), view, [key | unrecorded]),
+          do: fill_unrecorded(assign(socket, key, nil), frame, [key | unrecorded]),
           else: {socket, unrecorded, "the recording has no @#{key}"}
 
       {:error, description} ->

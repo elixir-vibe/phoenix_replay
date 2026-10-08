@@ -67,6 +67,17 @@ defmodule PhoenixReplay.RecorderTest do
            |> Enum.all?(fn [a, b] -> a <= b end)
   end
 
+  test "records the layout the view rendered in, as mount settled it", %{sessions: sessions} do
+    {:ok, _view, _html, id} = Sessions.live(sessions, build_conn(), "/layout")
+    assert {:ok, %Recording{layout: {"PhoenixReplay.Test.Layouts", "app"}}} = Buffer.fetch(id)
+
+    {:ok, _view, _html, id} = Sessions.live(sessions, build_conn(), "/layout?layout=none")
+    assert {:ok, %Recording{layout: false}} = Buffer.fetch(id)
+
+    {:ok, _view, _html, id} = Sessions.live(sessions, build_conn(), "/counter")
+    assert {:ok, %Recording{layout: false}} = Buffer.fetch(id)
+  end
+
   test "saves the recording when the view exits", %{sessions: sessions} do
     {:ok, view, _html, id} = Sessions.live(sessions, build_conn(), "/counter")
     render_click(view, "inc")
