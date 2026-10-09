@@ -94,4 +94,6 @@ Two optional callbacks let a backend serve the dashboard without listing everyth
 - `query/3` reads a page of summaries matching a `PhoenixReplay.Recording.Filter`, with an offset, a limit and start-time bounds, and counts every match
 - `values/4` counts the values of a filter field, such as views or event names, among the recordings matching the rest of a filter, for the dashboard's value picker
 
-Without them, both are worked out from `list/1`. The optional `append/3`, `fetch_partial/2` and `partials/1` take running sessions in chunks.
+Without them, both are worked out from `list/1`.
+
+The dashboard lists visits, so it passes `by: :visit` in the page options of `query/3`, `values/4` and `histogram/4`: a page then holds every recording of its visits and counts visits, values and the chart count each visit once, and a visit matches when any of its recordings does. A recording's visit is `PhoenixReplay.Recording.Summary.visit_key/1`. `PhoenixReplay.Recording.Filter`'s functions do the same in memory. A backend that ignores `:by` still works, with the dashboard counting recordings. The optional `append/3`, `fetch_partial/2` and `partials/1` take running sessions in chunks.

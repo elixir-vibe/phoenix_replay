@@ -26,12 +26,14 @@ defmodule PhoenixReplay.Recording.Filter do
     * `"min_events"` — minimum number of recorded events
     * `"errors"` — `"1"` to keep only sessions with an error, such as an
       error log, a failed query or a crash
-    * `"tab"` — sessions from one browser tab, a user's journey
+    * `"tab"` — recordings from one browser tab
+    * `"visit"` — the recordings of one visit; see
+      `PhoenixReplay.Recording.Summary.visit_key/1`
 
   Blank or invalid parameters are ignored.
   """
 
-  alias PhoenixReplay.Recording.{Client, Summary}
+  alias PhoenixReplay.Recording.{Client, Summary, Visit}
 
   @windows %{
     "15m" => :timer.minutes(15),
@@ -58,7 +60,8 @@ defmodule PhoenixReplay.Recording.Filter do
           longer_than: pos_integer() | nil,
           min_events: pos_integer() | nil,
           errors: boolean(),
-          tab: String.t() | nil
+          tab: String.t() | nil,
+          visit: String.t() | nil
         }
 
   defstruct [
@@ -78,6 +81,7 @@ defmodule PhoenixReplay.Recording.Filter do
     :longer_than,
     :min_events,
     :tab,
+    :visit,
     errors: false
   ]
 
@@ -108,7 +112,8 @@ defmodule PhoenixReplay.Recording.Filter do
       longer_than: positive_integer(params["longer_than"]),
       min_events: positive_integer(params["min_events"]),
       errors: params["errors"] == "1",
-      tab: text(params["tab"])
+      tab: text(params["tab"]),
+      visit: text(params["visit"])
     }
   end
 
@@ -132,7 +137,8 @@ defmodule PhoenixReplay.Recording.Filter do
       {"longer_than", filter.longer_than && Integer.to_string(filter.longer_than)},
       {"min_events", filter.min_events && Integer.to_string(filter.min_events)},
       {"errors", if(filter.errors, do: "1")},
-      {"tab", filter.tab}
+      {"tab", filter.tab},
+      {"visit", filter.visit}
     ]
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
@@ -173,15 +179,22 @@ defmodule PhoenixReplay.Recording.Filter do
   stay on offer: the most common first, at most `limit`. `now` is in Unix
   milliseconds, for `"within"`.
   """
-  @spec count_values([Summary.t()], field(), t(), integer(), pos_integer()) ::
+  @spec count_values([Summary.t()], field(), t(), integer(), pos_integer(), unit()) ::
           [{String.t(), pos_integer()}]
-  def count_values(summaries, field, %__MODULE__{} = filter, now, limit) do
+  def count_values(summaries, field, %__MODULE__{} = filter, now, limit, by \\ :recording) do
     summaries
     |> select(Map.put(filter, field, nil), now)
-    |> Enum.flat_map(&values_of(&1, field))
-    |> Enum.frequencies()
+    |> Enum.flat_map(fn summary ->
+      Enum.map(values_of(summary, field), &{&1, counted(summary, by)})
+    end)
+    |> Enum.uniq()
+    |> Enum.frequencies_by(&elem(&1, 0))
     |> top(limit)
   end
+
+  # What a count counts: each recording, or each visit once.
+  defp counted(summary, :visit), do: Summary.visit_key(summary)
+  defp counted(summary, _recording), do: summary.id
 
   @doc "The most common of counted values, then by value, at most `limit`."
   @spec top(%{String.t() => pos_integer()} | [{String.t(), pos_integer()}], pos_integer()) ::
@@ -214,7 +227,9 @@ defmodule PhoenixReplay.Recording.Filter do
   stretches of `size` milliseconds, earliest first; see `t:bucket/0`.
   Stretches begin at midnights and hours of the viewer's time zone,
   `:utc_offset` milliseconds ahead of UTC (default `0`); `:now` is for
-  `"within"`.
+  `"within"`. With `by: :visit`, it counts the visits with a matching
+  recording by when they started, those with an error in any recording
+  as errors.
   """
   @spec histogram([Summary.t()], t(), pos_integer(), page_opts()) :: [bucket()]
   def histogram(summaries, %__MODULE__{} = filter, size, opts) do
@@ -222,12 +237,26 @@ defmodule PhoenixReplay.Recording.Filter do
 
     summaries
     |> select(filter, Keyword.fetch!(opts, :now))
-    |> Enum.group_by(&bucket(&1.connected_at, size, utc_offset))
+    |> starts(summaries, opts[:by])
+    |> Enum.group_by(&bucket(elem(&1, 0), size, utc_offset))
     |> Enum.map(fn {start, started} ->
-      {start, length(started), Enum.count(started, &(&1.error_count > 0))}
+      {start, length(started), Enum.count(started, &elem(&1, 1))}
     end)
     |> Enum.sort()
   end
+
+  # When each counted unit started, and whether it had an error.
+  defp starts(matching, all, :visit) do
+    keys = MapSet.new(matching, &Summary.visit_key/1)
+
+    all
+    |> Enum.filter(&MapSet.member?(keys, Summary.visit_key(&1)))
+    |> Visit.group()
+    |> Enum.map(&{&1.started_at, &1.error_count > 0})
+  end
+
+  defp starts(matching, _all, _recording),
+    do: Enum.map(matching, &{&1.connected_at, &1.error_count > 0})
 
   @doc """
   The start of the stretch of `size` milliseconds that `at` falls in, in
@@ -259,6 +288,12 @@ defmodule PhoenixReplay.Recording.Filter do
     * `:offset` and `:limit` — the slice to return
     * `:utc_offset` — for counts by start time, how far the viewer's time
       zone is ahead of UTC, in milliseconds; see `histogram/4`
+    * `:by` — `:recording` (the default) pages and counts recordings;
+      `:visit` pages and counts visits, as the dashboard lists them: a
+      visit matches when any of its recordings does, a page holds every
+      recording of its visits, visits are ordered by when they started, and
+      values and the chart count each visit once. See
+      `PhoenixReplay.Recording.Visit`.
   """
   @type page_opts :: [
           now: integer(),
@@ -266,27 +301,44 @@ defmodule PhoenixReplay.Recording.Filter do
           since: integer() | nil,
           offset: non_neg_integer(),
           limit: non_neg_integer(),
-          utc_offset: integer()
+          utc_offset: integer(),
+          by: unit()
         ]
+
+  @typedoc "What pages and counts are made of; see `t:page_opts/0`."
+  @type unit :: :recording | :visit
 
   @doc """
   Reads a page of `summaries`, which are ordered most recent first, and
-  counts every summary that matches. See `t:page_opts/0`.
+  counts every summary that matches. With `by: :visit`, reads a page of
+  visits instead, returning every recording of them among `summaries`, and
+  counts the matching visits. See `t:page_opts/0`.
   """
   @spec page([Summary.t()], t(), page_opts()) :: {[Summary.t()], non_neg_integer()}
   def page(summaries, %__MODULE__{} = filter, opts) do
     {until, since} = {opts[:until], opts[:since]}
 
-    matching =
-      summaries
-      |> select(filter, Keyword.fetch!(opts, :now))
-      |> Enum.filter(fn summary ->
+    stored =
+      Enum.filter(summaries, fn summary ->
         (is_nil(until) or Summary.stored_at(summary) <= until) and
           (is_nil(since) or Summary.stored_at(summary) > since)
       end)
 
-    {Enum.slice(matching, Keyword.get(opts, :offset, 0), Keyword.fetch!(opts, :limit)),
-     length(matching)}
+    matching = select(stored, filter, Keyword.fetch!(opts, :now))
+    {offset, limit} = {Keyword.get(opts, :offset, 0), Keyword.fetch!(opts, :limit)}
+
+    case opts[:by] do
+      :visit ->
+        keys = MapSet.new(matching, &Summary.visit_key/1)
+
+        visits =
+          stored |> Enum.filter(&MapSet.member?(keys, Summary.visit_key(&1))) |> Visit.group()
+
+        {visits |> Enum.slice(offset, limit) |> Enum.flat_map(& &1.recordings), length(visits)}
+
+      _recording ->
+        {Enum.slice(matching, offset, limit), length(matching)}
+    end
   end
 
   @doc """
@@ -307,7 +359,8 @@ defmodule PhoenixReplay.Recording.Filter do
       (is_nil(filter.to) or summary.connected_at <= filter.to) and
       (is_nil(filter.min_events) or summary.event_count >= filter.min_events) and
       (not filter.errors or summary.error_count > 0) and
-      (is_nil(filter.tab) or summary.tab == filter.tab)
+      (is_nil(filter.tab) or summary.tab == filter.tab) and
+      (is_nil(filter.visit) or Summary.visit_key(summary) == filter.visit)
   end
 
   defp exact?(summary, filter, criterion) do

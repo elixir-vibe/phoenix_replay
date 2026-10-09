@@ -13,6 +13,8 @@
 ### Changed
 
 - Sampling and keeping decide by visit. `:sample_rate` draws once per visit, so its recordings are recorded or not together. A visit is kept once any of its recordings would be kept, and then every recording of it is saved, pages without interaction included. A recording that ends before its visit decides is held in memory until another of its recordings is kept or the visit ends, counted towards `:max_memory`; the `discarded` telemetry event has a new reason, `:max_memory`.
+- The dashboard lists visits: one row per visit, with the page it landed on, the pages it went through, where it came from, its device, and the marks and errors of all its pages, its duration running from the first page to the last event. A visit matches the filters when any of its recordings does; the chart and the filters' value counts count visits. `?visit=` lists one visit.
+- Custom storage backends: `query/3`, `values/4` and `histogram/4` get `by: :visit` in their page options from the dashboard, and should then page and count visits; see `PhoenixReplay.Storage`. A backend that ignores it keeps working, counting recordings.
 
 ## 0.6.2 - 2026-10-09
 

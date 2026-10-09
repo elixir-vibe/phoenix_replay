@@ -10,7 +10,9 @@ if Code.ensure_loaded?(Ecto.Query) do
 
     The dashboard's pages are read in SQL, except when filtering by text or
     event name: event names are stored encoded, so those criteria are
-    checked after reading the rows matching the others.
+    checked after reading the rows matching the others. With `by: :visit`,
+    pages and counts group the rows by `COALESCE(visit, id)`, so a
+    recording without a visit is one of its own.
 
     Tested on PostgreSQL, SQLite (ecto_sqlite3) and DuckDB (QuackDB). MySQL
     is not supported: saving upserts on `id`, and Ecto cannot name a
@@ -139,7 +141,13 @@ if Code.ensure_loaded?(Ecto.Query) do
     end
 
     @impl true
-    def query(%Filter{event: nil, query: nil} = filter, page_opts, opts) do
+    def query(filter, page_opts, opts) do
+      if page_opts[:by] == :visit,
+        do: query_visits(filter, page_opts, opts),
+        else: query_recordings(filter, page_opts, opts)
+    end
+
+    defp query_recordings(%Filter{event: nil, query: nil} = filter, page_opts, opts) do
       matching = matching(filter, page_opts)
       total = repo(opts).aggregate(matching, :count)
 
@@ -156,17 +164,82 @@ if Code.ensure_loaded?(Ecto.Query) do
     # Text search and the event filter look at event names, which SQL cannot
     # read; the other criteria narrow the rows first, and are not checked
     # again.
-    def query(%Filter{} = filter, page_opts, opts) do
-      {page, total} =
-        %{filter | event: nil, query: nil}
-        |> matching(page_opts)
-        |> order_by(desc: :connected_at, desc: :id)
-        |> select([r], map(r, ^[:event_names | @summary_fields]))
-        |> repo(opts).all()
-        |> Enum.map(&to_summary/1)
-        |> Filter.page(%Filter{query: filter.query, event: filter.event}, page_opts)
-
+    defp query_recordings(%Filter{} = filter, page_opts, opts) do
+      {page, total} = page_in_memory(filter, page_opts, opts)
       {with_marks(page, opts), total}
+    end
+
+    # Reads the rows matching what SQL can check, and pages them by text
+    # and event name in memory.
+    defp page_in_memory(filter, page_opts, opts) do
+      %{filter | event: nil, query: nil}
+      |> matching(page_opts)
+      |> order_by(desc: :connected_at, desc: :id)
+      |> select([r], map(r, ^[:event_names | @summary_fields]))
+      |> repo(opts).all()
+      |> Enum.map(&to_summary/1)
+      |> Filter.page(%Filter{query: filter.query, event: filter.event}, page_opts)
+    end
+
+    # Visits with a recording matching the filter, by when their first
+    # recording started, each page holding every recording of its visits.
+    defp query_visits(%Filter{event: nil, query: nil} = filter, page_opts, opts) do
+      repo = repo(opts)
+      keys = visit_keys(filter, page_opts)
+      total = repo.one(from(k in subquery(keys), select: count()))
+
+      page =
+        from(r in @table,
+          where: coalesce(r.visit, r.id) in subquery(keys),
+          group_by: coalesce(r.visit, r.id),
+          order_by: [desc: min(r.connected_at), desc: coalesce(r.visit, r.id)],
+          offset: ^Keyword.get(page_opts, :offset, 0),
+          limit: ^Keyword.fetch!(page_opts, :limit),
+          select: coalesce(r.visit, r.id)
+        )
+        |> stored_within(page_opts)
+        |> repo.all()
+
+      {visits(page, page_opts, opts), total}
+    end
+
+    defp query_visits(%Filter{} = filter, page_opts, opts) do
+      {page, total} = page_in_memory(filter, page_opts, opts)
+      keys = page |> Enum.map(&Summary.visit_key/1) |> Enum.uniq()
+      {visits(keys, page_opts, opts), total}
+    end
+
+    # The distinct visits of the rows matching the criteria SQL can check,
+    # as a one-column query for `in`.
+    defp visit_keys(filter, page_opts) do
+      keys =
+        filter
+        |> matching(page_opts)
+        |> select([r], %{key: coalesce(r.visit, r.id)})
+        |> distinct(true)
+
+      from(k in subquery(keys), select: k.key)
+    end
+
+    # Every recording of the visits `keys`, as of the page's time, visit by
+    # visit in the page's order.
+    defp visits(keys, page_opts, opts) do
+      by_visit =
+        from(r in @table, where: coalesce(r.visit, r.id) in ^keys)
+        |> stored_within(page_opts)
+        |> order_by(asc: :connected_at, asc: :id)
+        |> summaries(opts)
+        |> Enum.group_by(&Summary.visit_key/1)
+
+      Enum.flat_map(keys, &Map.get(by_visit, &1, []))
+    end
+
+    defp stored_within(query, page_opts) do
+      [until: page_opts[:until], since: page_opts[:since]]
+      |> Enum.reject(fn {_criterion, value} -> is_nil(value) end)
+      |> Enum.reduce(query, fn {criterion, value}, acc ->
+        where(acc, ^criterion(criterion, value))
+      end)
     end
 
     # The criteria SQL can check: all but text and the event name.
@@ -183,6 +256,7 @@ if Code.ensure_loaded?(Ecto.Query) do
         min_events: filter.min_events,
         errors: filter.errors,
         tab: filter.tab,
+        visit: filter.visit,
         until: page_opts[:until],
         since: page_opts[:since]
       )
@@ -212,6 +286,11 @@ if Code.ensure_loaded?(Ecto.Query) do
     defp criterion(:min_events, count), do: dynamic([r], r.event_count >= ^count)
     defp criterion(:errors, true), do: dynamic([r], r.error_count > 0)
     defp criterion(:tab, tab), do: dynamic([r], r.tab == ^tab)
+
+    # The visit column is indexed; a recording without one is its own visit.
+    defp criterion(:visit, key),
+      do: dynamic([r], r.visit == ^key or (is_nil(r.visit) and r.id == ^key))
+
     defp criterion(:until, ms), do: dynamic([r], coalesce(r.saved_at, r.connected_at) <= ^ms)
     defp criterion(:since, ms), do: dynamic([r], coalesce(r.saved_at, r.connected_at) > ^ms)
 
@@ -227,10 +306,7 @@ if Code.ensure_loaded?(Ecto.Query) do
       |> matching(page_opts)
       |> where([r], not is_nil(field(r, ^column)))
       |> group_by([r], field(r, ^column))
-      |> order_by([r], desc: count(r.id), asc: field(r, ^column))
-      |> limit(^Keyword.fetch!(page_opts, :limit))
-      |> select([r], {field(r, ^column), count(r.id)})
-      |> repo(opts).all()
+      |> counts(dynamic([r], field(r, ^column)), page_opts, opts)
     end
 
     def values(:mark, %Filter{event: nil, query: nil} = filter, page_opts, opts) do
@@ -238,10 +314,7 @@ if Code.ensure_loaded?(Ecto.Query) do
       |> matching(page_opts)
       |> join(:inner, [r], m in @marks, on: m.recording_id == r.id)
       |> group_by([_r, m], m.name)
-      |> order_by([r, m], desc: count(r.id), asc: m.name)
-      |> limit(^Keyword.fetch!(page_opts, :limit))
-      |> select([r, m], {m.name, count(r.id)})
-      |> repo(opts).all()
+      |> counts(dynamic([_r, m], m.name), page_opts, opts)
     end
 
     # Text search and the event filter read event names too, which SQL
@@ -257,12 +330,81 @@ if Code.ensure_loaded?(Ecto.Query) do
         field,
         %Filter{query: filter.query, event: filter.event},
         page_opts[:now],
-        page_opts[:limit]
+        page_opts[:limit],
+        page_opts[:by]
       )
+    end
+
+    # The most common values of a grouped query, counting recordings, or
+    # each visit once.
+    defp counts(query, value, page_opts, opts) do
+      count =
+        if page_opts[:by] == :visit,
+          do: dynamic([r], count(coalesce(r.visit, r.id), :distinct)),
+          else: dynamic([r], count(r.id))
+
+      query
+      |> order_by(^[desc: count, asc: value])
+      |> limit(^Keyword.fetch!(page_opts, :limit))
+      |> select(^%{value: value, count: count})
+      |> repo(opts).all()
+      |> Enum.map(&{&1.value, &1.count})
     end
 
     @impl true
     def histogram(%Filter{event: nil, query: nil} = filter, size, page_opts, opts) do
+      if page_opts[:by] == :visit,
+        do: visit_histogram(filter, size, page_opts, opts),
+        else: recording_histogram(filter, size, page_opts, opts)
+    end
+
+    def histogram(%Filter{} = filter, size, page_opts, opts) do
+      %{filter | event: nil, query: nil}
+      |> matching(page_opts)
+      |> summaries(opts)
+      |> Filter.histogram(%Filter{query: filter.query, event: filter.event}, size, page_opts)
+    end
+
+    # Visits with a matching recording, by when their first recording started.
+    defp visit_histogram(filter, size, page_opts, opts) do
+      utc_offset = Keyword.get(page_opts, :utc_offset, 0)
+      keys = visit_keys(filter, page_opts)
+
+      visits =
+        from(r in @table,
+          where: coalesce(r.visit, r.id) in subquery(keys),
+          group_by: coalesce(r.visit, r.id),
+          select: %{
+            started_at: min(r.connected_at),
+            errors: max(fragment("CASE WHEN ? > 0 THEN 1 ELSE 0 END", r.error_count))
+          }
+        )
+
+      from(v in subquery(visits),
+        group_by: selected_as(:bucket),
+        order_by: selected_as(:bucket),
+        select: {
+          selected_as(
+            fragment(
+              "(? + ?) - ((? + ?) % ?) - ?",
+              v.started_at,
+              ^utc_offset,
+              v.started_at,
+              ^utc_offset,
+              ^size,
+              ^utc_offset
+            ),
+            :bucket
+          ),
+          count(),
+          sum(v.errors)
+        }
+      )
+      |> repo(opts).all()
+      |> Enum.map(fn {start, visits, errors} -> {start, visits, errors || 0} end)
+    end
+
+    defp recording_histogram(filter, size, page_opts, opts) do
       utc_offset = Keyword.get(page_opts, :utc_offset, 0)
 
       filter
@@ -287,13 +429,6 @@ if Code.ensure_loaded?(Ecto.Query) do
       })
       |> repo(opts).all()
       |> Enum.map(fn {start, sessions, errors} -> {start, sessions, errors || 0} end)
-    end
-
-    def histogram(%Filter{} = filter, size, page_opts, opts) do
-      %{filter | event: nil, query: nil}
-      |> matching(page_opts)
-      |> summaries(opts)
-      |> Filter.histogram(%Filter{query: filter.query, event: filter.event}, size, page_opts)
     end
 
     @impl true

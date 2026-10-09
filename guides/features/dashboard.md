@@ -40,13 +40,15 @@ Actions are `:list`, `:view`, `:delete` and `:clear`. The socket's assigns inclu
 
 Without an `:authorize` module, storage pages the recording list itself. With one, the dashboard reads every summary and checks `:list` for each, so pages and counts show exactly what the viewer may see.
 
-## Finding recordings
+## Finding visits
 
-The list shows sessions still running under **Live now**, then saved recordings in a table: the view, the page it started on, the device and where the visit came from, how long ago it started, its duration, event count and errors. An icon marks each session as a phone, tablet or desktop. Click anywhere on a row to open it; hover a saved row, or focus it from the keyboard, to delete it. **Delete all recordings** is in the ⋯ menu. A line above the list counts sessions, live ones and ones with errors. When sampling leaves sessions out, a note under it says which are saved, such as "Saves every session with an error, and 5% of the others with interaction", so the counts are not read as all of your traffic.
+The list shows [visits](recording.md#visits), one row each: a visit is every recording from landing to leaving. Visits still recording are under **Live now**, then saved ones in a table: the page the visit landed on and the marks it reached anywhere, the pages it went through in order, the device and where it came from, how long ago it started, its duration from the first page to the last event, its events and errors across all its pages. An icon marks each visit as a phone, tablet or desktop. Click anywhere on a row to open the visit where it landed; hover a saved row, or focus it from the keyboard, to delete its recordings. **Delete all recordings** is in the ⋯ menu. A line above the list counts visits, live ones and ones with errors. When sampling leaves visits out, a note under it says which are saved, such as "Saves every session with an error, and 5% of the others with interaction", so the counts are not read as all of your traffic.
 
-A chart above the list shows how many of the sessions matching the filters started over time, in bars of a few minutes to a day, depending on the time range, with those that had an error in red. Without a time range it shows the last 30 days. Hover a bar for its time and counts, and click it to narrow the list to that stretch.
+A visit is listed when any of its recordings matches the filters, with all of its pages. Where it came from, its device and browser are the visit's own. Recordings made before visits were kept, or without `PhoenixReplay.Plug`, are each a visit of their own.
 
-Saved recordings are listed as of when you opened the list or last changed its filters, so rows stay put while sessions end. Recordings saved since then are counted in a **"3 new recordings · Show"** banner; showing them brings the list up to date. The list pages with numbered links, reading one page at a time from storage.
+A chart above the list shows how many of the visits matching the filters started over time, in bars of a few minutes to a day, depending on the time range, with those that had an error in red. Without a time range it shows the last 30 days. Hover a bar for its time and counts, and click it to narrow the list to that stretch.
+
+Saved visits are listed as of when you opened the list or last changed its filters, so rows stay put while visits end. Visits saved since then are counted in a **"3 new visits · Show"** banner; showing them brings the list up to date. The list pages with numbered links, reading one page at a time from storage.
 
 The filter bar always has a search, by URL, recording id, event or mark name, source or campaign, **Started**, and **With errors**, for sessions with an error log, a failed query or a crash. **+ Filter** adds the others:
 
