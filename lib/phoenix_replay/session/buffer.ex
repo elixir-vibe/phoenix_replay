@@ -37,6 +37,8 @@ defmodule PhoenixReplay.Session.Buffer do
     * `{{id, seq}, event}` — one per event not yet flushed, `seq` counting
       up from `0`
     * `{{id, :saving}, true}` — the session ended and a task is saving it
+    * `{{id, :held}, true}` — the session ended and waits for its visit to
+      decide whether it is kept; see `PhoenixReplay.Session.Visits`
   """
 
   import Ex2ms
@@ -308,6 +310,25 @@ defmodule PhoenixReplay.Session.Buffer do
     |> Enum.reject(fn {id, _pid} -> :ets.member(@table, {id, :saving}) end)
   end
 
+  @doc "The visit the session belongs to, or `nil`."
+  @spec visit(Recording.id()) :: String.t() | nil
+  def visit(id) do
+    case :ets.lookup(@table, {id, :meta}) do
+      [{_key, _pid, recording}] -> recording.client.visit
+      [] -> nil
+    end
+  end
+
+  @doc """
+  Marks the ended session as held for its visit's decision, which leaves
+  it out of the running sessions `summaries/0` lists.
+  """
+  @spec hold(Recording.id()) :: :ok
+  def hold(id) do
+    :ets.insert(@table, {{id, :held}, true})
+    :ok
+  end
+
   @doc """
   Marks the session as being saved, so a restarted
   `PhoenixReplay.Session.Monitor` leaves it to the task saving it.
@@ -319,7 +340,8 @@ defmodule PhoenixReplay.Session.Buffer do
   end
 
   @doc """
-  Summarizes every buffered session, most recent first, counting the
+  Summarizes every buffered session but those held for their visit's
+  decision, most recent first, counting the
   events flushed to storage and those still buffered from the session's
   running totals.
   """
@@ -327,6 +349,7 @@ defmodule PhoenixReplay.Session.Buffer do
   def summaries do
     @table
     |> :ets.select(fun(do: ({{_id, :meta}, pid, recording} -> {pid, recording})))
+    |> Enum.reject(fn {_pid, recording} -> :ets.member(@table, {recording.id, :held}) end)
     |> Enum.map(fn {pid, recording} ->
       struct!(Summary.new(recording, live?: Process.alive?(pid)), totals(recording.id))
     end)
@@ -343,6 +366,7 @@ defmodule PhoenixReplay.Session.Buffer do
     :ets.delete(@table, {id, :seq})
     :ets.delete(@table, {id, :last_at})
     :ets.delete(@table, {id, :state})
+    :ets.delete(@table, {id, :held})
     :ets.delete(@table, {id, :saving})
     :ets.delete(@table, {id, :config})
     :ets.delete(@table, {id, :meta})

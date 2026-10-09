@@ -10,6 +10,10 @@
 
 - Visits: `PhoenixReplay.Plug` gives each visit an id, which every recording made in it carries as `client.visit`. A visit ends after 30 minutes without a request, set with `client: [landing: [timeout: ms]]`, or when a request brings a new campaign. The plug keeps the visit even without `:headers` or `:landing`. See the recording guide's "Visits".
 
+### Changed
+
+- Sampling and keeping decide by visit. `:sample_rate` draws once per visit, so its recordings are recorded or not together. A visit is kept once any of its recordings would be kept, and then every recording of it is saved, pages without interaction included. A recording that ends before its visit decides is held in memory until another of its recordings is kept or the visit ends, counted towards `:max_memory`; the `discarded` telemetry event has a new reason, `:max_memory`.
+
 ## 0.6.2 - 2026-10-09
 
 Two replay fixes: a view's own layout, and lists of integers.

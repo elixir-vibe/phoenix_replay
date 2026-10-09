@@ -51,9 +51,11 @@ defmodule PhoenixReplay.Recorder do
 
   alias PhoenixReplay.{Config, Migration, Recording}
   alias PhoenixReplay.Capture.{Assigns, Browser, Pointer, State}
-  alias PhoenixReplay.Session.{Buffer, Monitor}
+  alias PhoenixReplay.Session.{Buffer, Monitor, Visits}
 
   @private :phoenix_replay
+  # Where PhoenixReplay.Plug keeps the visit in the session.
+  @kept PhoenixReplay.Plug.session_key()
   @record_event "phx_replay:record"
   @pointer_event Pointer.event()
   @state_event State.event()
@@ -86,15 +88,21 @@ defmodule PhoenixReplay.Recorder do
   def on_mount(opts, params, session, socket) when is_list(opts) do
     Keyword.validate!(opts, @session_options)
     config = Config.load(opts)
+    # A visit is sampled as a whole: its recordings draw the same.
+    {sample, keep} = Visits.draws(visit(session))
 
-    if connected?(socket) and sampled?(config.sample_rate) and memory?(config.max_memory),
-      do: {:cont, start(socket, params, session, config)},
+    if connected?(socket) and sampled?(config.sample_rate, sample) and memory?(config.max_memory),
+      do: {:cont, start(socket, params, session, config, keep)},
       else: {:cont, socket}
   end
 
+  defp visit(%{@kept => %{"visit" => %{"id" => id}}}) when is_binary(id), do: id
+  defp visit(_session), do: nil
+
   @doc """
   Decides whether a session is recorded at `rate`, given a uniform `draw`
-  in `0.0..1.0`. Rates of `0.0` and `1.0` never consult the draw.
+  in `0.0..1.0`, its visit's (see `PhoenixReplay.Session.Visits`). Rates
+  of `0.0` and `1.0` never consult the draw.
   """
   @spec sampled?(float(), float()) :: boolean()
   def sampled?(rate, draw \\ :rand.uniform())
@@ -105,10 +113,10 @@ defmodule PhoenixReplay.Recorder do
   defp memory?(nil), do: true
   defp memory?(max_memory), do: Buffer.memory() < max_memory
 
-  defp start(socket, params, session, config) do
+  defp start(socket, params, session, config, draw) do
     sanitizer = config.sanitizer
     # The request context PhoenixReplay.Plug kept is recorded once, in client.
-    {kept, session} = Map.pop(session, PhoenixReplay.Plug.session_key())
+    {kept, session} = Map.pop(session, @kept)
 
     recording = %Recording{
       id: Recording.generate_id(),
@@ -126,7 +134,7 @@ defmodule PhoenixReplay.Recorder do
       code: Recording.Code.of(socket.view, config.release, Migration.latest(socket.view))
     }
 
-    :ok = Buffer.open(recording, self(), config)
+    :ok = Buffer.open(recording, self(), config, draw)
     Monitor.watch(self(), recording.id)
 
     state = %{

@@ -19,7 +19,12 @@ defmodule PhoenixReplay.Session.TailSampling do
 
   @inputs_key State.inputs_key()
 
-  @type reason :: :not_interactive | :not_sampled
+  @typedoc """
+  Why a recording was discarded: no interaction, left out by
+  `keep: [rate: ...]`, or held for its visit until `:max_memory` made room;
+  see `PhoenixReplay.Session.Visits`.
+  """
+  @type reason :: :not_interactive | :not_sampled | :max_memory
 
   @typedoc "What `observe/3` has seen of a session's events so far."
   @type observation :: %{

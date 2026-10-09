@@ -14,8 +14,9 @@ defmodule PhoenixReplay.Config do
       Defaults to `PhoenixReplay.Sanitizer.Default`.
     * `:max_events` — events recorded per session before recording stops.
       Defaults to `10_000`.
-    * `:sample_rate` — share of sessions to record, from `0.0` to `1.0`.
-      Defaults to `1.0`, recording every session. `0.0` turns recording off.
+    * `:sample_rate` — share of visits to record, from `0.0` to `1.0`; a
+      visit's recordings are recorded or not together. Defaults to `1.0`,
+      recording every visit. `0.0` turns recording off.
     * `:keep` — keyword list choosing which recorded sessions are saved
       when they end, as described in "Tail sampling" below:
       * `:rate` — share of interactive sessions to save (default `1.0`)
@@ -176,6 +177,12 @@ defmodule PhoenixReplay.Config do
   error, a mark or a slow event matching `:errors`, `:marks` or
   `:slower_than` is always saved, a session without user interaction is discarded, and `:rate` of
   the rest are saved.
+
+  Both decide by visit (see `PhoenixReplay.Plug`): a visit is sampled as
+  a whole, and once any of its recordings is kept, all of them are saved,
+  pages without interaction included. A recording that would be discarded
+  waits, in memory, for another recording of its visit to be kept, or for
+  the visit to end; see `PhoenixReplay.Session.Visits`.
 
   To save every failing session but only a few others, record every session
   and keep a share of them:

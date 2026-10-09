@@ -53,6 +53,75 @@ defmodule PhoenixReplay.Session.MonitorTest do
     assert reason =~ "boom"
   end
 
+  describe "keeping by visit" do
+    # A recording of `visit`, buffered for a process that ends when told to.
+    defp visit_page(visit, clicks, config \\ Config.load()) do
+      recording = %{
+        Fixtures.counter_recording(clicks: clicks)
+        | client: %PhoenixReplay.Recording.Client{visit: visit}
+      }
+
+      pid = spawn(fn -> receive do: (:stop -> :ok) end)
+      buffer(recording, pid, config)
+      Monitor.watch(pid, recording.id)
+      {recording.id, pid}
+    end
+
+    test "saves a page without interaction once another page of its visit is kept" do
+      visit = "visit-#{System.unique_integer([:positive])}"
+      {read, read_pid} = visit_page(visit, 0)
+      {clicked, clicked_pid} = visit_page(visit, 2)
+
+      # The read-only page ends first: held, neither saved nor discarded.
+      send(read_pid, :stop)
+      refute_receive {:telemetry, _kind, %{id: ^read}}, 30
+      assert {:ok, _recording} = Buffer.fetch(read)
+
+      # The page with clicks keeps the visit, and the held page with it.
+      send(clicked_pid, :stop)
+      assert_receive {:telemetry, :persisted, %{id: ^clicked}}
+      assert_receive {:telemetry, :persisted, %{id: ^read}}
+
+      # A later page of the kept visit is saved without interaction of its own.
+      {later, later_pid} = visit_page(visit, 0)
+      send(later_pid, :stop)
+      assert_receive {:telemetry, :persisted, %{id: ^later}}
+    end
+
+    test "discards a visit without interaction whole, once it ends" do
+      visit = "visit-#{System.unique_integer([:positive])}"
+      {first, first_pid} = visit_page(visit, 0)
+      {second, second_pid} = visit_page(visit, 0)
+
+      send(first_pid, :stop)
+      send(second_pid, :stop)
+
+      # The test configuration ends a visit 50 ms after its last page.
+      assert_receive {:telemetry, :discarded, %{id: ^first, reason: :not_interactive}}, 1_000
+      assert_receive {:telemetry, :discarded, %{id: ^second, reason: :not_interactive}}, 1_000
+      assert Buffer.fetch(first) == :error
+    end
+
+    test "discards held pages, by the visit idle longest, while the buffer is over :max_memory" do
+      config = Config.load(max_memory: 1)
+      visit = "visit-#{System.unique_integer([:positive])}"
+      {held, held_pid} = visit_page(visit, 0, config)
+
+      send(held_pid, :stop)
+      assert_receive {:telemetry, :discarded, %{id: ^held, reason: :max_memory}}
+      assert Buffer.fetch(held) == :error
+    end
+
+    test "draws the same for every recording of a visit" do
+      assert PhoenixReplay.Session.Visits.draws("visit-a") ==
+               PhoenixReplay.Session.Visits.draws("visit-a")
+
+      {sample, keep} = PhoenixReplay.Session.Visits.draws("visit-a")
+      assert sample > 0 and sample <= 1 and keep > 0 and keep <= 1
+      assert sample != keep
+    end
+  end
+
   test "drops the buffer after persistence gives up" do
     recording = Fixtures.counter_recording()
     pid = spawn(fn -> receive do: (:stop -> :ok) end)

@@ -271,13 +271,17 @@ PhoenixReplay does not record focus, or `Phoenix.LiveView.JS` commands applied o
 
 ## Which sessions are kept
 
-Recording starts on every connected mount, but a session is saved only if the user interacted with it: it handled an event, in the view or a component, or navigated within the LiveView. Plain page views are discarded when the process exits.
+Recording starts on every connected mount, but a recording is saved only if its [visit](#visits) is kept. A visit is kept once any of its recordings would be kept on its own: the user interacted with it, by handling an event, in the view or a component, or by navigating within the LiveView, or it matched `:keep`. Then all of the visit's recordings are saved, pages the user only read included, so a visit replays from landing to leaving. A visit whose recordings are all plain page views is discarded whole.
 
-`:keep` decides further, when the session ends. `keep: [rate: 0.1]` saves a tenth of interactive sessions, and `errors: true` or `slower_than: ms` always save sessions that hit an error or a slow query, even without interaction. See [Keeping the sessions that matter](telemetry-and-logs.md#keeping-the-sessions-that-matter).
+`:keep` decides further. `keep: [rate: 0.1]` saves a tenth of visits with interaction, and `errors: true`, `marks: true` or `slower_than: ms` always save visits that hit an error, a mark or a slow query, even without interaction. See [Keeping the sessions that matter](telemetry-and-logs.md#keeping-the-sessions-that-matter).
+
+A recording that ends before its visit is kept waits for the decision, its events held in memory: it is saved when another recording of the visit is kept, and discarded when the visit ends. For this, a visit ends when none of its recordings is running and none has started for the visit's timeout, 30 minutes by default. Held recordings count towards `:max_memory`, and while the buffer is over it, the recordings held for the visit idle longest are discarded, with the reason `:max_memory`. The decision is kept by the node that recorded the pages; a visit whose pages reach several nodes is kept on each by the pages it recorded there.
+
+Retention and the per-collector `:limit`s apply to each recording, not to the visit.
 
 ## Sampling and limits
 
-Record a share of sessions with `:sample_rate`, from `0.0` to `1.0`, and cap the events per session with `:max_events`. `:sample_rate` decides on mount; to decide once you know how the session went, record every session and use `:keep` instead. Set them globally:
+Record a share of visits with `:sample_rate`, from `0.0` to `1.0`, and cap the events per recording with `:max_events`. `:sample_rate` decides on mount, from a draw the visit makes once, so a visit's recordings are recorded or not together; a live session's own `:sample_rate` applies to the same draw. To decide once you know how the visit went, record every visit and use `:keep` instead. Set them globally:
 
 ```elixir
 config :phoenix_replay,
@@ -303,7 +307,7 @@ Per-session options accept `:sample_rate`, `:keep`, `:max_events`, `:sanitizer` 
 `PhoenixReplay.Telemetry` emits an event when a session is finalized:
 
 - `[:phoenix_replay, :recording, :persisted]` with `event_count` and `duration_ms` measurements,
-- `[:phoenix_replay, :recording, :discarded]` with a `reason` of `:not_interactive` or `:not_sampled`,
+- `[:phoenix_replay, :recording, :discarded]` with a `reason` of `:not_interactive`, `:not_sampled`, or `:max_memory` for a recording [held for its visit](#which-sessions-are-kept) until the buffer needed the room,
 - `[:phoenix_replay, :recording, :failed]` when saving gave up.
 
 Each event fires after the session has left the buffer, so handlers see the finished state. `[:phoenix_replay, :collector, :exception]` reports a collector that raised; see [Telemetry and Logs](telemetry-and-logs.md#failures).

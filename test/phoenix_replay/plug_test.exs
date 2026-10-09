@@ -13,8 +13,10 @@ defmodule PhoenixReplay.PlugTest do
   @endpoint PhoenixReplay.Test.Endpoint
 
   setup context do
+    previous = Application.get_env(:phoenix_replay, :client)
+
     on_exit(fn ->
-      Application.delete_env(:phoenix_replay, :client)
+      Application.put_env(:phoenix_replay, :client, previous)
       Storage.clear(Fixtures.storage())
     end)
 
@@ -34,6 +36,7 @@ defmodule PhoenixReplay.PlugTest do
   defp kept(conn), do: get_session(conn, "phoenix_replay")
 
   test "keeps only the visit without :client" do
+    configure([])
     conn = request("/?utm_source=x", [{"accept-language", "en"}])
 
     assert %{"visit" => %{"id" => id, "seen" => seen}} = kept = kept(conn)
@@ -42,6 +45,7 @@ defmodule PhoenixReplay.PlugTest do
   end
 
   test "keeps one visit across requests, rewriting the session only as time passes" do
+    configure([])
     first = request("/")
     %{"visit" => %{"id" => id}} = kept = kept(first)
 
@@ -176,7 +180,8 @@ defmodule PhoenixReplay.PlugTest do
   end
 
   test "recordings carry the visit's context", %{sessions: sessions} do
-    configure(headers: ["accept-language"], landing: [params: [:utm]])
+    # A short visit, so the session held for its decision is decided as the test ends.
+    configure(headers: ["accept-language"], landing: [params: [:utm], timeout: 50])
 
     conn =
       build_conn()

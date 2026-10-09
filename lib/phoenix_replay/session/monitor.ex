@@ -18,6 +18,12 @@ defmodule PhoenixReplay.Session.Monitor do
   handler observes the finished state. Sessions being saved are marked in
   the buffer, so a restarted monitor leaves them to their task.
 
+  Recordings are kept by visit: a recording is saved when it or another
+  recording of its visit is kept, and a recording that would be discarded
+  is held until its visit is kept or ends; see
+  `PhoenixReplay.Session.Visits`. A recording without a visit is decided
+  alone.
+
   On shutdown the monitor waits for saves and flushes in flight. On start
   it re-attaches to every session already in
   `PhoenixReplay.Session.Buffer`, so a restart loses no recordings.
@@ -27,11 +33,13 @@ defmodule PhoenixReplay.Session.Monitor do
 
   require Logger
 
-  alias PhoenixReplay.{Catalog, Storage, Telemetry}
-  alias PhoenixReplay.Session.{Buffer, Finalizer, Flusher, TailSampling}
+  alias PhoenixReplay.{Catalog, Config, Storage, Telemetry}
+  alias PhoenixReplay.Session.{Buffer, Finalizer, Flusher, TailSampling, Visits}
 
   @max_reason 4_000
   @max_tick 1_000
+  # The longest wait between checks for visits that ended.
+  @max_sweep 5_000
   @drain_timeout 25_000
 
   @doc "Starts the monitor registered under its module name."
@@ -54,7 +62,10 @@ defmodule PhoenixReplay.Session.Monitor do
   @impl true
   def init(_opts) do
     Process.flag(:trap_exit, true)
-    {:ok, %{sessions: %{}, tracks: %{}, tasks: %{}, tick: nil}, {:continue, :recover}}
+
+    {:ok,
+     %{sessions: %{}, tracks: %{}, tasks: %{}, tick: nil, visits: Visits.new(), sweep?: false},
+     {:continue, :recover}}
   end
 
   @impl true
@@ -77,6 +88,17 @@ defmodule PhoenixReplay.Session.Monitor do
       end)
 
     {:noreply, Enum.reduce(Map.keys(state.tracks), state, &keep_ticking(&2, &1))}
+  end
+
+  def handle_info(:sweep, state) do
+    {visits, ended} = Visits.expire(state.visits, now())
+
+    for {id, reason} <- ended do
+      close(id)
+      Telemetry.discarded(id, reason)
+    end
+
+    {:noreply, sweep(%{state | visits: visits, sweep?: false})}
   end
 
   def handle_info({:DOWN, ref, :process, pid, reason}, state) do
@@ -106,15 +128,27 @@ defmodule PhoenixReplay.Session.Monitor do
   defp watch(state, pid, id) do
     # A session's configuration is fixed when it opens, so each check reads
     # it from here rather than copying it out of the buffer.
-    {flush, keep} =
+    {flush, keep, timeout} =
       case Buffer.config(id) do
-        {:ok, config} -> {if(Storage.chunked?(config.storage), do: config.flush), config.keep}
-        :error -> {nil, nil}
+        {:ok, config} ->
+          {if(Storage.chunked?(config.storage), do: config.flush), config.keep,
+           Config.visit_timeout(config)}
+
+        :error ->
+          {nil, nil, nil}
       end
+
+    visit = Buffer.visit(id)
+
+    visits =
+      if visit && timeout,
+        do: Visits.started(state.visits, visit, id, timeout),
+        else: state.visits
 
     track = %{
       flush: flush,
       keep: keep,
+      visit: visit,
       observation: TailSampling.new(),
       checked: -1,
       committed?: Buffer.flushed?(id),
@@ -127,8 +161,10 @@ defmodule PhoenixReplay.Session.Monitor do
       %{
         state
         | sessions: Map.put(state.sessions, Process.monitor(pid), id),
-          tracks: Map.put(state.tracks, id, track)
-      },
+          tracks: Map.put(state.tracks, id, track),
+          visits: visits
+      }
+      |> sweep(),
       id
     )
   end
@@ -157,7 +193,12 @@ defmodule PhoenixReplay.Session.Monitor do
 
   defp check(state, id, track) do
     if due?(Buffer.pending_count(id), track) do
-      track = observe(track, id)
+      committed? = track.committed?
+      track = observe(track, id, Visits.kept?(state.visits, track.visit))
+      # A recording kept on its own keeps its visit, saving what was held for it.
+      state =
+        if track.committed? and not committed?, do: keep_visit(state, track.visit), else: state
+
       if track.committed?, do: start_flush(state, id, track), else: put_track(state, id, track)
     else
       state
@@ -169,9 +210,10 @@ defmodule PhoenixReplay.Session.Monitor do
   defp due?(pending, %{flush: flush} = track),
     do: pending >= flush.events or now() - track.flushed_at >= flush.interval
 
-  defp observe(%{committed?: true} = track, _id), do: track
+  defp observe(%{committed?: true} = track, _id, _visit_kept?), do: track
+  defp observe(track, _id, true), do: %{track | committed?: true}
 
-  defp observe(track, id) do
+  defp observe(track, id, false) do
     events = Buffer.pending(id, track.checked)
 
     observation =
@@ -211,27 +253,108 @@ defmodule PhoenixReplay.Session.Monitor do
 
   defp finalize(state, id) do
     state = %{state | tracks: Map.delete(state.tracks, id)}
+    visit = Buffer.visit(id)
 
     with {:ok, recording} <- Buffer.fetch(id),
-         {:ok, config} <- Buffer.config(id),
-         :keep <- keep(id, recording, config) do
-      :ok = Buffer.mark_saving(id)
+         {:ok, config} <- Buffer.config(id) do
+      case decide(state, id, visit, recording, config) do
+        :keep ->
+          state
+          |> visit_ended(visit, id)
+          |> save(id, recording, config)
+          |> keep_visit(visit)
 
-      task =
-        Task.Supervisor.async_nolink(PhoenixReplay.TaskSupervisor, Finalizer, :finish, [
-          recording,
-          config
-        ])
+        {:discard, reason} when visit != nil ->
+          hold(state, visit, id, reason, config)
 
-      %{state | tasks: Map.put(state.tasks, task.ref, %{kind: :save, id: id, task: task})}
+        {:discard, reason} ->
+          close(id)
+          Telemetry.discarded(id, reason)
+          state
+      end
     else
-      {:discard, reason} ->
-        close(id)
-        Telemetry.discarded(id, reason)
-        state
+      :error -> state
+    end
+  end
 
-      :error ->
-        state
+  defp decide(state, id, visit, recording, config) do
+    if Visits.kept?(state.visits, visit), do: :keep, else: keep(id, recording, config)
+  end
+
+  defp save(state, id, recording, config) do
+    :ok = Buffer.mark_saving(id)
+
+    task =
+      Task.Supervisor.async_nolink(PhoenixReplay.TaskSupervisor, Finalizer, :finish, [
+        recording,
+        config
+      ])
+
+    %{state | tasks: Map.put(state.tasks, task.ref, %{kind: :save, id: id, task: task})}
+  end
+
+  # Keeping a visit saves the recordings held for it.
+  defp keep_visit(state, nil), do: state
+
+  defp keep_visit(state, visit) do
+    {visits, held} = Visits.keep(state.visits, visit)
+
+    Enum.reduce(held, %{state | visits: visits}, fn id, acc ->
+      with {:ok, recording} <- Buffer.fetch(id),
+           {:ok, config} <- Buffer.config(id) do
+        save(acc, id, recording, config)
+      else
+        :error -> acc
+      end
+    end)
+  end
+
+  defp visit_ended(state, nil, _id), do: state
+
+  defp visit_ended(state, visit, id),
+    do: %{state | visits: Visits.ended(state.visits, visit, id, now())}
+
+  # Its events stay buffered until the visit decides.
+  defp hold(state, visit, id, reason, config) do
+    :ok = Buffer.hold(id)
+    Catalog.broadcast_change()
+
+    %{state | visits: Visits.hold(state.visits, visit, id, reason, now())}
+    |> evict(config.max_memory)
+    |> sweep()
+  end
+
+  # Held recordings count towards `:max_memory`: those of the visit idle
+  # longest go first.
+  defp evict(state, nil), do: state
+
+  defp evict(state, max_memory) do
+    with true <- Buffer.memory() > max_memory,
+         {visits, [_first | _rest] = released} <- Visits.release_oldest(state.visits) do
+      for {id, _reason} <- released do
+        close(id)
+        Telemetry.discarded(id, :max_memory)
+      end
+
+      evict(%{state | visits: visits}, max_memory)
+    else
+      _within -> state
+    end
+  end
+
+  # Checks for ended visits while any is open, as often as the shortest
+  # timeout among them needs, and at least every few seconds.
+  defp sweep(%{sweep?: true} = state), do: state
+
+  defp sweep(state) do
+    if Visits.any?(state.visits) do
+      period =
+        state.visits |> Map.values() |> Enum.map(& &1.timeout) |> Enum.min() |> min(@max_sweep)
+
+      Process.send_after(self(), :sweep, period)
+      %{state | sweep?: true}
+    else
+      state
     end
   end
 

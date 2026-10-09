@@ -9,9 +9,11 @@ defmodule PhoenixReplay.Telemetry do
       Measurements: `%{event_count: integer, duration_ms: integer}`.
       Metadata: `%{id: String.t(), view: module}`.
     * `[:phoenix_replay, :recording, :discarded]` — a session ended and was
-      not saved, because it had no user interaction or was not sampled by
-      `keep: [rate: ...]`. Metadata: `%{id: String.t(), reason:
-      :not_interactive | :not_sampled}`.
+      not saved, because it had no user interaction, was not sampled by
+      `keep: [rate: ...]`, or was held for its visit until `:max_memory`
+      needed the room; see `PhoenixReplay.Session.Visits`. Metadata:
+      `%{id: String.t(), reason: :not_interactive | :not_sampled |
+      :max_memory}`.
     * `[:phoenix_replay, :recording, :failed]` — a recording could not be
       saved and was dropped. Metadata: `%{id: String.t(), reason: term}`.
     * `[:phoenix_replay, :recording, :recovered]` — a session whose node
