@@ -192,15 +192,15 @@ defmodule ExampleWeb.Catalog.Live do
         <.new_recordings count={3} />
         <.recording_list
           live
-          recordings={Enum.filter(@summaries, & &1.live?)}
+          visits={@summaries |> Enum.filter(& &1.live?) |> PhoenixReplay.Recording.Visit.group()}
           now={@now}
-          path={&("#" <> &1.id)}
+          path={&("#" <> &1.key)}
           filter_path={&("?" <> URI.encode_query(%{&1 => &2}))}
         />
         <.recording_list
-          recordings={Enum.reject(@summaries, & &1.live?)}
+          visits={@summaries |> Enum.reject(& &1.live?) |> PhoenixReplay.Recording.Visit.group()}
           now={@now}
-          path={&("#" <> &1.id)}
+          path={&("#" <> &1.key)}
           filter_path={&("?" <> URI.encode_query(%{&1 => &2}))}
           delete="delete"
         />

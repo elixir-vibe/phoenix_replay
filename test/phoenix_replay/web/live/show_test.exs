@@ -384,7 +384,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   test "redacts a live session before showing it, and hands it to the frame" do
     buffer_live("live-1")
     html = build_conn() |> get("/replay/live-1") |> html_response(200)
-    assert html =~ "Redacting the session"
+    assert html =~ "Redacting the recording"
     refute html =~ "4242"
 
     {:ok, view, _html} = live(build_conn(), "/replay/live-1")
@@ -824,24 +824,81 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       assert "google" in values
     end
 
-    test "links the sessions of one browser tab" do
-      for {id, at} <- [{"first", 1}, {"second", 2}, {"third", 3}] do
-        navigated_from = if id != "first", do: "http://localhost/counter"
-        recording = Fixtures.counter_recording(id: id, connected_at: at)
-
-        Storage.save(Fixtures.storage(), %{
-          recording
-          | client: client(nil, "tab-9", navigated_from)
-        })
-      end
-
+    test "lists the pages of the visit, each opening its page" do
+      save_visit([{"first", 1}, {"second", 5_000}, {"third", 9_000}])
       {:ok, view, _html} = live(build_conn(), "/replay/second")
 
-      assert open_tab(view, "Visit") =~ "Came from"
-      assert view |> element("#replay-journey") |> render() =~ "Session 2 of 3 in this tab"
-      assert has_element?(view, ~s(#replay-journey a[href="/replay/first"]), "Previous")
-      assert has_element?(view, ~s(#replay-journey a[href="/replay/third"]), "Next")
-      assert has_element?(view, ~s(#replay-journey a[href="/replay?tab=tab-9"]))
+      assert view |> element("#replay-pages") |> render() =~ "Page 2 of 3"
+      assert has_element?(view, ~s(#replay-page-second[aria-current="page"]))
+
+      open_tab(view, "Visit")
+      assert view |> element("#replay-visit-pages") |> render() =~ "/counter"
+
+      view |> element("#replay-page-third") |> render_click()
+      assert has_element?(view, ~s(#replay-page-third[aria-current="page"]))
+      assert view |> element("#replay-pages") |> render() =~ "Page 3 of 3"
+    end
+  end
+
+  describe "a visit" do
+    test "plays on from one page to the next" do
+      # The second page opened while the first was still open, so it follows at once.
+      save_visit([{"first", 1}, {"second", 1_500}])
+      {:ok, view, _html} = live(build_conn(), "/replay/first")
+
+      render_click(view, "jump", %{"to" => "end"})
+      render_click(view, "toggle")
+
+      assert eventually(fn ->
+               has_element?(view, ~s(#replay-page-second[aria-current="page"]))
+             end)
+
+      assert view |> element("#replay-pages") |> render() =~ "Page 2 of 2"
+    end
+
+    test "opens a page still recording, from a saved page of the visit" do
+      save_visit([{"saved", 1}])
+
+      running = %{
+        Fixtures.counter_recording(id: "running", connected_at: 9_000)
+        | client: %Client{visit: "visit-9"}
+      }
+
+      :ok = Buffer.open(running, self(), Config.load())
+
+      running.events
+      |> Enum.with_index()
+      |> Enum.each(fn {event, seq} -> Buffer.append("running", seq, event) end)
+
+      on_exit(fn -> Buffer.close("running") end)
+
+      {:ok, view, _html} = live(build_conn(), "/replay/saved")
+      assert view |> element("#replay-pages") |> render() =~ "Page 1 of 2"
+
+      view |> element("#replay-page-running") |> render_click()
+      assert has_element?(view, ~s(#replay-page-running[aria-current="page"]))
+    end
+  end
+
+  defp save_visit(pages) do
+    for {id, at} <- pages do
+      recording = Fixtures.counter_recording(id: id, connected_at: at)
+      Storage.save(Fixtures.storage(), %{recording | client: %Client{visit: "visit-9"}})
+    end
+  end
+
+  # Playback runs on timers; this waits for it, bounded.
+  defp eventually(check, tries \\ 100) do
+    cond do
+      check.() ->
+        true
+
+      tries == 0 ->
+        false
+
+      true ->
+        Process.sleep(20)
+        eventually(check, tries - 1)
     end
   end
 end

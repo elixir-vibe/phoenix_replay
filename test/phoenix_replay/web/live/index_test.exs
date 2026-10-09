@@ -28,7 +28,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
   test "shows an empty state" do
     {:ok, _view, html} = live(build_conn(), "/replay")
-    assert html =~ "No recordings yet."
+    assert html =~ "No visits yet."
     refute html =~ "Delete all recordings"
   end
 
@@ -303,12 +303,12 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
       view |> render() |> LazyHTML.from_document() |> LazyHTML.query("#recordings-activity a")
 
     assert Enum.count(bars) in 12..13
-    assert has_element?(view, ~s(#recordings-activity a[aria-label="1 session, 0 with errors"]))
+    assert has_element?(view, ~s(#recordings-activity a[aria-label="1 visit, 0 with errors"]))
     refute has_element?(view, "#recordings-sampling")
 
     href =
       view
-      |> element(~s(#recordings-activity a[aria-label="1 session, 0 with errors"]))
+      |> element(~s(#recordings-activity a[aria-label="1 visit, 0 with errors"]))
       |> render()
       |> LazyHTML.from_fragment()
       |> LazyHTML.attribute("href")
@@ -325,7 +325,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
     {:ok, view, _html} = live(build_conn(), "/replay?page=2")
     view |> element("button", "Delete all recordings") |> render_click()
-    assert render(view) =~ "No recordings yet."
+    assert render(view) =~ "No visits yet."
   end
 
   test "deletes one or all recordings" do

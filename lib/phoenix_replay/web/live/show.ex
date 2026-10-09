@@ -1,10 +1,14 @@
 defmodule PhoenixReplay.Web.Live.Show do
   @moduledoc """
-  Plays back a recording.
+  Plays back a visit, from the page of the recording it opens with.
 
   Playback is driven by the server: each step schedules the next one after
   the recorded gap divided by the speed, and tells the frame which event to
-  show through `PhoenixReplay.Web.Player.Channel`. The `Scrubber` hook only maps
+  show through `PhoenixReplay.Web.Player.Channel`. At the end of a page,
+  playback waits out the time until the visit's next page started, divided
+  by the speed, and hands the frame that page's recording; see
+  `PhoenixReplay.Web.Player.Pages`. The scrubber, the event list and the
+  pointer, client state and marks are the page's. The `Scrubber` hook only maps
   pointer positions to events and animates the thumb between them.
 
   A session that is still running is redacted before it is shown, which
@@ -28,14 +32,14 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.{Export, Layout, State}
-  import PhoenixReplay.Web.Components.Player.{EventList, Frame, Header, Playback, Visit}
+  import PhoenixReplay.Web.Components.Player.{EventList, Frame, Header, Pages, Playback, Visit}
 
   alias PhoenixReplay.Recording.{Client, Event, Filter, PointerTrack, Timeline}
   alias PhoenixReplay.{Catalog, Export, Migration}
   alias PhoenixReplay.Export.Options
   alias PhoenixReplay.Web.{Context, Highlight, Layouts, Params}
   alias PhoenixReplay.Web.Export.Download
-  alias PhoenixReplay.Web.Player.{Channel, Events, Journey, Shortcuts}
+  alias PhoenixReplay.Web.Player.{Channel, Events, Pages, Shortcuts}
 
   @speeds [1, 2, 5, 10]
   # The most sessions of one browser tab the player links between.
@@ -54,7 +58,12 @@ defmodule PhoenixReplay.Web.Live.Show do
         assets: Layouts.dashboard_assets(context),
         context: context,
         id: id,
+        # The recording the frame opened with; it is handed any other.
+        frame_id: id,
         recording: nil,
+        pages: nil,
+        # The page playback waits to go on to, between pages.
+        gap: nil,
         first_render: 0,
         live?: Catalog.live?(id),
         frame_ready?: false,
@@ -169,7 +178,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       first_render: Timeline.first_render_index(recording),
       marks: Events.marks(recording),
       dropped: Events.dropped_count(recording),
-      journey: Journey.of(socket, recording),
+      pages: Pages.of(socket, recording),
       code_changes: PhoenixReplay.Recording.Code.changes(recording.code),
       migrations: migrations_applied(recording)
     )
@@ -179,13 +188,51 @@ defmodule PhoenixReplay.Web.Live.Show do
     |> at_time(socket.assigns.start_time)
   end
 
-  # A live session's frame waits for the redacted recording from the player.
-  defp hand_over(%{assigns: %{live?: true, frame_ready?: true}} = socket) do
+  # A live session's frame waits for the redacted recording from the
+  # player, and a frame shows another page of the visit when handed it.
+  defp hand_over(%{assigns: %{frame_ready?: true} = assigns} = socket)
+       when assigns.live? or assigns.id != assigns.frame_id do
     :ok = Channel.load(socket.assigns.channel, socket.assigns.recording)
     socket
   end
 
   defp hand_over(socket), do: socket
+
+  # Opens another page of the visit, at its start.
+  defp switch_page(socket, id) do
+    %{context: context} = socket.assigns
+
+    with {:ok, recording} <- Catalog.fetch(context.config, id),
+         true <- Context.allowed?(socket, :view, recording) do
+      socket
+      |> assign(id: id, live?: Catalog.live?(id), start_at: nil, start_time: nil, gap: nil)
+      |> assign(pinned: nil, unrecorded: [], export: nil)
+      |> loaded(recording)
+      |> then(&if(&1.assigns.live?, do: &1, else: follow_export(&1)))
+    else
+      _missing -> put_flash(socket, :error, "That page of the visit could not be opened")
+    end
+  end
+
+  # At the end of a page, playback goes on to the visit's next one, after
+  # the time between them; after the last page, it stops.
+  defp end_of_page(socket) do
+    %{pages: pages, recording: recording, speed: speed} = socket.assigns
+
+    with %{} = pages <- pages,
+         %{} = next <- Pages.next(pages, recording.id) do
+      gap = Pages.gap(Pages.page(pages, recording.id), next)
+      ref = make_ref()
+      timer = Process.send_after(self(), {:next_page, ref, next.id}, div(gap, speed))
+
+      assign(socket,
+        playing: %{timer: timer, ref: ref, since: now()},
+        gap: %{page: next, ms: gap}
+      )
+    else
+      _last -> assign(socket, :playing, nil)
+    end
+  end
 
   @impl true
   def handle_async(:recording, {:ok, {:ok, recording}}, socket) do
@@ -270,6 +317,13 @@ defmodule PhoenixReplay.Web.Live.Show do
       nil -> {:noreply, socket}
       found -> {:noreply, socket |> pause() |> seek(found)}
     end
+  end
+
+  # Opens another page of the visit, from the pages strip or the Visit tab.
+  def handle_event("page", %{"id" => id}, %{assigns: %{pages: %{} = pages}} = socket) do
+    if Pages.page(pages, id) && id != socket.assigns.id,
+      do: {:noreply, socket |> pause() |> switch_page(id)},
+      else: {:noreply, socket}
   end
 
   def handle_event("shortcuts", _params, socket),
@@ -391,14 +445,21 @@ defmodule PhoenixReplay.Web.Live.Show do
         do: seek(socket, index + 1),
         else: assign(socket, :at, socket.assigns.next_at)
 
-    # Events can share a time; only the end of the recording stops playing.
+    # Events can share a time; only the end of the page moves on.
     if socket.assigns.index < Timeline.last_index(timeline) or
          socket.assigns.next_at > socket.assigns.at,
        do: {:noreply, schedule(socket)},
-       else: {:noreply, assign(socket, :playing, nil)}
+       else: {:noreply, end_of_page(socket)}
   end
 
   def handle_info({:advance, _stale}, socket), do: {:noreply, socket}
+
+  def handle_info({:next_page, ref, id}, %{assigns: %{playing: %{ref: ref}}} = socket) do
+    socket = socket |> assign(playing: nil) |> switch_page(id)
+    {:noreply, if(socket.assigns.id == id, do: play(socket), else: socket)}
+  end
+
+  def handle_info({:next_page, _stale, _id}, socket), do: {:noreply, socket}
 
   def handle_info({Channel, {:unrecorded, keys}}, socket),
     do: {:noreply, assign(socket, :unrecorded, keys)}
@@ -485,16 +546,16 @@ defmodule PhoenixReplay.Web.Live.Show do
     Process.cancel_timer(timer)
     %{at: at, next_at: next_at, speed: speed} = socket.assigns
     reached = min(at + (now() - since) * speed, next_at)
-    assign(socket, at: reached, playing: nil)
+    assign(socket, at: reached, playing: nil, gap: nil)
   end
 
   defp pause(socket), do: socket
 
-  defp redaction_label(nil), do: "Redacting the session before showing it…"
-  defp redaction_label({_done, 0}), do: "Redacting the session before showing it…"
+  defp redaction_label(nil), do: "Redacting the recording before showing it…"
+  defp redaction_label({_done, 0}), do: "Redacting the recording before showing it…"
 
   defp redaction_label({done, total}),
-    do: "Redacting the session before showing it… #{done} / #{total} events"
+    do: "Redacting the recording before showing it… #{done} / #{total} events"
 
   defp redaction_percent({done, total}) when total > 0, do: Float.round(done / total * 100, 1)
   defp redaction_percent(_progress), do: 0.0

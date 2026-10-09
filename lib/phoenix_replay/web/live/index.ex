@@ -434,7 +434,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         </:action>
       </.empty_state>
 
-      <.empty_state :if={not @any?} title="No recordings yet.">
+      <.empty_state :if={not @any?} title="No visits yet.">
         <:icon><.icon name="lucide:video" class="size-10" /></:icon>
         Add <code class="font-mono text-ink">on_mount: [PhoenixReplay.Recorder]</code>
         to a <code class="font-mono text-ink">live_session</code>

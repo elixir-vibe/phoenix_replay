@@ -57,7 +57,7 @@ defmodule PhoenixReplay.Web.Components.Player.Header do
             navigate={@back}
             class="inline-flex items-center gap-1 rounded-md py-2 pr-1 text-sm text-muted hover:text-ink"
           >
-            <.icon name="lucide:chevron-left" class="size-4" /> Recordings
+            <.icon name="lucide:chevron-left" class="size-4" /> Visits
           </.link>
           <span class="h-5 w-px bg-line" aria-hidden="true"></span>
           <h1 class="truncate text-[15px] font-semibold">{inspect(@recording.view)}</h1>

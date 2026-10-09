@@ -30,7 +30,7 @@ A recording is a list of `PhoenixReplay.Recording.Event` structs, each with a mi
 
 The recording also keeps the view module, URL, sanitized params and session, and the start time. Everything passes through the configured sanitizer first; see [Privacy and Security](privacy-and-security.md).
 
-## Browser and journey
+## Browser and tab
 
 A recording can also say which browser it came from and where the user went. The server cannot see these alone, so they are sent by the browser, and recordings simply leave them out when it does not send them.
 
@@ -54,7 +54,7 @@ socket "/live", Phoenix.LiveView.Socket,
 - **the media settings** — the color scheme, reduced motion, contrast, the kind of pointer and whether it hovers, as the page's CSS saw them, with the viewport. The replayed page takes them, so its `prefers-color-scheme`, `prefers-reduced-motion`, `prefers-contrast`, `pointer` and `hover` rules, and Tailwind's `dark:`, `motion-reduce:`, `contrast-more:`, `pointer-coarse:` and `hover:` classes, show what the user saw: a phone session replays without hover styles. Stylesheets from another origin, and script that calls `matchMedia`, still see the viewer's. The Visit tab lists them.
 - **resizes** — a resized window or a rotated phone is recorded as a `:viewport` event when it settles, a fifth of a second after it stops changing, as long as `replayRecorder` runs; see [Pointer, touches and scrolling](#pointer-touches-and-scrolling). The viewport also travels with each click and key press, which catches changes without `replayRecorder`. Your `handle_event/3` receives the extra `"_replay"` param; recorded params leave it out.
 - **the user agent** — shown in the player as, for example, "Safari on iOS".
-- **the tab** — an id kept in the tab's `sessionStorage`. Navigating to another LiveView starts a new recording; the tab id ties them into one journey, and the player links the previous and next sessions of the tab.
+- **the tab** — an id kept in the tab's `sessionStorage`, shared by the recordings made in that tab; `?tab=` lists them. Navigating to another LiveView starts a new recording; the [visit](#visits) ties a person's recordings together, across tabs, and the player plays them in order.
 - **the previous page** — the URL of the LiveView that live-navigated here (`client.navigated_from`).
 
 ### Visit context

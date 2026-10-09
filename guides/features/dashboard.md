@@ -69,6 +69,8 @@ Filters are URL parameters, such as `/admin/replay?view=MyAppWeb.CheckoutLive&ev
 
 ## Player
 
+The player plays a [visit](recording.md#visits), page by page: each page is one of its recordings, and when a page ends, playback waits out the real time until the next page started, divided by the playback speed, then goes on with it. A strip above the controls shows the visit's pages on its clock, each as long as it lasted; pages that overlap, as tabs opened side by side do, sit in lanes of their own. Click a page to open it. The timeline, the event list, the pointer, client state and marks are the page's own.
+
 The header names the view, the page and when the session started, with its duration and event count. When the session had errors, **"2 errors · jump to first"** takes you to the first one. **Copy link to 0:07.25** copies a link to the current moment: `/admin/replay/<id>?at=<index>&t=<ms>` opens the player at that event, and at the time `t` in milliseconds when it falls between that event and the next.
 
 The replayed page sits under a bar showing its URL at that moment. When the browser's viewport was recorded, the page renders at that size, and the bar shows its orientation, size and scale. That chip opens the **View** menu: fit the page to the window or show it at its actual size in a scrolling box, or **Rotate** the device a quarter turn, to look at it the other way round: the page keeps the layout it was recorded in, with its pointer and scrolling, and the device turns back when the recording next turns. When the user turned their phone, the page takes its new layout at once and turns into place from where the device was, as a phone does.
@@ -79,7 +81,7 @@ The panel beside it has three tabs:
 
 - **Events** groups events by interaction: a mount, a user event, a navigation or a message, with the renders, component updates, [queries, requests and logs](telemetry-and-logs.md) it caused under it. Filter them by text, or hide a kind with its chip. A pane under the list describes the current event in full: a user event's params, the assigns a render or component set, a navigation's URL, a query's SQL, duration and metadata, a log, a crash, client state or a viewport. Rows stay one line, so playback moves only the highlight. Pin the pane to keep an event's details while playback goes on, and drag the divider above it to resize it; the browser remembers the height.
 - **State** lists the assigns at that moment, marking the ones the selected event set. Open one to see its full value.
-- **Visit** shows the device, the other sessions of the same browser tab, the page the user came from, and how the visit started: its campaign, referrer, landing page and kept headers.
+- **Visit** shows the device, the visit's pages, each opening its page, the page the user came from, and how the visit started: its campaign, referrer, landing page and kept headers.
 
 When the session recorded the pointer, it is drawn over the replay: the cursor, moved between samples with a short trail, a ripple where it pressed, on the pressed element when the replayed page has it, and a fingertip for each touch. The replayed page scrolls as the user's did, and stays there: the wheel does not move it. Turn off **Follow scroll** in the **View** menu to scroll it yourself. The cursor button in the frame's bar hides or shows them. See [Pointer, touches and scrolling](recording.md#pointer-touches-and-scrolling).
 

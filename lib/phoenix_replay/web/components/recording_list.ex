@@ -159,12 +159,12 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
       )
 
     ~H"""
-    <section id="recordings-activity" aria-label="Sessions over time" class="mb-5">
+    <section id="recordings-activity" aria-label="Visits over time" class="mb-5">
       <div class="flex h-14 items-end gap-px">
         <.link
           :for={bar <- @bars}
           patch={bar.path}
-          aria-label={"#{Format.count(bar.sessions, "session")}, #{bar.errors} with errors"}
+          aria-label={"#{Format.count(bar.sessions, "visit")}, #{bar.errors} with errors"}
           data-tip
           class="group/tip flex h-full min-w-0 flex-1 flex-col justify-end rounded-sm hover:bg-hover/50 focus-visible:bg-hover/50"
         >
@@ -186,7 +186,7 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
             <.local_time id={"recordings-activity-#{bar.index}"} at={bar.start}>
               {Format.started(bar.start)} UTC
             </.local_time>
-            · {Format.count(bar.sessions, "session")}<span :if={bar.errors > 0}>, {bar.errors} with errors</span>
+            · {Format.count(bar.sessions, "visit")}<span :if={bar.errors > 0}>, {bar.errors} with errors</span>
           </span>
         </.link>
       </div>

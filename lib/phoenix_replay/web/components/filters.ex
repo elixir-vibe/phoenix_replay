@@ -64,12 +64,12 @@ defmodule PhoenixReplay.Web.Components.Filters do
       >
         <label class={[@field, "min-w-0 flex-[1_1_14rem]"]}>
           <.icon name="lucide:search" class="size-4 shrink-0 text-muted" />
-          <span class="sr-only">Search by URL, session id or event</span>
+          <span class="sr-only">Search by URL, id or event</span>
           <input
             type="search"
             name="q"
             value={@filter.query}
-            placeholder="Search URL, session id or event"
+            placeholder="Search URL, id or event"
             phx-debounce="300"
             data-shortcut="/"
             class="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-faint"
@@ -205,7 +205,7 @@ defmodule PhoenixReplay.Web.Components.Filters do
     <div
       id="recording-filter-time-picker"
       role="dialog"
-      aria-label="When sessions started"
+      aria-label="When visits started"
       phx-click-away="close_filter"
       phx-window-keydown="close_filter"
       phx-key="Escape"
@@ -420,7 +420,7 @@ defmodule PhoenixReplay.Web.Components.Filters do
         </li>
       </ul>
       <p :if={@field.control == :choice and @shown == []} class="px-2.5 py-2 text-muted">
-        No recordings here have one{if @typed != "", do: " like that"}.
+        No visits here have one{if @typed != "", do: " like that"}.
         <span :if={@typed != ""}>Press Enter to filter by it anyway.</span>
       </p>
     </div>

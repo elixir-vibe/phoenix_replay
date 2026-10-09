@@ -21,6 +21,24 @@ defmodule PhoenixReplay.TraceTest do
   defp ids(filters),
     do: filters |> Trace.find() |> Enum.map(& &1.id) |> Enum.filter(&(&1 in ~w(traced failing)))
 
+  test "reads a visit's recordings in the order they started, and finds them by visit" do
+    for {id, at} <- [{"page-2", 20}, {"page-1", 10}] do
+      recording = Fixtures.counter_recording(id: id, connected_at: at)
+
+      :ok =
+        Storage.save(Fixtures.storage(), %{
+          recording
+          | client: %PhoenixReplay.Recording.Client{visit: "visit-t"}
+        })
+    end
+
+    assert {:ok, [%{id: "page-1"}, %{id: "page-2"}]} = Trace.visit("visit-t")
+    # A recording without a visit is a visit of its own.
+    assert {:ok, [%{id: "traced"}]} = Trace.visit("traced")
+    assert Trace.visit("nothing") == {:error, :not_found}
+    assert ["page-2", "page-1"] = Enum.map(Trace.find(visit: "visit-t"), & &1.id)
+  end
+
   test "finds recordings by view, error and text" do
     assert ids(errors: true) == ["failing"]
     assert ids(view: PhoenixReplay.Test.Live.Form) == ["failing"]

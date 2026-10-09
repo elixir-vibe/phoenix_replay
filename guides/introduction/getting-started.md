@@ -8,7 +8,7 @@ PhoenixReplay needs Elixir 1.18 or later and Phoenix LiveView 1.1 or later.
 mix igniter.install phoenix_replay
 ```
 
-The installer imports PhoenixReplay's formatter settings, mounts the dashboard at `/dev/replay` behind your `:dev_routes` flag (like Phoenix's LiveDashboard), turns recording off in `config/test.exs`, and ignores the local recordings directory. It also sends [browser context](../features/recording.md#browser-and-journey) to recordings: it adds `:user_agent` to your LiveView socket's `connect_info`, passes PhoenixReplay's client helpers to `LiveSocket` and starts `replayRecorder` in `assets/js/app.js` when that file still has the setup Phoenix generates, and adds `PhoenixReplay.Plug` to your `:browser` pipeline for [visit context](../features/recording.md#visit-context). It then prints how to record a live session, which is the step below.
+The installer imports PhoenixReplay's formatter settings, mounts the dashboard at `/dev/replay` behind your `:dev_routes` flag (like Phoenix's LiveDashboard), turns recording off in `config/test.exs`, and ignores the local recordings directory. It also sends [browser context](../features/recording.md#browser-and-tab) to recordings: it adds `:user_agent` to your LiveView socket's `connect_info`, passes PhoenixReplay's client helpers to `LiveSocket` and starts `replayRecorder` in `assets/js/app.js` when that file still has the setup Phoenix generates, and adds `PhoenixReplay.Plug` to your `:browser` pipeline for [visit context](../features/recording.md#visit-context). It then prints how to record a live session, which is the step below.
 
 ## Install manually
 
@@ -31,7 +31,7 @@ Add `:phoenix_replay` to `import_deps` in `.formatter.exs`, so `mix format` leav
 
 Turn recording off in `config/test.exs`; see [Testing](#testing).
 
-Optionally, send the browser's viewport, user agent and tab with recordings, as [Browser and journey](../features/recording.md#browser-and-journey) describes, and start `replayRecorder` to record form input and, with `pointer: true`, the pointer; see [Client state](../features/recording.md#client-state).
+Optionally, send the browser's viewport, user agent and tab with recordings, as [Browser and tab](../features/recording.md#browser-and-tab) describes, and start `replayRecorder` to record form input and, with `pointer: true`, the pointer; see [Client state](../features/recording.md#client-state).
 
 ## Record a live session
 
