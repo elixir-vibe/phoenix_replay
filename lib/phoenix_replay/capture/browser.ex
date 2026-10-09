@@ -94,7 +94,8 @@ defmodule PhoenixReplay.Capture.Browser do
       tab: tab(replay),
       navigated_from: navigated_from((connect_params || %{})["_live_referer"]),
       headers: Map.get(kept, "headers", %{}),
-      landing: landing(kept["landing"])
+      landing: landing(kept["landing"]),
+      visit: visit(kept["visit"])
     }
   end
 
@@ -108,6 +109,9 @@ defmodule PhoenixReplay.Capture.Browser do
   end
 
   defp landing(_landing), do: nil
+
+  defp visit(%{"id" => id}) when is_binary(id), do: id
+  defp visit(_visit), do: nil
 
   @doc "The event name the browser sends viewport changes as, while it is recorded."
   @spec viewport_event() :: String.t()

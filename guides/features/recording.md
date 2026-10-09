@@ -78,9 +78,19 @@ end
 
 - **`headers`** — an allowlist, refreshed on each request, each value cut to 256 characters. `cookie`, `authorization` and `proxy-authorization` are refused.
 - **`landing`** — the visit's first `GET`: its path, time, tracked query params and `Referer`. `:utm` and `:click_ids` expand to the usual parameter names. The referrer loses its query string unless `referrer: :full`, since query strings often carry tokens.
-- **Attribution** is first-touch: the landing is kept for the whole visit. `attribution: :last` replaces it whenever a request carries tracked params, to see which campaign brought someone back.
+- **Attribution** is first-touch: the landing is the visit's first page. `attribution: :last` moves it to the latest page that carries the visit's campaign params.
 
-A visit lasts as long as the session cookie. The plug rewrites the session only when the kept context changes, and does nothing until `:client` asks for headers or a landing; the installer adds it to the `:browser` pipeline. The player shows the campaign, the referrer's host and the landing page, with the params and headers under "Visit details".
+The plug rewrites the session only when the kept context changes; the installer adds it to the `:browser` pipeline. The player shows the campaign, the referrer's host and the landing page, with the params and headers under "Visit details".
+
+### Visits
+
+A visit is what web analytics call a session, and PhoenixReplay counts it the same way: it starts with a request, and ends after 30 minutes without one, or when a request arrives with campaign params that differ from its landing's. It spans the browser's tabs. `PhoenixReplay.Plug` gives each visit an id, kept in the session, and every recording made in it carries the id as `client.visit`. A recording is one LiveView; a visit is every recording between landing and leaving.
+
+```elixir
+config :phoenix_replay, client: [landing: [timeout: :timer.minutes(30)]]
+```
+
+The plug keeps the visit even without `:headers` or `:landing` configured. The time of the latest request is written once a minute has passed since the one kept, so a busy visit does not rewrite the session cookie on every request. Live navigation between LiveViews makes no request, so a visit that stays on LiveView pages for longer than the timeout ends at its next full page load. Recordings made without the plug, or before visits were kept, are each a visit of their own.
 
 Headers such as `x-forwarded-for` or `cf-connecting-ip` hold IP addresses, which are personal data in many jurisdictions; capture them only when you need them. Captured headers and the landing go through the [redactor](privacy-and-security.md#redacting-values) when a recording is saved.
 

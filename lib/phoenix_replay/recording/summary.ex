@@ -8,7 +8,8 @@ defmodule PhoenixReplay.Recording.Summary do
   see `PhoenixReplay.Recording.Event.mark_name/1`.
   `error_count` counts the events for which `PhoenixReplay.Recording.Event.error?/1`
   holds. `tab` is the browser tab the session ran in, when the client sent
-  it, shared by the sessions of one journey. `viewport`, `device`,
+  it, and `visit` the visit it belongs to, when `PhoenixReplay.Plug` kept
+  one; see `visit_key/1`. `viewport`, `device`,
   `device_type` and `browser` describe the browser, and `source`, `medium`
   and `campaign` where the visit came from, as
   `PhoenixReplay.Recording.Client` names them. `saved_at` is when storage
@@ -30,6 +31,7 @@ defmodule PhoenixReplay.Recording.Summary do
           marks: %{String.t() => pos_integer()},
           error_count: non_neg_integer(),
           tab: String.t() | nil,
+          visit: String.t() | nil,
           viewport: Recording.viewport() | nil,
           device: String.t() | nil,
           device_type: Client.device_type() | nil,
@@ -65,6 +67,7 @@ defmodule PhoenixReplay.Recording.Summary do
     marks: %{},
     error_count: 0,
     tab: nil,
+    visit: nil,
     viewport: nil,
     device: nil,
     device_type: nil,
@@ -87,6 +90,7 @@ defmodule PhoenixReplay.Recording.Summary do
       url: recording.url,
       connected_at: recording.connected_at,
       tab: recording.client.tab,
+      visit: recording.client.visit,
       viewport: recording.client.viewport,
       device: Client.device(recording.client.user_agent),
       device_type: Client.device_type(recording.client.viewport),
@@ -185,6 +189,15 @@ defmodule PhoenixReplay.Recording.Summary do
   @spec stored_at(t()) :: integer()
   def stored_at(%__MODULE__{saved_at: nil, connected_at: connected_at}), do: connected_at
   def stored_at(%__MODULE__{saved_at: saved_at}), do: saved_at
+
+  @doc """
+  The visit a recording belongs to: its `visit`, or its own id for one
+  without, made before visits were kept or without `PhoenixReplay.Plug`,
+  which is a visit of its own.
+  """
+  @spec visit_key(t()) :: String.t()
+  def visit_key(%__MODULE__{visit: nil, id: id}), do: id
+  def visit_key(%__MODULE__{visit: visit}), do: visit
 
   @doc """
   Orders summaries most recent first. Sessions that started in the same

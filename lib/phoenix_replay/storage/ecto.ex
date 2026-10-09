@@ -28,8 +28,8 @@ if Code.ensure_loaded?(Ecto.Query) do
         defmodule MyApp.Repo.Migrations.AddPhoenixReplay do
           use Ecto.Migration
 
-          def up, do: PhoenixReplay.Storage.Ecto.Migration.up(version: 3)
-          def down, do: PhoenixReplay.Storage.Ecto.Migration.down(version: 3)
+          def up, do: PhoenixReplay.Storage.Ecto.Migration.up(version: 4)
+          def down, do: PhoenixReplay.Storage.Ecto.Migration.down(version: 4)
         end
     """
 
@@ -54,6 +54,7 @@ if Code.ensure_loaded?(Ecto.Query) do
       :error_count,
       :duration_ms,
       :tab,
+      :visit,
       :viewport,
       :device,
       :device_type,
@@ -72,6 +73,7 @@ if Code.ensure_loaded?(Ecto.Query) do
       :error_count,
       :duration_ms,
       :tab,
+      :visit,
       :viewport,
       :device,
       :device_type,

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Upgrading
+
+- Ecto storage: run migration version 4, `PhoenixReplay.Storage.Ecto.Migration.up(from: 3, version: 4)`. Saving and listing fail until it runs.
+
+### Added
+
+- Visits: `PhoenixReplay.Plug` gives each visit an id, which every recording made in it carries as `client.visit`. A visit ends after 30 minutes without a request, set with `client: [landing: [timeout: ms]]`, or when a request brings a new campaign. The plug keeps the visit even without `:headers` or `:landing`. See the recording guide's "Visits".
+
 ## 0.6.2 - 2026-10-09
 
 Two replay fixes: a view's own layout, and lists of integers.

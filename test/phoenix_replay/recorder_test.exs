@@ -158,7 +158,10 @@ defmodule PhoenixReplay.RecorderTest do
 
       assert {:ok, %{client: client}} = Buffer.fetch(id)
 
-      assert client == %PhoenixReplay.Recording.Client{
+      # The visit comes from PhoenixReplay.Plug on the server, not from the client.
+      assert is_binary(client.visit)
+
+      assert %{client | visit: nil} == %PhoenixReplay.Recording.Client{
                viewport: %{width: 390, height: 844, dpr: 3},
                user_agent: @iphone,
                tab: "tab-1",
@@ -171,7 +174,7 @@ defmodule PhoenixReplay.RecorderTest do
       {:ok, _view, _html, id} = Sessions.live(sessions, conn, "/counter")
 
       assert {:ok, %{client: %PhoenixReplay.Recording.Client{} = client}} = Buffer.fetch(id)
-      assert client == %PhoenixReplay.Recording.Client{}
+      assert %{client | visit: nil} == %PhoenixReplay.Recording.Client{}
     end
 
     test "records viewport changes sent with events, leaving them out of params", %{

@@ -33,18 +33,65 @@ defmodule PhoenixReplay.PlugTest do
 
   defp kept(conn), do: get_session(conn, "phoenix_replay")
 
-  test "keeps nothing without :client" do
+  test "keeps only the visit without :client" do
     conn = request("/?utm_source=x", [{"accept-language", "en"}])
 
-    assert kept(conn) == nil
-    refute conn.private[:plug_session_info]
+    assert %{"visit" => %{"id" => id, "seen" => seen}} = kept = kept(conn)
+    assert Map.keys(kept) == ["visit"]
+    assert is_binary(id) and is_integer(seen)
+  end
+
+  test "keeps one visit across requests, rewriting the session only as time passes" do
+    first = request("/")
+    %{"visit" => %{"id" => id}} = kept = kept(first)
+
+    # A request soon after changes nothing, so the session cookie is left alone.
+    later = Plug.Test.init_test_session(build_conn(:get, "/about"), %{"phoenix_replay" => kept})
+    assert PhoenixReplay.Plug.call(later, []) == later
+
+    # A minute on, the time of the latest request moves, in the same visit.
+    stale = put_in(kept, ["visit", "seen"], kept["visit"]["seen"] - 61_000)
+
+    assert %{"visit" => %{"id" => ^id, "seen" => seen}} =
+             kept(request("/", [], %{"phoenix_replay" => stale}))
+
+    assert seen > stale["visit"]["seen"]
+  end
+
+  test "starts a new visit after the timeout without a request" do
+    configure(landing: [params: [:utm], timeout: 1_000])
+    first = kept(request("/?utm_source=google"))
+
+    idle = put_in(first, ["visit", "seen"], first["visit"]["seen"] - 2_000)
+    next = kept(request("/about", [], %{"phoenix_replay" => idle}))
+
+    assert next["visit"]["id"] != first["visit"]["id"]
+    # The new visit landed on its own first page, without the old campaign.
+    assert %{"path" => "/about", "params" => %{}} = next["landing"]
+  end
+
+  test "starts a new visit when a request brings another campaign, under either attribution" do
+    for attribution <- [:first, :last] do
+      configure(landing: [params: [:utm], attribution: attribution])
+      first = kept(request("/?utm_source=google"))
+
+      same = kept(request("/?utm_source=google", [], %{"phoenix_replay" => first}))
+      assert same["visit"]["id"] == first["visit"]["id"]
+
+      untracked = kept(request("/about", [], %{"phoenix_replay" => first}))
+      assert untracked["visit"]["id"] == first["visit"]["id"]
+
+      other = kept(request("/?utm_source=newsletter", [], %{"phoenix_replay" => first}))
+      assert other["visit"]["id"] != first["visit"]["id"]
+      assert other["landing"]["params"] == %{"utm_source" => "newsletter"}
+    end
   end
 
   test "keeps the allowed headers of the latest request" do
     configure(headers: ["accept-language", "cf-ipcountry"])
 
     conn = request("/", [{"accept-language", "en-US"}, {"x-other", "1"}])
-    assert kept(conn) == %{"headers" => %{"accept-language" => "en-US"}}
+    assert kept(conn)["headers"] == %{"accept-language" => "en-US"}
 
     long = String.duplicate("é", 300)
     conn = request("/", [{"cf-ipcountry", long}], %{"phoenix_replay" => kept(conn)})
@@ -71,6 +118,11 @@ defmodule PhoenixReplay.PlugTest do
     assert String.length(kept["landing"]["path"]) == 256
     # The campaign params went first, so the landing itself is kept.
     assert kept["landing"]["params"] == %{}
+    assert %{"id" => _id} = kept["visit"]
+
+    # The same campaign later is still the same visit, though its params were dropped.
+    again = request("/?" <> query, [], %{"phoenix_replay" => kept})
+    assert kept(again)["visit"]["id"] == kept["visit"]["id"]
   end
 
   test "keeps the first landing of the visit" do
@@ -92,7 +144,7 @@ defmodule PhoenixReplay.PlugTest do
 
     # An unchanged context leaves the conn, and so the session cookie, alone.
     later =
-      Plug.Test.init_test_session(build_conn(:get, "/?utm_source=newsletter"), %{
+      Plug.Test.init_test_session(build_conn(:get, "/?utm_source=google&utm_medium=cpc"), %{
         "phoenix_replay" => kept(conn)
       })
 
@@ -106,8 +158,10 @@ defmodule PhoenixReplay.PlugTest do
     untracked = request("/about", [], %{"phoenix_replay" => kept(first)})
     assert kept(untracked)["landing"]["params"] == %{"utm_source" => "google"}
 
-    campaign = request("/?utm_source=newsletter", [], %{"phoenix_replay" => kept(first)})
-    assert kept(campaign)["landing"]["params"] == %{"utm_source" => "newsletter"}
+    # The same campaign again moves the landing to the latest page, in the same visit.
+    again = request("/pricing?utm_source=google", [], %{"phoenix_replay" => kept(first)})
+    assert kept(again)["landing"]["path"] == "/pricing"
+    assert kept(again)["visit"]["id"] == kept(first)["visit"]["id"]
   end
 
   test "keeps the full referrer only on request, and lands only on GET" do
@@ -118,7 +172,7 @@ defmodule PhoenixReplay.PlugTest do
     configure(landing: [referrer: false])
     assert kept(request("/", [{"referer", "https://example.com/"}]))["landing"]["referrer"] == nil
 
-    assert kept(request("/", [], %{}, :post)) == nil
+    assert kept(request("/", [], %{}, :post))["landing"] == nil
   end
 
   test "recordings carry the visit's context", %{sessions: sessions} do
@@ -137,6 +191,9 @@ defmodule PhoenixReplay.PlugTest do
 
     assert %{path: "/counter", params: %{"utm_source" => "news", "utm_campaign" => "launch"}} =
              client.landing
+
+    assert client.visit == get_session(conn, "phoenix_replay")["visit"]["id"]
+    assert is_binary(client.visit)
 
     refute Map.has_key?(session, "phoenix_replay")
   end

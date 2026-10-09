@@ -231,7 +231,7 @@ config :phoenix_replay,
   ]
 ```
 
-Headers and the landing need `plug PhoenixReplay.Plug` in the `:browser` pipeline. First-touch by default; `attribution: :last` follows the latest campaign. `media` lists the browser's media settings to keep, all by default, `false` for none. `:context` is this option's former name.
+Headers, the landing and visits need `plug PhoenixReplay.Plug` in the `:browser` pipeline. First-touch by default; `attribution: :last` follows the latest page of the campaign. A visit ends after `landing: [timeout: ms]` without a request, 30 minutes by default, or on a new campaign. `media` lists the browser's media settings to keep, all by default, `false` for none. `:context` is this option's former name.
 
 ## Live sessions
 {: .col-2}
