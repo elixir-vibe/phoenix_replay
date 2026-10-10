@@ -198,8 +198,8 @@ defmodule PhoenixReplay.Web.Live.Show do
 
   defp hand_over(socket), do: socket
 
-  # Opens another page of the visit, at its start.
-  defp switch_page(socket, id) do
+  # Opens another page of the visit, at its start or `at` milliseconds in.
+  defp switch_page(socket, id, at \\ 0) do
     %{context: context} = socket.assigns
 
     with {:ok, recording} <- Catalog.fetch(context.config, id),
@@ -209,30 +209,41 @@ defmodule PhoenixReplay.Web.Live.Show do
       |> assign(pinned: nil, unrecorded: [], export: nil)
       |> loaded(recording)
       |> then(&if(&1.assigns.live?, do: &1, else: follow_export(&1)))
+      |> then(&if(at > 0, do: seek_time(&1, at), else: &1))
     else
       _missing -> put_flash(socket, :error, "That page of the visit could not be opened")
     end
   end
 
-  # At the end of a page, playback goes on to the visit's next one, after
-  # the time between them; after the last page, it stops.
-  defp end_of_page(socket) do
-    %{pages: pages, recording: recording, speed: speed} = socket.assigns
+  # At the end of a page, playback follows the visit's clock: on in a tab
+  # still open then, or to the next page after the time between them; with
+  # neither, it stops. See `Pages.after_page/2`.
+  defp end_of_page(%{assigns: %{pages: %{} = pages}} = socket) do
+    %{recording: recording, speed: speed} = socket.assigns
 
-    with %{} = pages <- pages,
-         %{} = next <- Pages.next(pages, recording.id) do
-      gap = Pages.gap(Pages.page(pages, recording.id), next)
-      ref = make_ref()
-      timer = Process.send_after(self(), {:next_page, ref, next.id}, div(gap, speed))
+    case Pages.after_page(pages, recording.id) do
+      {:continue, page, at} ->
+        socket |> assign(playing: nil) |> switch_page(page.id, at) |> play()
 
-      assign(socket,
-        playing: %{timer: timer, ref: ref, since: now()},
-        gap: %{page: next, ms: gap}
-      )
-    else
-      _last -> assign(socket, :playing, nil)
+      {:wait, page, gap} ->
+        ref = make_ref()
+        timer = Process.send_after(self(), {:next_page, ref, page.id}, div(gap, speed))
+
+        assign(socket,
+          playing: %{timer: timer, ref: ref, since: now()},
+          gap: %{page: page, ms: gap}
+        )
+
+      nil ->
+        assign(socket, :playing, nil)
     end
   end
+
+  defp end_of_page(socket), do: assign(socket, :playing, nil)
+
+  # The moment `at` milliseconds into the page, between events if need be.
+  defp seek_time(socket, at),
+    do: socket |> seek(Timeline.index_at(socket.assigns.recording, at)) |> at_time(at)
 
   @impl true
   def handle_async(:recording, {:ok, {:ok, recording}}, socket) do

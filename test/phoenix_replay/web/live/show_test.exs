@@ -846,7 +846,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       save_visit([{"first", 1}, {"second", 1_500}])
       {:ok, view, _html} = live(build_conn(), "/replay/first")
 
-      render_click(view, "jump", %{"to" => "end"})
+      render_click(view, "speed", %{"value" => "10"})
       render_click(view, "toggle")
 
       assert eventually(fn ->
@@ -854,6 +854,21 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
              end)
 
       assert view |> element("#replay-pages") |> render() =~ "Page 2 of 2"
+    end
+
+    test "stops at the end of a page rather than go back to a tab closed while it played" do
+      # The second tab opened at 1 s and closed at 3 s, while the first page ran to 4 s.
+      for {id, at, clicks} <- [{"long", 1, 4}, {"tab", 1_001, 2}] do
+        recording = Fixtures.counter_recording(id: id, connected_at: at, clicks: clicks)
+        Storage.save(Fixtures.storage(), %{recording | client: %Client{visit: "visit-9"}})
+      end
+
+      {:ok, view, _html} = live(build_conn(), "/replay/long")
+      render_click(view, "speed", %{"value" => "10"})
+      render_click(view, "toggle")
+
+      assert eventually(fn -> has_element?(view, ~s(button[aria-label="Play"])) end)
+      assert has_element?(view, ~s(#replay-page-long[aria-current="page"]))
     end
 
     test "opens a page still recording, from a saved page of the visit" do

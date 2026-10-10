@@ -3,8 +3,9 @@ defmodule PhoenixReplay.Web.Player.Pages do
   The pages of the visit a recording belongs to, for the player: each of
   the visit's recordings the viewer may see, placed on the visit's clock
   by when it started. Pages that overlap, as tabs open side by side do,
-  sit in lanes of their own. Playback goes from one page to the next in
-  the order they started, waiting out the time between them.
+  sit in lanes of their own. Playback follows the visit's clock: when a
+  page ends, it goes on in a tab still open at that moment, or waits out
+  the time until the next page started; see `after_page/2`.
 
   See `PhoenixReplay.Recording.Visit` for what a visit is; a recording
   without one is a visit of a single page.
@@ -92,10 +93,34 @@ defmodule PhoenixReplay.Web.Player.Pages do
   @spec page(t(), Recording.id()) :: page() | nil
   def page(%{pages: pages}, id), do: Enum.find(pages, &(&1.id == id))
 
-  @doc "The page that started after page `id`, or `nil` after the last."
-  @spec next(t(), Recording.id()) :: page() | nil
-  def next(%{pages: pages}, id) do
-    pages |> Enum.drop_while(&(&1.id != id)) |> Enum.drop(1) |> List.first()
+  @doc """
+  Where playback goes when page `id` ends, at that moment on the visit's
+  clock:
+
+    * `{:continue, page, at}` — another tab still open then, at `at`
+      milliseconds into it
+    * `{:wait, page, gap}` — nothing open then; the next page to start,
+      `gap` milliseconds later
+    * `nil` — nothing open then, and no page started later
+
+  A tab that opened and closed while page `id` played is not gone back to;
+  the strip opens it.
+  """
+  @spec after_page(t(), Recording.id()) ::
+          {:continue, page(), non_neg_integer()} | {:wait, page(), non_neg_integer()} | nil
+  def after_page(%{pages: pages} = visit, id) do
+    %{end_at: ended} = page(visit, id)
+
+    case Enum.find(pages, &(&1.id != id and &1.offset < ended and &1.end_at > ended)) do
+      %{} = open ->
+        {:continue, open, ended - open.offset}
+
+      nil ->
+        case Enum.find(pages, &(&1.id != id and &1.offset >= ended)) do
+          %{} = next -> {:wait, next, next.offset - ended}
+          nil -> nil
+        end
+    end
   end
 
   @doc "The page that started before page `id`, or `nil` before the first."
@@ -103,11 +128,4 @@ defmodule PhoenixReplay.Web.Player.Pages do
   def previous(%{pages: pages}, id) do
     pages |> Enum.take_while(&(&1.id != id)) |> Enum.reverse() |> List.first()
   end
-
-  @doc """
-  The time between page `from` ending and `to` starting, in milliseconds:
-  `0` when `to` started before `from` ended, as an overlapping tab does.
-  """
-  @spec gap(page(), page()) :: non_neg_integer()
-  def gap(from, to), do: max(to.offset - from.end_at, 0)
 end
