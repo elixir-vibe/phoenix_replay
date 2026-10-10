@@ -834,9 +834,41 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       open_tab(view, "Visit")
       assert view |> element("#replay-visit-pages") |> render() =~ "/counter"
 
-      view |> element("#replay-page-third") |> render_click()
+      view |> element(~s(#replay-visit-pages button[phx-value-id="third"])) |> render_click()
       assert has_element?(view, ~s(#replay-page-third[aria-current="page"]))
       assert view |> element("#replay-pages") |> render() =~ "Page 3 of 3"
+    end
+
+    test "seeks on the visit's clock, to the page open then and the moment in it" do
+      save_visit([{"first", 1}, {"second", 5_000}, {"third", 9_000}])
+      {:ok, view, _html} = live(build_conn(), "/replay/first")
+
+      # 1 s into the second page, which started 4999 ms into the visit.
+      render_click(view, "visit_seek", %{"at" => 5_999})
+      assert has_element?(view, ~s(#replay-page-second[aria-current="page"]))
+      assert has_element?(view, ~s(#replay-visit-timeline[aria-valuenow="5999"]))
+
+      # Between pages, the next one, from its first render, 5 ms in.
+      render_click(view, "visit_seek", %{"at" => 8_000})
+      assert has_element?(view, ~s(#replay-page-third[aria-current="page"]))
+      assert has_element?(view, ~s(#replay-visit-timeline[aria-valuenow="9004"]))
+    end
+
+    test "marks the errors of every page on the visit's timeline" do
+      error = %Event{at: 1_500, type: :log, data: %{level: :error, message: "x", metadata: %{}}}
+
+      for {id, at, extra} <- [{"first", 1, []}, {"second", 5_000, [error]}] do
+        recording = Fixtures.counter_recording(id: id, connected_at: at)
+
+        Storage.save(Fixtures.storage(), %{
+          recording
+          | events: recording.events ++ extra,
+            client: %Client{visit: "visit-9"}
+        })
+      end
+
+      {:ok, view, _html} = live(build_conn(), "/replay/first")
+      assert has_element?(view, ~s(#replay-visit-timeline [data-marker="error"]))
     end
   end
 
@@ -890,7 +922,8 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       {:ok, view, _html} = live(build_conn(), "/replay/saved")
       assert view |> element("#replay-pages") |> render() =~ "Page 1 of 2"
 
-      view |> element("#replay-page-running") |> render_click()
+      open_tab(view, "Visit")
+      view |> element(~s(#replay-visit-pages button[phx-value-id="running"])) |> render_click()
       assert has_element?(view, ~s(#replay-page-running[aria-current="page"]))
     end
   end

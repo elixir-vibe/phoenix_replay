@@ -71,7 +71,14 @@
           unrecorded={@unrecorded}
           code_changes={@code_changes}
         />
-        <.visit_pages :if={@pages} pages={@pages} current={@recording.id} gap={@gap} />
+        <.visit_pages
+          :if={@pages}
+          pages={@pages}
+          current={@recording.id}
+          gap={@gap}
+          clock={visit_clock(assigns)}
+          speed={@speed}
+        />
         <.playback
           id="replay-playback"
           recording={@recording}

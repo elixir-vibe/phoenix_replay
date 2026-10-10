@@ -12,7 +12,7 @@ defmodule PhoenixReplay.Web.Player.Pages do
   """
 
   alias PhoenixReplay.{Catalog, Recording}
-  alias PhoenixReplay.Recording.Summary
+  alias PhoenixReplay.Recording.{Event, Summary}
   alias PhoenixReplay.Web.Context
 
   @typedoc """
@@ -30,18 +30,29 @@ defmodule PhoenixReplay.Web.Player.Pages do
           live?: boolean()
         }
 
-  @typedoc "A visit's pages in the order they started, and how long the visit lasted."
+  @typedoc "An error or a mark on the visit's clock, in milliseconds from its start."
+  @type marker :: %{at: non_neg_integer(), kind: :error | :mark}
+
+  @typedoc """
+  A visit's pages in the order they started, how long the visit lasted,
+  and the errors and marks of all its pages.
+  """
   @type t :: %{
           key: String.t(),
           pages: [page()],
           duration_ms: non_neg_integer(),
-          lanes: pos_integer()
+          lanes: pos_integer(),
+          markers: [marker()]
         }
+
+  @doc "The visit `recording` belongs to: its `client.visit`, or its own id."
+  @spec key(Recording.t()) :: String.t()
+  def key(%Recording{} = recording), do: recording.client.visit || recording.id
 
   @doc "The pages of `recording`'s visit that the viewer may list, `recording` among them."
   @spec of(Phoenix.LiveView.Socket.t(), Recording.t()) :: t()
   def of(socket, %Recording{} = recording) do
-    key = recording.client.visit || recording.id
+    key = key(recording)
 
     summaries =
       socket.assigns.context.config
@@ -53,7 +64,35 @@ defmodule PhoenixReplay.Web.Player.Pages do
         do: summaries,
         else: Enum.sort_by([Summary.new(recording) | summaries], &{&1.connected_at, &1.id})
 
-    new(key, summaries)
+    key
+    |> new(summaries)
+    |> Map.put(:markers, markers(socket, summaries, recording))
+  end
+
+  # The errors and marks of every page, read from the pages that have any.
+  defp markers(socket, summaries, recording) do
+    [first | _rest] = summaries
+
+    for summary <- summaries,
+        summary.error_count > 0 or summary.marks != %{},
+        {:ok, page} <- [read(socket, summary, recording)],
+        event <- page.events,
+        kind = marker_kind(event),
+        kind != nil,
+        do: %{at: summary.connected_at - first.connected_at + event.at, kind: kind}
+  end
+
+  defp read(_socket, %{id: id}, %Recording{id: id} = recording), do: {:ok, recording}
+
+  defp read(socket, summary, _recording),
+    do: Catalog.fetch(socket.assigns.context.config, summary.id)
+
+  defp marker_kind(event) do
+    cond do
+      Event.error?(event) -> :error
+      Event.mark?(event) -> :mark
+      true -> nil
+    end
   end
 
   @doc "Places `summaries`, all of visit `key`, on the visit's clock."
@@ -85,7 +124,8 @@ defmodule PhoenixReplay.Web.Player.Pages do
       key: key,
       pages: pages,
       duration_ms: pages |> Enum.map(& &1.end_at) |> Enum.max(),
-      lanes: map_size(ends)
+      lanes: map_size(ends),
+      markers: []
     }
   end
 
@@ -127,5 +167,30 @@ defmodule PhoenixReplay.Web.Player.Pages do
   @spec previous(t(), Recording.id()) :: page() | nil
   def previous(%{pages: pages}, id) do
     pages |> Enum.take_while(&(&1.id != id)) |> Enum.reverse() |> List.first()
+  end
+
+  @doc """
+  The page to show at `at` milliseconds into the visit, and how far into
+  it: the page `current` when it is open then, else the page open then in
+  the lowest lane, else the next page to start, from its start. Past the
+  last page, its end.
+  """
+  @spec at(t(), integer(), Recording.id()) :: {page(), non_neg_integer()}
+  def at(%{pages: pages}, at, current) do
+    open = Enum.filter(pages, &(&1.offset <= at and at < &1.end_at))
+
+    case {Enum.find(open, &(&1.id == current)), Enum.min_by(open, & &1.lane, fn -> nil end)} do
+      {%{} = page, _lowest} ->
+        {page, at - page.offset}
+
+      {nil, %{} = page} ->
+        {page, at - page.offset}
+
+      {nil, nil} ->
+        case Enum.find(pages, &(&1.offset > at)) do
+          %{} = next -> {next, 0}
+          nil -> pages |> Enum.max_by(& &1.end_at) |> then(&{&1, &1.end_at - &1.offset})
+        end
+    end
   end
 end

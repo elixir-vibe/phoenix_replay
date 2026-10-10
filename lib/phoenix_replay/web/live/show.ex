@@ -178,7 +178,7 @@ defmodule PhoenixReplay.Web.Live.Show do
       first_render: Timeline.first_render_index(recording),
       marks: Events.marks(recording),
       dropped: Events.dropped_count(recording),
-      pages: Pages.of(socket, recording),
+      pages: visit_pages(socket, recording),
       code_changes: PhoenixReplay.Recording.Code.changes(recording.code),
       migrations: migrations_applied(recording)
     )
@@ -197,6 +197,31 @@ defmodule PhoenixReplay.Web.Live.Show do
   end
 
   defp hand_over(socket), do: socket
+
+  # The visit's pages, read once per visit: switching pages keeps them.
+  defp visit_pages(socket, recording) do
+    key = Pages.key(recording)
+
+    case socket.assigns.pages do
+      %{key: ^key} = pages -> pages
+      _other_visit -> Pages.of(socket, recording)
+    end
+  end
+
+  # Where the visit's playhead is, on the visit's clock, and how far it may
+  # run before the server says more: to the next event, or through a gap to
+  # the next page.
+  defp visit_clock(%{pages: %{} = pages, recording: recording} = assigns) do
+    %{offset: offset} = Pages.page(pages, recording.id)
+
+    until =
+      case assigns.gap do
+        %{page: page} -> page.offset
+        nil -> offset + assigns.next_at
+      end
+
+    %{at: offset + assigns.at, until: until, playing?: assigns.playing != nil}
+  end
 
   # Opens another page of the visit, at its start or `at` milliseconds in.
   defp switch_page(socket, id, at \\ 0) do
@@ -328,6 +353,16 @@ defmodule PhoenixReplay.Web.Live.Show do
       nil -> {:noreply, socket}
       found -> {:noreply, socket |> pause() |> seek(found)}
     end
+  end
+
+  # Seeks on the visit's clock: the page open then, at that moment in it.
+  def handle_event("visit_seek", %{"at" => at}, %{assigns: %{pages: %{} = pages}} = socket) do
+    socket = pause(socket)
+    {page, local} = Pages.at(pages, Params.integer(at, 0), socket.assigns.id)
+
+    if page.id == socket.assigns.id,
+      do: {:noreply, seek_time(socket, local)},
+      else: {:noreply, switch_page(socket, page.id, local)}
   end
 
   # Opens another page of the visit, from the pages strip or the Visit tab.

@@ -1,9 +1,12 @@
 defmodule PhoenixReplay.Web.Components.Player.Pages do
   @moduledoc """
-  The pages of the visit being played, on the visit's clock: one segment
-  per page, where it starts and as long as it lasted, pages that overlap,
-  as tabs do, in lanes of their own. Each opens its page with the
-  `"page"` event; see `PhoenixReplay.Web.Player.Pages`.
+  The visit's timeline: its pages on the visit's clock, one segment per
+  page where it started and as long as it lasted, pages that overlap, as
+  tabs do, in lanes of their own, with the errors and marks of every page
+  above them and a playhead at the moment playing. The `VisitTimeline`
+  hook moves the playhead between the server's updates and sends
+  `"visit_seek"` with the moment the pointer let go at; see
+  `PhoenixReplay.Web.Player.Pages`.
   """
 
   use Phoenix.Component
@@ -13,11 +16,14 @@ defmodule PhoenixReplay.Web.Components.Player.Pages do
   alias PhoenixReplay.Web.Format
 
   @doc """
-  The strip of a visit's pages, for a visit of more than one. `gap` is the
-  page playback waits to go on to, with how long, between pages.
+  The timeline of a visit of more than one page. `clock` is where the
+  playhead is, how far it may run before the server says more, and whether
+  it plays; `gap` the page playback waits to go on to, between pages.
   """
   attr :pages, :map, required: true
   attr :current, :string, required: true
+  attr :clock, :map, required: true
+  attr :speed, :integer, required: true
   attr :gap, :map, default: nil
 
   @spec visit_pages(map()) :: Phoenix.LiveView.Rendered.t()
@@ -28,7 +34,7 @@ defmodule PhoenixReplay.Web.Components.Player.Pages do
     <section
       :if={length(@pages.pages) > 1}
       id="replay-pages"
-      aria-label="Pages of this visit"
+      aria-label="Visit timeline"
       class="rounded-xl border border-line bg-surface px-3 py-2.5"
     >
       <div class="mb-2 flex items-center justify-between gap-3 text-xs text-muted">
@@ -41,30 +47,55 @@ defmodule PhoenixReplay.Web.Components.Player.Pages do
         </span>
       </div>
       <div
-        class="relative"
-        style={"height: #{@pages.lanes * 1.25}rem"}
-        role="list"
+        id="replay-visit-timeline"
+        phx-hook="VisitTimeline"
+        role="slider"
+        tabindex="0"
+        aria-label="Visit time"
+        aria-valuemin="0"
+        aria-valuemax={@pages.duration_ms}
+        aria-valuenow={@clock.at}
+        aria-valuetext={Format.clock(@clock.at)}
+        data-at={@clock.at}
+        data-until={@clock.until}
+        data-playing={to_string(@clock.playing?)}
+        data-speed={@speed}
+        data-duration={@pages.duration_ms}
+        class="relative cursor-pointer touch-none select-none"
+        style={"height: #{@pages.lanes * 1.25 + 0.75}rem"}
       >
-        <button
+        <span
+          :for={marker <- @pages.markers}
+          data-marker={marker.kind}
+          title={"#{if marker.kind == :error, do: "Error", else: "Mark"} at #{Format.clock(marker.at)}"}
+          class={[
+            "absolute top-0 size-1.5 -translate-x-1/2 rounded-full",
+            if(marker.kind == :error, do: "bg-error", else: "bg-kind-mark")
+          ]}
+          style={"left: #{percent(marker.at, @pages)}%"}
+        ></span>
+        <span
           :for={page <- @pages.pages}
           id={"replay-page-#{page.id}"}
-          type="button"
-          role="listitem"
-          phx-click="page"
-          phx-value-id={page.id}
           aria-current={page.id == @current && "page"}
           title={"#{path(page.url)} · at #{Format.clock(page.offset)}, #{Format.clock(page.end_at - page.offset)}"}
           class={[
-            "absolute h-4 min-w-1.5 overflow-hidden rounded px-1 text-left text-[0.625rem] leading-4 whitespace-nowrap transition-colors",
+            "absolute h-4 min-w-1.5 overflow-hidden rounded px-1 text-[0.625rem] leading-4 whitespace-nowrap",
             if(page.id == @current,
               do: "bg-accent-soft font-medium text-accent",
-              else: "bg-hover text-muted hover:bg-line hover:text-ink"
+              else: "bg-hover text-muted"
             )
           ]}
           style={segment(@pages, page)}
         >
           {path(page.url)}
-        </button>
+        </span>
+        <span
+          data-thumb
+          aria-hidden="true"
+          class="pointer-events-none absolute top-0 bottom-0 w-px -translate-x-1/2 bg-ink"
+          style={"left: #{percent(@clock.at, @pages)}%"}
+        ></span>
       </div>
     </section>
     """
@@ -73,13 +104,14 @@ defmodule PhoenixReplay.Web.Components.Player.Pages do
   defp position(%{pages: pages}, current),
     do: Enum.find_index(pages, &(&1.id == current)) + 1
 
-  # Where the page sits on the visit's clock, and in which lane.
-  defp segment(%{duration_ms: duration}, page) do
-    total = max(duration, 1)
-    left = page.offset / total * 100
-    width = (page.end_at - page.offset) / total * 100
+  defp percent(at, %{duration_ms: duration}),
+    do: Float.round(min(at, duration) / max(duration, 1) * 100, 2)
 
-    "left: #{Float.round(left, 2)}%; width: #{Float.round(width, 2)}%; top: #{page.lane * 1.25}rem"
+  # Where the page sits on the visit's clock, and in which lane, below the markers.
+  defp segment(pages, page) do
+    left = percent(page.offset, pages)
+    width = Float.round((page.end_at - page.offset) / max(pages.duration_ms, 1) * 100, 2)
+    "left: #{left}%; width: #{width}%; top: #{page.lane * 1.25 + 0.5}rem"
   end
 
   defp path(nil), do: "—"
