@@ -38,6 +38,11 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
   attr :first, :integer, default: 0, doc: "the first event the view can be shown at"
   attr :slow_ms, :integer, default: 100, doc: "how long a collected event takes to count as slow"
 
+  slot :visit_lane,
+    doc: "a lane of the visit's pages, above the page's lanes, for a visit of several"
+
+  slot :visit_status, doc: "where playback stands in the visit, next to the clock"
+
   @spec playback(map()) :: Phoenix.LiveView.Rendered.t()
   def playback(assigns) do
     assigns =
@@ -50,7 +55,7 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
     <section
       id={@id}
       aria-label="Playback"
-      class="flex flex-col gap-4 rounded-xl border border-line bg-surface px-4 py-3.5"
+      class="flex flex-col gap-3 rounded-xl border border-line bg-surface px-4 py-3"
     >
       <div class="flex flex-wrap items-center gap-2.5">
         <.icon_button
@@ -66,7 +71,7 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
         <.icon_button
           phx-click="previous"
           label="Previous event"
-          size="lg"
+          variant="ghost"
           keys={Shortcuts.keys(:previous)}
           disabled={@index <= @first}
         >
@@ -75,16 +80,17 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
         <.icon_button
           phx-click="next"
           label="Next event"
-          size="lg"
+          variant="ghost"
           keys={Shortcuts.keys(:next)}
           disabled={@index == @last}
         >
           <.icon name="lucide:chevron-right" class="size-4" />
         </.icon_button>
-        <span class="ml-1.5 font-mono tabular-nums">
+        <span class="ml-1 font-mono tabular-nums">
           {Format.precise_clock(@at)}
           <span class="text-muted">/ {Format.precise_clock(@duration_ms)}</span>
         </span>
+        {render_slot(@visit_status)}
         <span class="flex-1"></span>
         <.segmented
           label="Playback speed"
@@ -104,9 +110,19 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
         </.icon_button>
       </div>
 
-      <div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3">
-        <div class="flex flex-col gap-1.5 text-xs text-muted" aria-hidden="true">
-          <span :for={{kind, _events} <- @lanes} class="flex h-[18px] items-center">
+      <%!-- The visit's lane runs on the visit's clock, the lanes below it on
+      the page's; a rule keeps the two apart. --%>
+      <div
+        :if={@visit_lane != []}
+        class="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-x-3 border-b border-line pb-2.5"
+      >
+        <span class="text-[11px] text-muted" aria-hidden="true">Visit</span>
+        {render_slot(@visit_lane)}
+      </div>
+
+      <div class="grid grid-cols-[4rem_minmax(0,1fr)] gap-x-3">
+        <div class="flex flex-col gap-1 text-[11px] text-muted" aria-hidden="true">
+          <span :for={{kind, _events} <- @lanes} class="flex h-3.5 items-center">
             {Events.kind_label(kind)}
           </span>
         </div>
@@ -126,9 +142,9 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
           data-duration={@duration_ms}
           data-speed={@speed}
           data-playing={to_string(@playing)}
-          class="relative flex cursor-pointer touch-none flex-col gap-1.5 rounded select-none"
+          class="relative flex cursor-pointer touch-none flex-col gap-1 rounded select-none"
         >
-          <div :for={{_kind, events} <- @lanes} class="relative h-[18px] rounded bg-track">
+          <div :for={{_kind, events} <- @lanes} class="relative h-3.5 rounded bg-track">
             <span
               :for={{event, _index} <- events}
               class={[
@@ -142,7 +158,7 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
           <span
             data-thumb
             aria-hidden="true"
-            class="absolute -top-1 -bottom-1 w-0.5 -translate-x-1/2 rounded-full bg-ink"
+            class="absolute -inset-y-0.5 w-0.5 -translate-x-1/2 rounded-full bg-ink"
             style={"left: #{position(@at, @duration_ms)}%"}
           ></span>
         </div>

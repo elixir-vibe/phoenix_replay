@@ -71,14 +71,6 @@
           unrecorded={@unrecorded}
           code_changes={@code_changes}
         />
-        <.visit_pages
-          :if={@pages}
-          pages={@pages}
-          current={@recording.id}
-          gap={@gap}
-          clock={visit_clock(assigns)}
-          speed={@speed}
-        />
         <.playback
           id="replay-playback"
           recording={@recording}
@@ -91,7 +83,19 @@
           speeds={@speeds}
           first={@first_render}
           slow_ms={Events.slow_ms(@context.config.keep)}
-        />
+        >
+          <:visit_lane :if={@pages && length(@pages.pages) > 1}>
+            <.visit_lane
+              pages={@pages}
+              current={@recording.id}
+              clock={visit_clock(assigns)}
+              speed={@speed}
+            />
+          </:visit_lane>
+          <:visit_status :if={@pages && length(@pages.pages) > 1}>
+            <.visit_status pages={@pages} current={@recording.id} gap={@gap} />
+          </:visit_status>
+        </.playback>
       </main>
       <aside
         aria-label="Page"

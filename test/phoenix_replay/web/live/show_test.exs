@@ -828,7 +828,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       save_visit([{"first", 1}, {"second", 5_000}, {"third", 9_000}])
       {:ok, view, _html} = live(build_conn(), "/replay/second")
 
-      assert view |> element("#replay-pages") |> render() =~ "Page 2 of 3"
+      assert view |> element("#replay-pages") |> render() =~ "page 2 of 3"
       assert has_element?(view, ~s(#replay-page-second[aria-current="page"]))
 
       open_tab(view, "Visit")
@@ -836,7 +836,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
 
       view |> element(~s(#replay-visit-pages button[phx-value-id="third"])) |> render_click()
       assert has_element?(view, ~s(#replay-page-third[aria-current="page"]))
-      assert view |> element("#replay-pages") |> render() =~ "Page 3 of 3"
+      assert view |> element("#replay-pages") |> render() =~ "page 3 of 3"
     end
 
     test "seeks on the visit's clock, to the page open then and the moment in it" do
@@ -885,7 +885,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
                has_element?(view, ~s(#replay-page-second[aria-current="page"]))
              end)
 
-      assert view |> element("#replay-pages") |> render() =~ "Page 2 of 2"
+      assert view |> element("#replay-pages") |> render() =~ "page 2 of 2"
     end
 
     test "stops at the end of a page rather than go back to a tab closed while it played" do
@@ -920,7 +920,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       on_exit(fn -> Buffer.close("running") end)
 
       {:ok, view, _html} = live(build_conn(), "/replay/saved")
-      assert view |> element("#replay-pages") |> render() =~ "Page 1 of 2"
+      assert view |> element("#replay-pages") |> render() =~ "page 1 of 2"
 
       open_tab(view, "Visit")
       view |> element(~s(#replay-visit-pages button[phx-value-id="running"])) |> render_click()
