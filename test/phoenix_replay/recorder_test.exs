@@ -107,6 +107,40 @@ defmodule PhoenixReplay.RecorderTest do
     assert length(events) == 3
   end
 
+  test "samples a visit as a whole: its recordings draw the same", %{sessions: sessions} do
+    {sampled, skipped} =
+      Enum.split_with(Enum.map(1..40, &"visit-#{&1}"), fn visit ->
+        {draw, _keep} = PhoenixReplay.Session.Visits.draws(visit)
+        Recorder.sampled?(0.5, draw)
+      end)
+
+    recorded? = fn visit, path ->
+      kept = %{
+        "visit" => %{"id" => visit, "seen" => System.system_time(:millisecond), "campaign" => nil}
+      }
+
+      conn = Plug.Test.init_test_session(build_conn(), %{"phoenix_replay" => kept})
+      {:ok, view, _html} = live(conn, path)
+
+      case :sys.get_state(view.pid).socket.private[:phoenix_replay] do
+        %{id: _id} ->
+          Sessions.track(sessions, view)
+          true
+
+        nil ->
+          false
+      end
+    end
+
+    for visit <- Enum.take(sampled, 2) do
+      assert recorded?.(visit, "/half/counter") and recorded?.(visit, "/half/form")
+    end
+
+    for visit <- Enum.take(skipped, 2) do
+      refute recorded?.(visit, "/half/counter") or recorded?.(visit, "/half/form")
+    end
+  end
+
   test "records only the sampled share of sessions" do
     {:ok, view, _html} = live(build_conn(), "/unsampled/counter")
     render_click(view, "inc")
@@ -158,7 +192,10 @@ defmodule PhoenixReplay.RecorderTest do
 
       assert {:ok, %{client: client}} = Buffer.fetch(id)
 
-      assert client == %PhoenixReplay.Recording.Client{
+      # The visit and landing come from PhoenixReplay.Plug on the server, not from the client.
+      assert is_binary(client.visit)
+
+      assert %{client | visit: nil, landing: nil} == %PhoenixReplay.Recording.Client{
                viewport: %{width: 390, height: 844, dpr: 3},
                user_agent: @iphone,
                tab: "tab-1",
@@ -171,7 +208,7 @@ defmodule PhoenixReplay.RecorderTest do
       {:ok, _view, _html, id} = Sessions.live(sessions, conn, "/counter")
 
       assert {:ok, %{client: %PhoenixReplay.Recording.Client{} = client}} = Buffer.fetch(id)
-      assert client == %PhoenixReplay.Recording.Client{}
+      assert %{client | visit: nil, landing: nil} == %PhoenixReplay.Recording.Client{}
     end
 
     test "records viewport changes sent with events, leaving them out of params", %{
@@ -215,8 +252,14 @@ defmodule PhoenixReplay.RecorderTest do
     end
 
     test "keeps only the media settings the :client config asks for", %{sessions: sessions} do
-      Application.put_env(:phoenix_replay, :client, media: [:color_scheme])
-      on_exit(fn -> Application.delete_env(:phoenix_replay, :client) end)
+      previous = Application.get_env(:phoenix_replay, :client)
+
+      Application.put_env(:phoenix_replay, :client,
+        media: [:color_scheme],
+        landing: [timeout: 50]
+      )
+
+      on_exit(fn -> Application.put_env(:phoenix_replay, :client, previous) end)
 
       {:ok, view, _html, id} = Sessions.live(sessions, client_conn(), "/counter")
 

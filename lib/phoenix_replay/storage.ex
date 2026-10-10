@@ -34,7 +34,16 @@ defmodule PhoenixReplay.Storage do
   its filters suggest, with how many recordings have each, through the
   optional `values/4`, and counts them by when they started for its chart
   through the optional `histogram/4`. Without them, all are worked out
-  from `list/1`. A backend that needs a
+  from `list/1`.
+
+  The dashboard lists visits, so it passes `by: :visit` in the page
+  options of all three: pages and counts are then of visits, each visit
+  counted once, a visit matching when any of its recordings does, and a
+  page returning every recording of its visits. A recording's visit is
+  `PhoenixReplay.Recording.Summary.visit_key/1`. See
+  `t:PhoenixReplay.Recording.Filter.page_opts/0`; the functions of
+  `PhoenixReplay.Recording.Filter` do the same in memory. A backend that
+  ignores `:by` still works, with the dashboard counting recordings. A backend that needs a
   process, such as a cache, returns it from the optional `child_spec/1`.
   """
 
@@ -141,7 +150,7 @@ defmodule PhoenixReplay.Storage do
     else
       storage
       |> list()
-      |> Filter.count_values(field, filter, page_opts[:now], page_opts[:limit])
+      |> Filter.count_values(field, filter, page_opts[:now], page_opts[:limit], page_opts[:by])
     end
   end
 

@@ -384,7 +384,7 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
   test "redacts a live session before showing it, and hands it to the frame" do
     buffer_live("live-1")
     html = build_conn() |> get("/replay/live-1") |> html_response(200)
-    assert html =~ "Redacting the session"
+    assert html =~ "Redacting the recording"
     refute html =~ "4242"
 
     {:ok, view, _html} = live(build_conn(), "/replay/live-1")
@@ -824,24 +824,131 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       assert "google" in values
     end
 
-    test "links the sessions of one browser tab" do
-      for {id, at} <- [{"first", 1}, {"second", 2}, {"third", 3}] do
-        navigated_from = if id != "first", do: "http://localhost/counter"
+    test "lists the pages of the visit, each opening its page" do
+      save_visit([{"first", 1}, {"second", 5_000}, {"third", 9_000}])
+      {:ok, view, _html} = live(build_conn(), "/replay/second")
+
+      assert view |> element("#replay-pages") |> render() =~ "page 2 of 3"
+      assert has_element?(view, ~s(#replay-page-second[aria-current="page"]))
+
+      open_tab(view, "Visit")
+      assert view |> element("#replay-visit-pages") |> render() =~ "/counter"
+
+      view |> element(~s(#replay-visit-pages button[phx-value-id="third"])) |> render_click()
+      assert has_element?(view, ~s(#replay-page-third[aria-current="page"]))
+      assert view |> element("#replay-pages") |> render() =~ "page 3 of 3"
+    end
+
+    test "seeks on the visit's clock, to the page open then and the moment in it" do
+      save_visit([{"first", 1}, {"second", 5_000}, {"third", 9_000}])
+      {:ok, view, _html} = live(build_conn(), "/replay/first")
+
+      # 1 s into the second page, which started 4999 ms into the visit.
+      render_click(view, "visit_seek", %{"at" => 5_999})
+      assert has_element?(view, ~s(#replay-page-second[aria-current="page"]))
+      assert has_element?(view, ~s(#replay-scrubber[data-at="5999"]))
+
+      # Between pages, the next one, from its first render, 5 ms in.
+      render_click(view, "visit_seek", %{"at" => 8_000})
+      assert has_element?(view, ~s(#replay-page-third[aria-current="page"]))
+      assert has_element?(view, ~s(#replay-scrubber[data-at="9004"]))
+    end
+
+    test "lays every page's events on the visit's timeline" do
+      error = %Event{at: 1_500, type: :log, data: %{level: :error, message: "x", metadata: %{}}}
+
+      for {id, at, extra} <- [{"first", 1, []}, {"second", 5_000, [error]}] do
         recording = Fixtures.counter_recording(id: id, connected_at: at)
 
         Storage.save(Fixtures.storage(), %{
           recording
-          | client: client(nil, "tab-9", navigated_from)
+          | events: recording.events ++ extra,
+            client: %Client{visit: "visit-9"}
         })
       end
 
-      {:ok, view, _html} = live(build_conn(), "/replay/second")
+      {:ok, view, _html} = live(build_conn(), "/replay/first")
+      # One timeline on the visit's clock, with the other page's events, dimmed.
+      assert has_element?(view, ~s(#replay-scrubber[data-mode="visit"]))
+      assert has_element?(view, ~s(#replay-scrubber span.opacity-35[title*="x"]))
+    end
+  end
 
-      assert open_tab(view, "Visit") =~ "Came from"
-      assert view |> element("#replay-journey") |> render() =~ "Session 2 of 3 in this tab"
-      assert has_element?(view, ~s(#replay-journey a[href="/replay/first"]), "Previous")
-      assert has_element?(view, ~s(#replay-journey a[href="/replay/third"]), "Next")
-      assert has_element?(view, ~s(#replay-journey a[href="/replay?tab=tab-9"]))
+  describe "a visit" do
+    test "plays on from one page to the next" do
+      # The second page opened while the first was still open, so it follows at once.
+      save_visit([{"first", 1}, {"second", 1_500}])
+      {:ok, view, _html} = live(build_conn(), "/replay/first")
+
+      render_click(view, "speed", %{"value" => "10"})
+      render_click(view, "toggle")
+
+      assert eventually(fn ->
+               has_element?(view, ~s(#replay-page-second[aria-current="page"]))
+             end)
+
+      assert view |> element("#replay-pages") |> render() =~ "page 2 of 2"
+    end
+
+    test "stops at the end of a page rather than go back to a tab closed while it played" do
+      # The second tab opened at 1 s and closed at 3 s, while the first page ran to 4 s.
+      for {id, at, clicks} <- [{"long", 1, 4}, {"tab", 1_001, 2}] do
+        recording = Fixtures.counter_recording(id: id, connected_at: at, clicks: clicks)
+        Storage.save(Fixtures.storage(), %{recording | client: %Client{visit: "visit-9"}})
+      end
+
+      {:ok, view, _html} = live(build_conn(), "/replay/long")
+      render_click(view, "speed", %{"value" => "10"})
+      render_click(view, "toggle")
+
+      assert eventually(fn -> has_element?(view, ~s(button[aria-label="Play"])) end)
+      assert has_element?(view, ~s(#replay-page-long[aria-current="page"]))
+    end
+
+    test "opens a page still recording, from a saved page of the visit" do
+      save_visit([{"saved", 1}])
+
+      running = %{
+        Fixtures.counter_recording(id: "running", connected_at: 9_000)
+        | client: %Client{visit: "visit-9"}
+      }
+
+      :ok = Buffer.open(running, self(), Config.load())
+
+      running.events
+      |> Enum.with_index()
+      |> Enum.each(fn {event, seq} -> Buffer.append("running", seq, event) end)
+
+      on_exit(fn -> Buffer.close("running") end)
+
+      {:ok, view, _html} = live(build_conn(), "/replay/saved")
+      assert view |> element("#replay-pages") |> render() =~ "page 1 of 2"
+
+      open_tab(view, "Visit")
+      view |> element(~s(#replay-visit-pages button[phx-value-id="running"])) |> render_click()
+      assert has_element?(view, ~s(#replay-page-running[aria-current="page"]))
+    end
+  end
+
+  defp save_visit(pages) do
+    for {id, at} <- pages do
+      recording = Fixtures.counter_recording(id: id, connected_at: at)
+      Storage.save(Fixtures.storage(), %{recording | client: %Client{visit: "visit-9"}})
+    end
+  end
+
+  # Playback runs on timers; this waits for it, bounded.
+  defp eventually(check, tries \\ 100) do
+    cond do
+      check.() ->
+        true
+
+      tries == 0 ->
+        false
+
+      true ->
+        Process.sleep(20)
+        eventually(check, tries - 1)
     end
   end
 end

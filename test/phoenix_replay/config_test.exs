@@ -114,8 +114,17 @@ defmodule PhoenixReplay.ConfigTest do
              params:
                ~w(utm_source utm_medium utm_campaign utm_term utm_content ref gclid fbclid msclkid),
              referrer: true,
-             attribution: :last
+             attribution: :last,
+             timeout: 1_800_000
            }
+
+    # A visit lasts 30 minutes without a request, with or without a landing.
+    assert Config.visit_timeout(Config.new([])) == 1_800_000
+    assert Config.visit_timeout(Config.new(client: [landing: [timeout: 60_000]])) == 60_000
+
+    assert_raise ArgumentError, ~r/:timeout/, fn ->
+      Config.new(client: [landing: [timeout: 0]])
+    end
 
     assert_raise ArgumentError, ~r/"cookie"/, fn -> Config.new(client: [headers: ["Cookie"]]) end
 

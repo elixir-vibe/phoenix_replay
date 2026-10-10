@@ -33,6 +33,24 @@ defmodule PhoenixReplay.Catalog do
   end
 
   @doc """
+  The recordings of visit `key`, buffered and stored, in the order they
+  started; see `PhoenixReplay.Recording.Visit`. A key no recording carries
+  as its visit is a recording's own id, a visit of its own.
+  """
+  @spec visit(Config.t(), String.t()) :: [Summary.t()]
+  def visit(%Config{storage: storage}, key) do
+    filter = %Filter{visit: key}
+    now = System.system_time(:millisecond)
+    # A visit's recordings, however many; storage reads them by its key.
+    {stored, _count} = Storage.query(storage, filter, now: now, offset: 0, limit: 10_000)
+    buffered = live(filter, now)
+    buffered_ids = MapSet.new(buffered, & &1.id)
+
+    (buffered ++ Enum.reject(stored, &MapSet.member?(buffered_ids, &1.id)))
+    |> Enum.sort_by(&{&1.connected_at, &1.id})
+  end
+
+  @doc """
   Reads a page of stored recordings matching `filter`, most recent first,
   and counts every match. See `t:PhoenixReplay.Recording.Filter.page_opts/0`.
 
@@ -64,7 +82,7 @@ defmodule PhoenixReplay.Catalog do
 
     case Keyword.pop(opts, :allow) do
       {nil, page_opts} ->
-        live = Buffer.summaries() |> Filter.count_values(field, filter, now, limit)
+        live = Buffer.summaries() |> Filter.count_values(field, filter, now, limit, opts[:by])
         stored = Storage.values(storage, field, filter, page_opts)
 
         live
@@ -73,7 +91,10 @@ defmodule PhoenixReplay.Catalog do
         |> Filter.top(limit)
 
       {allow, _page_opts} ->
-        config |> list() |> Enum.filter(allow) |> Filter.count_values(field, filter, now, limit)
+        config
+        |> list()
+        |> Enum.filter(allow)
+        |> Filter.count_values(field, filter, now, limit, opts[:by])
     end
   end
 
@@ -113,7 +134,7 @@ defmodule PhoenixReplay.Catalog do
 
     ranged = %{filter | within: nil, from: from, to: to}
     utc_offset = Keyword.get(opts, :utc_offset, 0)
-    histogram_opts = [now: now, utc_offset: utc_offset]
+    histogram_opts = [now: now, utc_offset: utc_offset, by: opts[:by]]
 
     counts =
       case Keyword.get(opts, :allow) do

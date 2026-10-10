@@ -1,7 +1,9 @@
 defmodule PhoenixReplay.Web.Live.Index do
   @moduledoc """
-  Lists recordings, live sessions first, narrowed by a
-  `PhoenixReplay.Recording.Filter` kept in the URL.
+  Lists visits, those still recording first, narrowed by a
+  `PhoenixReplay.Recording.Filter` kept in the URL. A visit is listed when
+  any of its recordings matches the filter, with all of them; see
+  `PhoenixReplay.Recording.Visit`.
 
   Reads storage again when `PhoenixReplay.Catalog` broadcasts a change,
   at most once a second however many sessions start and end, and reads the
@@ -10,7 +12,7 @@ defmodule PhoenixReplay.Web.Live.Index do
 
   Saved recordings are listed as of a moment, `until`, taken when the list
   opens or its filter changes, so pages stay put while sessions end. Newer
-  ones are counted in a banner that brings the list up to date.
+  visits are counted in a banner that brings the list up to date.
 
   Filters beyond the search, the time window and errors are added and
   changed in a value picker, which offers the values recordings have
@@ -26,7 +28,7 @@ defmodule PhoenixReplay.Web.Live.Index do
   import PhoenixReplay.Web.Components.RecordingList
 
   alias PhoenixReplay.Catalog
-  alias PhoenixReplay.Recording.Filter
+  alias PhoenixReplay.Recording.{Filter, Summary, Visit}
   alias PhoenixReplay.Web.{Context, FilterFields, Format, Highlight, Layouts, Params}
 
   @per_page 25
@@ -92,10 +94,24 @@ defmodule PhoenixReplay.Web.Live.Index do
   def handle_info(:refresh, socket), do: {:noreply, load_live(socket)}
 
   @impl true
-  def handle_event("delete", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.saved, &(&1.id == id)) do
-      nil -> {:noreply, socket}
-      summary -> {:noreply, perform(socket, :delete, summary, &Catalog.delete(&1, id))}
+  # Deletes the saved recordings of a visit the viewer may delete.
+  def handle_event("delete", %{"key" => key}, socket) do
+    case Enum.find(socket.assigns.saved, &(&1.key == key)) do
+      nil ->
+        {:noreply, socket}
+
+      visit ->
+        deletable = Enum.filter(visit.recordings, &Context.allowed?(socket, :delete, &1))
+
+        {:noreply,
+         perform(socket, :delete, List.first(deletable), fn config ->
+           Enum.reduce_while(deletable, :ok, fn summary, :ok ->
+             case Catalog.delete(config, summary.id) do
+               :ok -> {:cont, :ok}
+               error -> {:halt, error}
+             end
+           end)
+         end)}
     end
   end
 
@@ -177,7 +193,8 @@ defmodule PhoenixReplay.Web.Live.Index do
           Catalog.values(config, field.key, filter,
             now: System.system_time(:millisecond),
             limit: @values,
-            allow: allow(socket)
+            allow: allow(socket),
+            by: :visit
           ),
         else: []
 
@@ -198,7 +215,10 @@ defmodule PhoenixReplay.Web.Live.Index do
     %{context: %{config: config}} = socket.assigns
     now = System.system_time(:millisecond)
     allow = allow(socket)
-    count = &(config |> Catalog.query(&1, now: now, limit: 0, allow: allow) |> elem(1))
+
+    count =
+      &(config |> Catalog.query(&1, now: now, limit: 0, allow: allow, by: :visit) |> elem(1))
+
     {saved, total, page} = saved_page(socket, now, allow)
     all = count.(%Filter{})
 
@@ -210,44 +230,61 @@ defmodule PhoenixReplay.Web.Live.Index do
         Catalog.activity(config, socket.assigns.filter,
           now: now,
           allow: allow,
-          utc_offset: socket.assigns.utc_offset
+          utc_offset: socket.assigns.utc_offset,
+          by: :visit
         ),
       sampling: Format.sampling(config.sample_rate, config.keep),
       can_clear?: all > 0 and Context.allowed?(socket, :clear, nil)
     )
   end
 
-  # Sessions still in the buffer, running or ended and being saved, merged
-  # with the stored page.
+  # Visits with recordings still in the buffer, running or ended and being
+  # saved, merged with the stored page: on the first page, a visit with
+  # saved recordings too is shown once, with all of them.
   defp load_live(socket) do
     %{filter: filter, page: page, stored: stored} = socket.assigns
     now = System.system_time(:millisecond)
 
-    {live, ending} =
+    buffered =
       Catalog.live(%Filter{}, now)
       |> Enum.filter(allow(socket) || fn _summary -> true end)
-      |> Enum.split_with(& &1.live?)
 
-    buffered = MapSet.new(live ++ ending, & &1.id)
-    shown = Filter.select(live ++ ending, filter, now)
+    buffered_ids = MapSet.new(buffered, & &1.id)
+    saved = Enum.reject(stored.saved, &MapSet.member?(buffered_ids, &1.id))
+    all = Visit.group(buffered)
+    matching = MapSet.new(Filter.select(buffered, filter, now), &Summary.visit_key/1)
+    shown = Enum.filter(all, &MapSet.member?(matching, &1.key))
+    shown_keys = MapSet.new(shown, & &1.key)
+
+    # Shown visits take the stored recordings of the same visit on this page.
+    {shown, saved} =
+      if page == 1 do
+        {merged, rest} =
+          Enum.split_with(saved, &MapSet.member?(shown_keys, Summary.visit_key(&1)))
+
+        {merged |> Enum.concat(Enum.flat_map(shown, & &1.recordings)) |> Visit.group(), rest}
+      else
+        {shown, saved}
+      end
+
+    {live, ending} = Enum.split_with(shown, & &1.live?)
+    {live_all, ending_all} = Enum.split_with(all, & &1.live?)
 
     socket
     |> assign(
       total_pages: max(1, ceil(stored.total / @per_page)),
       total: stored.total + length(shown),
-      any?: stored.all + length(live) + length(ending) > 0,
+      any?: stored.all + length(all) > 0,
       now: now,
-      live: if(page == 1, do: Enum.filter(shown, & &1.live?), else: []),
-      saved:
-        if(page == 1, do: Enum.reject(shown, & &1.live?), else: []) ++
-          Enum.reject(stored.saved, &MapSet.member?(buffered, &1.id)),
+      live: if(page == 1, do: live, else: []),
+      saved: if(page == 1, do: ending, else: []) ++ Visit.group(saved),
       counts: %{
-        all: stored.all + length(live) + length(ending),
-        live: length(live),
-        errors: stored.errors + Enum.count(live ++ ending, &(&1.error_count > 0))
+        all: stored.all + length(live_all) + length(ending_all),
+        live: length(live_all),
+        errors: stored.errors + Enum.count(all, &(&1.error_count > 0))
       }
     )
-    |> schedule_refresh(live != [])
+    |> schedule_refresh(live_all != [])
   end
 
   # A page of stored recordings, the last one when the requested page is
@@ -261,7 +298,8 @@ defmodule PhoenixReplay.Web.Live.Index do
         until: socket.assigns.until,
         offset: (&1 - 1) * @per_page,
         limit: @per_page,
-        allow: allow
+        allow: allow,
+        by: :visit
       )
 
     case read.(page) do
@@ -280,7 +318,7 @@ defmodule PhoenixReplay.Web.Live.Index do
     %{context: %{config: config}, filter: filter, until: until} = socket.assigns
 
     {_none, count} =
-      Catalog.query(config, filter, now: now, since: until, limit: 0, allow: allow)
+      Catalog.query(config, filter, now: now, since: until, limit: 0, allow: allow, by: :visit)
 
     count
   end
@@ -313,6 +351,10 @@ defmodule PhoenixReplay.Web.Live.Index do
   defp range_path(context, %Filter{} = filter, {from, to}),
     do: index_path(context, %Filter{filter | within: nil, from: from, to: to}, 1)
 
+  # A visit opens at its first recording.
+  defp visit_path(context, %Visit{recordings: [first | _rest]}),
+    do: Context.path(context, [first.id])
+
   defp index_path(context, filter, page) do
     params = Filter.to_params(filter)
     params = if page > 1, do: Map.put(params, "page", Integer.to_string(page)), else: params
@@ -329,7 +371,7 @@ defmodule PhoenixReplay.Web.Live.Index do
     <.app_bar>
       <:mark><.icon name="lucide:circle-play" class="size-5 text-accent" /></:mark>
       <:crumb>PhoenixReplay</:crumb>
-      <:crumb>Recordings</:crumb>
+      <:crumb>Visits</:crumb>
       <:actions>
         <a
           href="https://hexdocs.pm/phoenix_replay"
@@ -352,9 +394,9 @@ defmodule PhoenixReplay.Web.Live.Index do
     <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <.flash flash={@flash} />
       <header class="mb-5">
-        <h1 class="text-2xl font-semibold tracking-tight">Recordings</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">Visits</h1>
         <p :if={@any?} class="mt-1.5 text-sm text-muted">
-          {Format.count(@counts.all, "session")} · {@counts.live} live · {@counts.errors} with errors
+          {Format.count(@counts.all, "visit")} · {@counts.live} live · {@counts.errors} with errors
         </p>
         <p
           :if={@any? and @sampling}
@@ -380,7 +422,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         path={&range_path(@context, @filter, &1)}
       />
 
-      <.empty_state :if={@any? and @total == 0} title="No recordings match these filters.">
+      <.empty_state :if={@any? and @total == 0} title="No visits match these filters.">
         <:icon><.icon name="lucide:search-x" class="size-8" /></:icon>
         <:action>
           <.link
@@ -392,7 +434,7 @@ defmodule PhoenixReplay.Web.Live.Index do
         </:action>
       </.empty_state>
 
-      <.empty_state :if={not @any?} title="No recordings yet.">
+      <.empty_state :if={not @any?} title="No visits yet.">
         <:icon><.icon name="lucide:video" class="size-10" /></:icon>
         Add <code class="font-mono text-ink">on_mount: [PhoenixReplay.Recorder]</code>
         to a <code class="font-mono text-ink">live_session</code>
@@ -402,15 +444,15 @@ defmodule PhoenixReplay.Web.Live.Index do
       <.new_recordings count={@newer} />
       <.recording_list
         live
-        recordings={@live}
+        visits={@live}
         now={@now}
-        path={&Context.path(@context, [&1.id])}
+        path={&visit_path(@context, &1)}
         filter_path={&index_path(@context, Map.put(@filter, &1, &2), 1)}
       />
       <.recording_list
-        recordings={@saved}
+        visits={@saved}
         now={@now}
-        path={&Context.path(@context, [&1.id])}
+        path={&visit_path(@context, &1)}
         filter_path={&index_path(@context, Map.put(@filter, &1, &2), 1)}
         delete="delete"
       />

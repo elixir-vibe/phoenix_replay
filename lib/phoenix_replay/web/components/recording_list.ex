@@ -1,11 +1,10 @@
 defmodule PhoenixReplay.Web.Components.RecordingList do
   @moduledoc """
-  Components of the recording list. They take
-  `PhoenixReplay.Recording.Summary` structs and functions that build URLs,
-  never the socket.
+  Components of the visit list. They take `PhoenixReplay.Recording.Visit`
+  structs and functions that build URLs, never the socket.
 
-  Each row is a single link stretched over the whole row, so the row opens
-  the recording; its delete button sits above the link. The filter bar
+  Each row is a visit, a single link stretched over the whole row, so the
+  row opens it; its delete button sits above the link. The filter bar
   above the list is `PhoenixReplay.Web.Components.Filters`.
   """
 
@@ -15,22 +14,23 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
 
   import PhoenixReplay.Web.Components.Core, only: [badge: 1, local_time: 1]
 
-  alias PhoenixReplay.Recording.{Client, Summary}
+  alias PhoenixReplay.Recording.{Client, Visit}
   alias PhoenixReplay.Web.Format
 
-  # Columns on wider screens: mark, session, started, duration, events,
+  # Columns on wider screens: mark, visit, started, duration, events,
   # status, action. Phones show the mark, the session and the status.
   @columns "grid-cols-[1rem_minmax(0,1fr)_auto] sm:grid-cols-[1rem_minmax(0,1fr)_8rem_4.5rem_4.5rem_6.5rem_2rem]"
 
   @doc """
-  A section of recordings: sessions still recording with `live`, or saved
-  ones under a header row. `delete` names the event that deletes a saved
-  recording, or is `nil` when the viewer may not delete. Where each visit
-  came from links to the list filtered by it, through `filter_path`.
+  A section of visits: those still recording with `live`, or saved ones
+  under a header row. `delete` names the event that deletes a saved
+  visit's recordings, or is `nil` when the viewer may not delete. Where
+  each visit came from links to the list filtered by it, through
+  `filter_path`.
   """
-  attr :recordings, :list, required: true
+  attr :visits, :list, required: true
   attr :now, :integer, required: true
-  attr :path, :any, required: true, doc: "a function from a summary to its URL"
+  attr :path, :any, required: true, doc: "a function from a visit to its URL"
 
   attr :filter_path, :any,
     required: true,
@@ -42,7 +42,7 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   @spec recording_list(map()) :: Phoenix.LiveView.Rendered.t()
   def recording_list(%{live: true} = assigns) do
     ~H"""
-    <section :if={@recordings != []} aria-labelledby="recordings-live" class="mb-6">
+    <section :if={@visits != []} aria-labelledby="recordings-live" class="mb-6">
       <h2
         id="recordings-live"
         class="mb-2 flex items-center gap-2 text-xs font-medium tracking-wide text-muted uppercase"
@@ -50,20 +50,12 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
         <span class="size-2 animate-pulse rounded-full bg-live"></span> Live now
       </h2>
       <ul class="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-        <.row
-          :for={recording <- @recordings}
-          recording={recording}
-          path={@path.(recording)}
-          filter_path={@filter_path}
-        >
+        <.row :for={visit <- @visits} visit={visit} path={@path.(visit)} filter_path={@filter_path}>
           <:mark><span class="size-2.5 animate-pulse rounded-full bg-live"></span></:mark>
           <:meta>
-            Live · {Format.clock(recording.duration_ms)} · {Format.count(
-              recording.event_count,
-              "event"
-            )}
+            Live · {Format.clock(visit.duration_ms)} · {Format.count(visit.event_count, "event")}
           </:meta>
-          <:started>Started {Format.relative(recording.connected_at, @now)}</:started>
+          <:started>Started {Format.relative(visit.started_at, @now)}</:started>
           <:status><span class="font-medium text-live">Recording</span></:status>
           <:action>
             <.icon name="lucide:chevron-right" class="size-4 text-muted" />
@@ -79,7 +71,7 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
     assigns = assign(assigns, columns: @columns, two_days: :timer.hours(48))
 
     ~H"""
-    <section :if={@recordings != []} aria-labelledby="recordings-saved">
+    <section :if={@visits != []} aria-labelledby="recordings-saved">
       <h2 id="recordings-saved" class="mb-2 text-xs font-medium tracking-wide text-muted uppercase">
         Saved
       </h2>
@@ -91,47 +83,39 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
             @columns
           ]}
         >
-          <span></span><span>Session</span><span>Started</span><span>Duration</span>
+          <span></span><span>Visit</span><span>Started</span><span>Duration</span>
           <span>Events</span><span>Errors</span><span></span>
         </div>
         <ul class="divide-y divide-line">
-          <.row
-            :for={recording <- @recordings}
-            recording={recording}
-            path={@path.(recording)}
-            filter_path={@filter_path}
-          >
-            <:mark><.device_icon viewport={recording.viewport} /></:mark>
+          <.row :for={visit <- @visits} visit={visit} path={@path.(visit)} filter_path={@filter_path}>
+            <:mark><.device_icon viewport={visit.viewport} /></:mark>
             <:meta>
-              {Format.relative(recording.connected_at, @now)} · {Format.count(
-                recording.event_count,
-                "event"
-              )}
+              {Format.relative(visit.started_at, @now)} · {Format.count(visit.event_count, "event")}
             </:meta>
             <:started>
               <.local_time
-                id={"recording-#{recording.id}-started"}
-                at={recording.connected_at}
-                format={if @now - recording.connected_at < @two_days, do: "title", else: "date"}
+                id={"visit-#{visit.key}-started"}
+                at={visit.started_at}
+                format={if @now - visit.started_at < @two_days, do: "title", else: "date"}
               >
-                {Format.relative(recording.connected_at, @now)}
+                {Format.relative(visit.started_at, @now)}
               </.local_time>
             </:started>
             <:status>
-              <.badge :if={recording.error_count > 0} tone="error" dot="static">
-                {Format.count(recording.error_count, "error")}
+              <.badge :if={visit.error_count > 0} tone="error" dot="static">
+                {Format.count(visit.error_count, "error")}
               </.badge>
-              <span :if={recording.error_count == 0} class="hidden text-muted sm:inline">None</span>
+              <span :if={visit.error_count == 0} class="hidden text-muted sm:inline">None</span>
             </:status>
             <:action>
               <button
                 :if={@delete}
                 type="button"
                 phx-click={@delete}
-                phx-value-id={recording.id}
-                data-confirm="Delete this recording?"
-                aria-label={"Delete recording #{short_id(recording)}"}
-                title="Delete recording"
+                phx-value-key={visit.key}
+                data-confirm="Delete this visit's recordings?"
+                aria-label={"Delete visit #{short_key(visit)}"}
+                title="Delete visit"
                 class="relative z-10 inline-flex size-8 items-center justify-center rounded-md text-muted opacity-0 transition group-hover:opacity-100 hover:bg-error-soft hover:text-error focus-visible:opacity-100 pointer-coarse:opacity-100"
               >
                 <.icon name="lucide:trash-2" class="size-4" />
@@ -175,12 +159,12 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
       )
 
     ~H"""
-    <section id="recordings-activity" aria-label="Sessions over time" class="mb-5">
+    <section id="recordings-activity" aria-label="Visits over time" class="mb-5">
       <div class="flex h-14 items-end gap-px">
         <.link
           :for={bar <- @bars}
           patch={bar.path}
-          aria-label={"#{Format.count(bar.sessions, "session")}, #{bar.errors} with errors"}
+          aria-label={"#{Format.count(bar.sessions, "visit")}, #{bar.errors} with errors"}
           data-tip
           class="group/tip flex h-full min-w-0 flex-1 flex-col justify-end rounded-sm hover:bg-hover/50 focus-visible:bg-hover/50"
         >
@@ -202,7 +186,7 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
             <.local_time id={"recordings-activity-#{bar.index}"} at={bar.start}>
               {Format.started(bar.start)} UTC
             </.local_time>
-            · {Format.count(bar.sessions, "session")}<span :if={bar.errors > 0}>, {bar.errors} with errors</span>
+            · {Format.count(bar.sessions, "visit")}<span :if={bar.errors > 0}>, {bar.errors} with errors</span>
           </span>
         </.link>
       </div>
@@ -235,13 +219,13 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
         class="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent-soft px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-accent/60 pointer-coarse:py-3"
       >
         <.icon name="lucide:arrow-up" class="size-4 text-accent" />
-        {Format.count(@count, "new recording")} · Show
+        {Format.count(@count, "new visit")} · Show
       </button>
     </div>
     """
   end
 
-  attr :recording, Summary, required: true
+  attr :visit, Visit, required: true
   attr :path, :string, required: true
   attr :filter_path, :any, required: true
   slot :mark, required: true
@@ -251,11 +235,11 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   slot :action, required: true
 
   defp row(assigns) do
-    assigns = assign(assigns, columns: @columns, traffic: traffic_of(assigns.recording))
+    assigns = assign(assigns, columns: @columns, traffic: traffic_of(assigns.visit))
 
     ~H"""
     <li
-      id={"recording-#{@recording.id}"}
+      id={"visit-#{@visit.key}"}
       class={[
         "group relative grid items-center gap-x-4 px-4 py-3 transition-colors hover:bg-hover",
         @columns
@@ -268,10 +252,10 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
             navigate={@path}
             class="truncate font-medium after:absolute after:inset-0 focus-visible:outline-none after:focus-visible:outline-2 after:focus-visible:-outline-offset-2 after:focus-visible:outline-accent"
           >
-            {@recording.view}
+            {landing(@visit)}
           </.link>
           <.link
-            :for={{name, count} <- Enum.sort(@recording.marks)}
+            :for={{name, count} <- Enum.sort(@visit.marks)}
             patch={@filter_path.(:mark, name)}
             title={"Reached #{name}" <> if(count > 1, do: " #{count} times", else: "")}
             class="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-full bg-kind-mark/15 px-2 py-px text-xs font-medium text-kind-mark hover:bg-kind-mark/25"
@@ -283,19 +267,19 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
         <p class="mt-0.5 truncate font-mono text-xs text-muted">
           <span class="sm:hidden">{render_slot(@meta)}</span>
           <span class="hidden sm:inline">
-            {page(@recording)}<span :if={@recording.device}> · {@recording.device}</span><.traffic
+            {pages(@visit)}<span :if={@visit.device}> · {@visit.device}</span><.traffic
               :if={@traffic != []}
               traffic={@traffic}
               filter_path={@filter_path}
-            /> · {short_id(@recording)}
+            /> · {short_key(@visit)}
           </span>
         </p>
       </div>
       <span class="hidden text-sm text-muted sm:block">{render_slot(@started)}</span>
       <span class="hidden font-mono text-sm tabular-nums sm:block">
-        {Format.clock(@recording.duration_ms)}
+        {Format.clock(@visit.duration_ms)}
       </span>
-      <span class="hidden text-sm text-muted tabular-nums sm:block">{@recording.event_count}</span>
+      <span class="hidden text-sm text-muted tabular-nums sm:block">{@visit.event_count}</span>
       <span class="justify-self-end text-sm sm:justify-self-start">{render_slot(@status)}</span>
       <span class="hidden justify-center sm:flex">{render_slot(@action)}</span>
     </li>
@@ -333,7 +317,7 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   # Where the visit came from, leaving out what says nothing: a direct
   # visit, no medium, or a referral, which the referrer's host as the
   # source already tells.
-  defp traffic_of(%Summary{source: source, medium: medium, campaign: campaign}) do
+  defp traffic_of(%Visit{source: source, medium: medium, campaign: campaign}) do
     [
       {:source, if(source != "(direct)", do: source)},
       {:medium, if(medium not in ["(none)", "referral"], do: medium)},
@@ -346,8 +330,17 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
   # otherwise fill the row and hide it.
   @shown_utm ~w(utm_source utm_medium utm_campaign)
 
-  defp page(%Summary{url: nil}), do: "—"
-  defp page(%Summary{url: url}), do: url |> URI.parse() |> without_shown_utm() |> Format.path_of()
+  # Where the visit landed.
+  defp landing(%Visit{} = visit), do: page(visit.url)
+
+  # The pages of the visit in the order they opened, one per recording.
+  defp pages(%Visit{recordings: recordings}),
+    do: Enum.map_join(recordings, " → ", &(&1.url |> page() |> without_query()))
+
+  defp without_query(path), do: path |> String.split("?", parts: 2) |> hd()
+
+  defp page(nil), do: "—"
+  defp page(url), do: url |> URI.parse() |> without_shown_utm() |> Format.path_of()
 
   defp without_shown_utm(%URI{query: nil} = uri), do: URI.to_string(uri)
 
@@ -358,5 +351,5 @@ defmodule PhoenixReplay.Web.Components.RecordingList do
     URI.to_string(%{uri | query: if(params != [], do: URI.encode_query(params))})
   end
 
-  defp short_id(%Summary{id: id}), do: String.slice(id, 0, 8)
+  defp short_key(%Visit{key: key}), do: String.slice(key, 0, 8)
 end

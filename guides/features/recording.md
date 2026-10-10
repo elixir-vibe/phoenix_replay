@@ -30,7 +30,7 @@ A recording is a list of `PhoenixReplay.Recording.Event` structs, each with a mi
 
 The recording also keeps the view module, URL, sanitized params and session, and the start time. Everything passes through the configured sanitizer first; see [Privacy and Security](privacy-and-security.md).
 
-## Browser and journey
+## Browser and tab
 
 A recording can also say which browser it came from and where the user went. The server cannot see these alone, so they are sent by the browser, and recordings simply leave them out when it does not send them.
 
@@ -54,7 +54,7 @@ socket "/live", Phoenix.LiveView.Socket,
 - **the media settings** — the color scheme, reduced motion, contrast, the kind of pointer and whether it hovers, as the page's CSS saw them, with the viewport. The replayed page takes them, so its `prefers-color-scheme`, `prefers-reduced-motion`, `prefers-contrast`, `pointer` and `hover` rules, and Tailwind's `dark:`, `motion-reduce:`, `contrast-more:`, `pointer-coarse:` and `hover:` classes, show what the user saw: a phone session replays without hover styles. Stylesheets from another origin, and script that calls `matchMedia`, still see the viewer's. The Visit tab lists them.
 - **resizes** — a resized window or a rotated phone is recorded as a `:viewport` event when it settles, a fifth of a second after it stops changing, as long as `replayRecorder` runs; see [Pointer, touches and scrolling](#pointer-touches-and-scrolling). The viewport also travels with each click and key press, which catches changes without `replayRecorder`. Your `handle_event/3` receives the extra `"_replay"` param; recorded params leave it out.
 - **the user agent** — shown in the player as, for example, "Safari on iOS".
-- **the tab** — an id kept in the tab's `sessionStorage`. Navigating to another LiveView starts a new recording; the tab id ties them into one journey, and the player links the previous and next sessions of the tab.
+- **the tab** — an id kept in the tab's `sessionStorage`, shared by the recordings made in that tab; `?tab=` lists them. Navigating to another LiveView starts a new recording; the [visit](#visits) ties a person's recordings together, across tabs, and the player plays them in order.
 - **the previous page** — the URL of the LiveView that live-navigated here (`client.navigated_from`).
 
 ### Visit context
@@ -78,9 +78,19 @@ end
 
 - **`headers`** — an allowlist, refreshed on each request, each value cut to 256 characters. `cookie`, `authorization` and `proxy-authorization` are refused.
 - **`landing`** — the visit's first `GET`: its path, time, tracked query params and `Referer`. `:utm` and `:click_ids` expand to the usual parameter names. The referrer loses its query string unless `referrer: :full`, since query strings often carry tokens.
-- **Attribution** is first-touch: the landing is kept for the whole visit. `attribution: :last` replaces it whenever a request carries tracked params, to see which campaign brought someone back.
+- **Attribution** is first-touch: the landing is the visit's first page. `attribution: :last` moves it to the latest page that carries the visit's campaign params.
 
-A visit lasts as long as the session cookie. The plug rewrites the session only when the kept context changes, and does nothing until `:client` asks for headers or a landing; the installer adds it to the `:browser` pipeline. The player shows the campaign, the referrer's host and the landing page, with the params and headers under "Visit details".
+The plug rewrites the session only when the kept context changes; the installer adds it to the `:browser` pipeline. The player shows the campaign, the referrer's host and the landing page, with the params and headers under "Visit details".
+
+### Visits
+
+A visit is what web analytics call a session, and PhoenixReplay counts it the same way: it starts with a request, and ends after 30 minutes without one, or when a request arrives with campaign params that differ from its landing's. It spans the browser's tabs. `PhoenixReplay.Plug` gives each visit an id, kept in the session, and every recording made in it carries the id as `client.visit`. A recording is one LiveView; a visit is every recording between landing and leaving.
+
+```elixir
+config :phoenix_replay, client: [landing: [timeout: :timer.minutes(30)]]
+```
+
+The plug keeps the visit even without `:headers` or `:landing` configured. The time of the latest request is written once a minute has passed since the one kept, so a busy visit does not rewrite the session cookie on every request. Live navigation between LiveViews makes no request, so a visit that stays on LiveView pages for longer than the timeout ends at its next full page load. Recordings made without the plug, or before visits were kept, are each a visit of their own.
 
 Headers such as `x-forwarded-for` or `cf-connecting-ip` hold IP addresses, which are personal data in many jurisdictions; capture them only when you need them. Captured headers and the landing go through the [redactor](privacy-and-security.md#redacting-values) when a recording is saved.
 
@@ -261,13 +271,17 @@ PhoenixReplay does not record focus, or `Phoenix.LiveView.JS` commands applied o
 
 ## Which sessions are kept
 
-Recording starts on every connected mount, but a session is saved only if the user interacted with it: it handled an event, in the view or a component, or navigated within the LiveView. Plain page views are discarded when the process exits.
+Recording starts on every connected mount, but a recording is saved only if its [visit](#visits) is kept. A visit is kept once any of its recordings would be kept on its own: the user interacted with it, by handling an event, in the view or a component, or by navigating within the LiveView, or it matched `:keep`. Then all of the visit's recordings are saved, pages the user only read included, so a visit replays from landing to leaving. A visit whose recordings are all plain page views is discarded whole.
 
-`:keep` decides further, when the session ends. `keep: [rate: 0.1]` saves a tenth of interactive sessions, and `errors: true` or `slower_than: ms` always save sessions that hit an error or a slow query, even without interaction. See [Keeping the sessions that matter](telemetry-and-logs.md#keeping-the-sessions-that-matter).
+`:keep` decides further. `keep: [rate: 0.1]` saves a tenth of visits with interaction, and `errors: true`, `marks: true` or `slower_than: ms` always save visits that hit an error, a mark or a slow query, even without interaction. See [Keeping the sessions that matter](telemetry-and-logs.md#keeping-the-sessions-that-matter).
+
+A recording that ends before its visit is kept waits for the decision, its events held in memory: it is saved when another recording of the visit is kept, and discarded when the visit ends. For this, a visit ends when none of its recordings is running and none has started for the visit's timeout, 30 minutes by default. Held recordings count towards `:max_memory`, and while the buffer is over it, the recordings held for the visit idle longest are discarded, with the reason `:max_memory`. The decision is kept by the node that recorded the pages; a visit whose pages reach several nodes is kept on each by the pages it recorded there.
+
+Retention and the per-collector `:limit`s apply to each recording, not to the visit.
 
 ## Sampling and limits
 
-Record a share of sessions with `:sample_rate`, from `0.0` to `1.0`, and cap the events per session with `:max_events`. `:sample_rate` decides on mount; to decide once you know how the session went, record every session and use `:keep` instead. Set them globally:
+Record a share of visits with `:sample_rate`, from `0.0` to `1.0`, and cap the events per recording with `:max_events`. `:sample_rate` decides on mount, from a draw the visit makes once, so a visit's recordings are recorded or not together; a live session's own `:sample_rate` applies to the same draw. To decide once you know how the visit went, record every visit and use `:keep` instead. Set them globally:
 
 ```elixir
 config :phoenix_replay,
@@ -293,7 +307,7 @@ Per-session options accept `:sample_rate`, `:keep`, `:max_events`, `:sanitizer` 
 `PhoenixReplay.Telemetry` emits an event when a session is finalized:
 
 - `[:phoenix_replay, :recording, :persisted]` with `event_count` and `duration_ms` measurements,
-- `[:phoenix_replay, :recording, :discarded]` with a `reason` of `:not_interactive` or `:not_sampled`,
+- `[:phoenix_replay, :recording, :discarded]` with a `reason` of `:not_interactive`, `:not_sampled`, or `:max_memory` for a recording [held for its visit](#which-sessions-are-kept) until the buffer needed the room,
 - `[:phoenix_replay, :recording, :failed]` when saving gave up.
 
 Each event fires after the session has left the buffer, so handlers see the finished state. `[:phoenix_replay, :collector, :exception]` reports a collector that raised; see [Telemetry and Logs](telemetry-and-logs.md#failures).

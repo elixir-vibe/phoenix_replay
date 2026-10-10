@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'volt:test'
 
 import { html, mountHook } from '../../../test/hooks'
-import { Scrubber } from './scrubber'
+import { Scrubber, TIME_EVENT } from './scrubber'
 
 const scrubber = (data: { at: number; playing?: boolean }): HTMLElement =>
   html(`
@@ -94,4 +94,27 @@ test('maps keys to player events', () => {
     ['previous', {}],
     ['toggle', {}]
   ])
+})
+
+test('seeks on the visit clock for a visit of several pages, and tells overlays the page time', () => {
+  const el = scrubber({ at: 0 })
+  el.dataset.mode = 'visit'
+  el.dataset.pageOffset = '200'
+  const times: number[] = []
+  const listen = (event: Event): void => {
+    times.push((event as CustomEvent<number>).detail)
+  }
+  window.addEventListener(TIME_EVENT, listen)
+  const { pushed } = mountHook(Scrubber, el)
+
+  pointer('pointerdown', el, 0.5)
+  pointer('pointerup', el, 0.6)
+  window.removeEventListener(TIME_EVENT, listen)
+
+  expect(pushed).toEqual([
+    ['visit_seek', { at: 500 }],
+    ['visit_seek', { at: 600 }]
+  ])
+  // The page started 200 ms into the visit.
+  expect(times.at(-1)).toBe(400)
 })

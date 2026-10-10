@@ -54,6 +54,7 @@ logic = [
   "PhoenixReplay.Redactor*",
   "PhoenixReplay.Sanitizer*",
   "PhoenixReplay.Session.TailSampling",
+  "PhoenixReplay.Session.Visits",
   "PhoenixReplay.Storage.Codec"
 ]
 

@@ -7,6 +7,7 @@ defmodule PhoenixReplay.ExportTest do
 
   alias PhoenixReplay.{Export, Storage}
   alias PhoenixReplay.Export.{Job, Video}
+  alias PhoenixReplay.Recording.Client
   alias PhoenixReplay.Test.Fixtures
 
   @endpoint PhoenixReplay.Test.Endpoint
@@ -319,6 +320,39 @@ defmodule PhoenixReplay.ExportTest do
 
     assert_raise Mix.Error, "The frame rate must be one of 15, 30, 60.", fn ->
       Mix.Tasks.PhoenixReplay.Export.run([recording.id, "--fps", "24"])
+    end
+  end
+
+  test "mix phoenix_replay.export joins a visit's pages into one video" do
+    for {id, at} <- [{"visit-landing", 1}, {"visit-next", 5_000}] do
+      recording = Fixtures.counter_recording(id: id, connected_at: at)
+
+      :ok =
+        Storage.save(Fixtures.storage(), %{recording | client: %Client{visit: "visit-export"}})
+    end
+
+    output = Path.join(System.tmp_dir!(), "phoenix_replay_export_visit.mp4")
+    on_exit(fn -> File.rm(output) end)
+
+    ExUnit.CaptureIO.capture_io(fn ->
+      Mix.Tasks.PhoenixReplay.Export.run([
+        "visit-export",
+        "--output",
+        output,
+        "--fps",
+        "15",
+        "--no-pointer"
+      ])
+    end)
+
+    probe = probe(output)
+    # Both pages, each longer than a second, at the first page's size.
+    assert probe =~ "width=1280"
+    assert [duration] = Regex.run(~r/duration=([\d.]+)/, probe, capture: :all_but_first)
+    assert String.to_float(duration) > 2.0
+
+    assert_raise Mix.Error, ~r/single recording/, fn ->
+      Mix.Tasks.PhoenixReplay.Export.run(["visit-export", "--from", "1"])
     end
   end
 

@@ -32,6 +32,11 @@ defmodule PhoenixReplay.Test.Router do
       live "/unsampled/counter", PhoenixReplay.Test.Live.Counter
     end
 
+    live_session :half_sampled, on_mount: [{PhoenixReplay.Recorder, sample_rate: 0.5}] do
+      live "/half/counter", PhoenixReplay.Test.Live.Counter
+      live "/half/form", PhoenixReplay.Test.Live.Form
+    end
+
     live_session :limited, on_mount: [{PhoenixReplay.Recorder, max_events: 3}] do
       live "/limited/counter", PhoenixReplay.Test.Live.Counter
     end

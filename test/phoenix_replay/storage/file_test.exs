@@ -171,4 +171,61 @@ defmodule PhoenixReplay.Storage.FileTest do
       assert Enum.sort(FileStorage.partials(opts)) == ["crashed", "mine", "older"]
     end
   end
+
+  describe "by visit" do
+    alias PhoenixReplay.Recording.{Event, Filter}
+    alias PhoenixReplay.Storage
+
+    # The same visits as the Ecto backends' tests, paged in memory by
+    # PhoenixReplay.Recording.Filter.
+    setup %{opts: opts} do
+      error = %Event{at: 9, type: :log, data: %{level: :error, message: "x", metadata: %{}}}
+
+      for {id, at, visit, extra} <- [
+            {"v1a", 1, "v1", []},
+            {"v1b", 5, "v1", [error: error]},
+            {"v2", 3, "v2", [view: Other]},
+            {"solo", 4, nil, []}
+          ] do
+        recording = Fixtures.counter_recording(id: id, connected_at: at)
+
+        :ok =
+          FileStorage.save(
+            %{
+              recording
+              | view: extra[:view] || recording.view,
+                events: recording.events ++ List.wrap(extra[:error]),
+                client: %{recording.client | visit: visit}
+            },
+            opts
+          )
+      end
+
+      %{storage: {FileStorage, opts}}
+    end
+
+    defp visit_ids({summaries, total}), do: {Enum.map(summaries, & &1.id), total}
+
+    test "pages visits by when they started, with every recording of each", %{storage: storage} do
+      query =
+        &visit_ids(Storage.query(storage, Filter.from_params(&1), [now: 10, by: :visit] ++ &2))
+
+      assert query.(%{}, limit: 10) == {~w(solo v2 v1a v1b), 3}
+      assert query.(%{}, offset: 1, limit: 1) == {~w(v2), 3}
+      assert query.(%{"errors" => "1"}, limit: 10) == {~w(v1a v1b), 1}
+      assert query.(%{"view" => "Other"}, limit: 10) == {~w(v2), 1}
+      assert query.(%{"visit" => "v1"}, limit: 10) == {~w(v1a v1b), 1}
+      assert query.(%{"visit" => "solo"}, limit: 10) == {~w(solo), 1}
+    end
+
+    test "counts each visit once in values and the chart", %{storage: storage} do
+      values = &Storage.values(storage, :view, %Filter{}, [now: 10, limit: 10] ++ &1)
+
+      assert values.(by: :visit) == [{"PhoenixReplay.Test.Live.Counter", 2}, {"Other", 1}]
+      assert values.([]) == [{"PhoenixReplay.Test.Live.Counter", 3}, {"Other", 1}]
+
+      assert Storage.histogram(storage, %Filter{}, 2, now: 10, by: :visit) ==
+               [{0, 1, 1}, {2, 1, 0}, {4, 1, 0}]
+    end
+  end
 end

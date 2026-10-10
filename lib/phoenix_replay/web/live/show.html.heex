@@ -4,7 +4,7 @@
     <:crumb>
       <.link navigate={Context.path(@context, [])} class="hover:text-accent">PhoenixReplay</.link>
     </:crumb>
-    <:crumb>Live session</:crumb>
+    <:crumb>Live recording</:crumb>
   </.app_bar>
   <main class="flex flex-col gap-4 p-4 sm:p-5">
     <.flash flash={@flash} />
@@ -83,15 +83,23 @@
           speeds={@speeds}
           first={@first_render}
           slow_ms={Events.slow_ms(@context.config.keep)}
-        />
+          visit={
+            @pages && length(@pages.pages) > 1 &&
+              %{pages: @pages, current: @recording.id, clock: visit_clock(assigns)}
+          }
+        >
+          <:visit_status :if={@pages && length(@pages.pages) > 1}>
+            <.visit_status pages={@pages} current={@recording.id} gap={@gap} />
+          </:visit_status>
+        </.playback>
       </main>
       <aside
-        aria-label="Session"
+        aria-label="Page"
         class="flex max-w-full min-w-0 flex-[1_1_24rem] flex-col border-l border-line bg-surface lg:min-h-0"
       >
         <.tabs
           id="replay-tabs"
-          label="Session details"
+          label="Page details"
           tabs={[{"events", "Events"}, {"state", "State"}, {"visit", "Visit"}]}
           value={@tab}
           event="tab"
@@ -126,7 +134,7 @@
             :if={@tab == "visit"}
             recording={@recording}
             viewport={@viewport}
-            journey={@journey}
+            pages={@pages}
             filter_path={&filtered_list(@context, &1)}
             migrations={@migrations}
           />

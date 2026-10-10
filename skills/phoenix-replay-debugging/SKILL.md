@@ -30,7 +30,7 @@ mix phoenix_replay.list --errors --within 24h
 mix phoenix_replay.list --view MyAppWeb.CheckoutLive --event submit --limit 5
 ```
 
-Each `PhoenixReplay.Recording.Summary` has `id`, `view`, `url`, `connected_at` (Unix ms), `duration_ms`, `event_count`, `error_count`, `event_names` (`handle_event/3` names), `marks` (moments reached, by name, with counts), `source`, `medium` and `campaign` (where the visit came from, `"(direct)"` and `"(none)"` when nothing referred it), `device`, `device_type`, `browser`, `release` (the deploy it was recorded on), `viewport`, `tab`, and `live?`. Sessions of one browser tab share `tab`: `find(tab: tab)` is the user's journey across LiveViews.
+Each `PhoenixReplay.Recording.Summary` has `id`, `view`, `url`, `connected_at` (Unix ms), `duration_ms`, `event_count`, `error_count`, `event_names` (`handle_event/3` names), `marks` (moments reached, by name, with counts), `source`, `medium` and `campaign` (where the visit came from, `"(direct)"` and `"(none)"` when nothing referred it), `device`, `device_type`, `browser`, `release` (the deploy it was recorded on), `viewport`, `tab`, `visit` and `live?`. The recordings of one visit share `visit`: `find(visit: visit)` lists them, and `PhoenixReplay.Trace.visit(visit)` reads them in the order they started, the user's path across LiveViews. Recordings of one browser tab share `tab`.
 
 ## 2. Read what happened
 

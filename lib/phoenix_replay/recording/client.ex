@@ -13,6 +13,9 @@ defmodule PhoenixReplay.Recording.Client do
       `PhoenixReplay.Plug`
     * `:landing` — the visit's first request, when the `:client` config asks for it;
       see `PhoenixReplay.Recording.Client.Landing`
+    * `:visit` — the id of the visit, shared by its recordings, kept by
+      `PhoenixReplay.Plug`; `nil` without the plug and in recordings made
+      before visits were kept, each of which is a visit of its own
 
   Its functions describe the device, named from its user agent with
   `UAParser`, and where the visit came from.
@@ -28,10 +31,11 @@ defmodule PhoenixReplay.Recording.Client do
           tab: String.t() | nil,
           navigated_from: String.t() | nil,
           headers: %{String.t() => String.t()},
-          landing: Landing.t() | nil
+          landing: Landing.t() | nil,
+          visit: String.t() | nil
         }
 
-  defstruct [:viewport, :user_agent, :tab, :navigated_from, :landing, headers: %{}]
+  defstruct [:viewport, :user_agent, :tab, :navigated_from, :landing, :visit, headers: %{}]
 
   @campaign_keys ~w(utm_source utm_medium utm_campaign)
 

@@ -73,6 +73,69 @@ defmodule PhoenixReplay.Test.EctoStorageCase do
         assert EctoStorage.list(opts) == []
       end
 
+      describe "by visit" do
+        alias PhoenixReplay.Recording.{Event, Filter}
+
+        setup %{opts: opts} do
+          error = %Event{at: 9, type: :log, data: %{level: :error, message: "x", metadata: %{}}}
+
+          # Visit v1 lands at 1 and errs on its second page; v2 is one page
+          # of another view; "solo" has no visit, so it is a visit of its own.
+          for {id, at, visit, extra} <- [
+                {"v1a", 1, "v1", []},
+                {"v1b", 5, "v1", [error: error]},
+                {"v2", 3, "v2", [view: Other]},
+                {"solo", 4, nil, []}
+              ] do
+            recording = Fixtures.counter_recording(id: id, connected_at: at)
+
+            :ok =
+              EctoStorage.save(
+                %{
+                  recording
+                  | view: extra[:view] || recording.view,
+                    events: recording.events ++ List.wrap(extra[:error]),
+                    client: %{recording.client | visit: visit}
+                },
+                opts
+              )
+          end
+
+          :ok
+        end
+
+        defp visit_ids({summaries, total}), do: {Enum.map(summaries, & &1.id), total}
+
+        test "pages visits by when they started, with every recording of each", %{opts: opts} do
+          query =
+            &visit_ids(
+              EctoStorage.query(Filter.from_params(&1), [now: 10, by: :visit] ++ &2, opts)
+            )
+
+          assert query.(%{}, limit: 10) == {~w(solo v2 v1a v1b), 3}
+          assert query.(%{}, offset: 1, limit: 1) == {~w(v2), 3}
+          # A visit matches when any recording does, and brings all of them.
+          assert query.(%{"errors" => "1"}, limit: 10) == {~w(v1a v1b), 1}
+          assert query.(%{"view" => "Other"}, limit: 10) == {~w(v2), 1}
+          assert query.(%{"event" => "inc"}, limit: 10) == {~w(solo v2 v1a v1b), 3}
+          assert query.(%{"visit" => "v1"}, limit: 10) == {~w(v1a v1b), 1}
+          assert query.(%{"visit" => "solo"}, limit: 10) == {~w(solo), 1}
+        end
+
+        test "counts each visit once in values and the chart", %{opts: opts} do
+          values = &EctoStorage.values(:view, %Filter{}, [now: 10, limit: 10] ++ &1, opts)
+
+          assert values.(by: :visit) ==
+                   [{"PhoenixReplay.Test.Live.Counter", 2}, {"Other", 1}]
+
+          assert values.([]) == [{"PhoenixReplay.Test.Live.Counter", 3}, {"Other", 1}]
+
+          # Visits by when they started; v1 errs on its second page.
+          assert EctoStorage.histogram(%Filter{}, 2, [now: 10, by: :visit], opts) ==
+                   [{0, 1, 1}, {2, 1, 0}, {4, 1, 0}]
+        end
+      end
+
       describe "query/3" do
         alias PhoenixReplay.Recording.{Event, Filter}
 

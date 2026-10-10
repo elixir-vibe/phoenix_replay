@@ -44,7 +44,7 @@ live_session :checkout,
 end
 ```
 
-In the browser, `replayParams` and `replayMetadata` send the viewport, so a phone session replays at phone size, and link sessions across LiveViews into one journey. `replayRecorder` records what only the browser sees: form input, and with `pointer: true`, the pointer, touches and scrolling. The installer adds all three:
+In the browser, `replayParams` and `replayMetadata` send the viewport, so a phone visit replays at phone size, and the browser tab each recording ran in. `replayRecorder` records what only the browser sees: form input, and with `pointer: true`, the pointer, touches and scrolling. The installer adds all three:
 
 ```javascript
 import { replayParams, replayMetadata, replayRecorder } from "phoenix_replay"
@@ -110,7 +110,7 @@ See the [Privacy and Security guide](https://hexdocs.pm/phoenix_replay/privacy-a
 
 ## Dashboard
 
-Filter sessions by device, browser, where they came from, marks, errors and time; every filter is a shareable URL. The player shows each event with the queries, logs and assigns behind it, and draws the user's pointer over the replay. Restrict who sees what with an authorization module:
+The dashboard lists visits, every page from landing to leaving, and filters them by device, browser, where they came from, marks, errors and time; every filter is a shareable URL. The player plays a visit page by page, showing each event with the queries, logs and assigns behind it, and draws the user's pointer over the replay. Restrict who sees what with an authorization module:
 
 ```elixir
 phoenix_replay "/replay",

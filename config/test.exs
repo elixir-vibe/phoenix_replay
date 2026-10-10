@@ -15,6 +15,9 @@ config :phoenix_replay,
   persist: [attempts: 2, backoff: 0],
   # Tests flush sessions explicitly, so no chunk is written behind their backs.
   flush: false,
+  # Visits end 50 ms after their last recording, so a session held for its
+  # visit's decision is decided while the test awaits it.
+  client: [landing: [timeout: 50]],
   # Small, quick videos; the tests tagged :export need ffmpeg and Playwright.
   export: [
     endpoint: PhoenixReplay.Test.Endpoint,

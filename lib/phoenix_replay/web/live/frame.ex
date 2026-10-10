@@ -118,7 +118,7 @@ defmodule PhoenixReplay.Web.Live.Frame do
   def render(%{@private => %{view: nil}} = assigns) do
     ~H"""
     <div style="padding: 2rem; color: #737373; text-align: center; font-family: system-ui, sans-serif;">
-      Redacting the session…
+      Redacting the recording…
     </div>
     """
   end

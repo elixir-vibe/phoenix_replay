@@ -28,24 +28,26 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
   test "shows an empty state" do
     {:ok, _view, html} = live(build_conn(), "/replay")
-    assert html =~ "No recordings yet."
+    assert html =~ "No visits yet."
     refute html =~ "Delete all recordings"
   end
 
-  test "lists recordings, each row one link to it" do
+  test "lists visits, each row one link to it" do
     save("stored")
     {:ok, view, html} = live(build_conn(), "/replay")
 
-    assert html =~ "PhoenixReplay.Test.Live.Counter"
+    # A recording without a visit is a visit of its own, shown by where it landed.
+    assert has_element?(view, "#visit-stored", "/counter")
+    assert html =~ "Visits"
 
     assert [_one] =
              view
              |> render()
              |> LazyHTML.from_document()
-             |> LazyHTML.query("#recording-stored a")
+             |> LazyHTML.query("#visit-stored a")
              |> Enum.to_list()
 
-    assert has_element?(view, ~s(#recording-stored a[href="/replay/stored"]))
+    assert has_element?(view, ~s(#visit-stored a[href="/replay/stored"]))
     refute html =~ "Open"
   end
 
@@ -64,14 +66,35 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     url = "http://localhost/tasks?utm_source=hn&filter=done&utm_campaign=launch"
     Storage.save(Fixtures.storage(), %{recording | client: client, url: url})
     {:ok, view, _html} = live(build_conn(), "/replay")
-    row = view |> element("#recording-phone") |> render()
+    row = view |> element("#visit-phone") |> render()
     assert row =~ "Mobile Safari 18 on iOS"
-    assert has_element?(view, ~s(#recording-phone a[href="/replay?source=hn"]), "hn")
+    assert has_element?(view, ~s(#visit-phone a[href="/replay?source=hn"]), "hn")
     assert row =~ ~s(aria-label="Phone")
 
     # The page leaves out the UTM parameters its source already shows.
     assert row =~ "/tasks?filter=done"
     refute row =~ "utm_"
+  end
+
+  test "lists the recordings of one visit as one row, its pages in order" do
+    for {id, at, url} <- [{"landing", 1, "http://x/counter"}, {"form", 2, "http://x/form"}] do
+      recording = Fixtures.counter_recording(id: id, connected_at: at)
+
+      :ok =
+        Storage.save(Fixtures.storage(), %{
+          recording
+          | url: url,
+            client: %{recording.client | visit: "visit-1"}
+        })
+    end
+
+    {:ok, view, html} = live(build_conn(), "/replay")
+
+    assert has_element?(view, "#visit-visit-1", "/counter → /form")
+    # The row opens the visit where it landed.
+    assert has_element?(view, ~s(#visit-visit-1 a[href="/replay/landing"]))
+    refute has_element?(view, "#visit-landing")
+    assert html =~ "1 visit · 0 live · 0 with errors"
   end
 
   test "lists running sessions apart, without delete, and counts sessions" do
@@ -83,10 +106,10 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     {:ok, view, html} = live(build_conn(), "/replay")
 
     assert has_element?(view, "#recordings-live")
-    assert has_element?(view, ~s(#recording-running a[href="/replay/running"]))
-    refute has_element?(view, ~s(#recording-running button[aria-label^="Delete"]))
-    assert has_element?(view, ~s(#recording-stored button[aria-label^="Delete"]))
-    assert html =~ "2 sessions · 1 live · 0 with errors"
+    assert has_element?(view, ~s(#visit-running a[href="/replay/running"]))
+    refute has_element?(view, ~s(#visit-running button[aria-label^="Delete"]))
+    assert has_element?(view, ~s(#visit-stored button[aria-label^="Delete"]))
+    assert html =~ "2 visits · 1 live · 0 with errors"
   end
 
   test "keeps its rows while sessions end, counting them in a banner" do
@@ -102,14 +125,14 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     save_at("fresh", until + 1)
     Catalog.broadcast_change()
 
-    assert has_element?(view, "#recording-listed")
-    refute has_element?(view, "#recording-ended")
-    refute has_element?(view, "#recording-fresh")
-    assert has_element?(view, "#recordings-new button", "2 new recordings · Show")
+    assert has_element?(view, "#visit-listed")
+    refute has_element?(view, "#visit-ended")
+    refute has_element?(view, "#visit-fresh")
+    assert has_element?(view, "#recordings-new button", "2 new visits · Show")
 
     view |> element("#recordings-new button") |> render_click()
-    assert has_element?(view, "#recording-ended")
-    assert has_element?(view, "#recording-fresh")
+    assert has_element?(view, "#visit-ended")
+    assert has_element?(view, "#visit-fresh")
     refute has_element?(view, "#recordings-new button")
   end
 
@@ -119,14 +142,14 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
     save_at("first", until + 1)
     Catalog.broadcast_change()
-    assert has_element?(view, "#recordings-new button", "1 new recording · Show")
+    assert has_element?(view, "#recordings-new button", "1 new visit · Show")
 
     save_at("second", until + 2)
     Catalog.broadcast_change()
-    assert has_element?(view, "#recordings-new button", "1 new recording · Show")
+    assert has_element?(view, "#recordings-new button", "1 new visit · Show")
 
     send(view.pid, :reload_window)
-    assert has_element?(view, "#recordings-new button", "2 new recordings · Show")
+    assert has_element?(view, "#recordings-new button", "2 new visits · Show")
   end
 
   test "shows filters as chips, adds them from a menu and offers values with counts" do
@@ -230,8 +253,8 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     {:ok, view, _html} =
       live(build_conn(), "/replay?from=1970-01-01T00:00:00Z&to=1970-01-01T00:00:02Z")
 
-    assert has_element?(view, "#recording-old")
-    refute has_element?(view, "#recording-new")
+    assert has_element?(view, "#visit-old")
+    refute has_element?(view, "#visit-new")
 
     assert has_element?(
              view,
@@ -265,7 +288,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
     assert has_element?(
              view,
-             ~s(#recording-marked a[href="/replay?mark=Paid"][title="Reached Paid 2 times"]),
+             ~s(#visit-marked a[href="/replay?mark=Paid"][title="Reached Paid 2 times"]),
              "×2"
            )
   end
@@ -280,12 +303,12 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
       view |> render() |> LazyHTML.from_document() |> LazyHTML.query("#recordings-activity a")
 
     assert Enum.count(bars) in 12..13
-    assert has_element?(view, ~s(#recordings-activity a[aria-label="1 session, 0 with errors"]))
+    assert has_element?(view, ~s(#recordings-activity a[aria-label="1 visit, 0 with errors"]))
     refute has_element?(view, "#recordings-sampling")
 
     href =
       view
-      |> element(~s(#recordings-activity a[aria-label="1 session, 0 with errors"]))
+      |> element(~s(#recordings-activity a[aria-label="1 visit, 0 with errors"]))
       |> render()
       |> LazyHTML.from_fragment()
       |> LazyHTML.attribute("href")
@@ -302,7 +325,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
     {:ok, view, _html} = live(build_conn(), "/replay?page=2")
     view |> element("button", "Delete all recordings") |> render_click()
-    assert render(view) =~ "No recordings yet."
+    assert render(view) =~ "No visits yet."
   end
 
   test "deletes one or all recordings" do
@@ -310,11 +333,11 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     save("two")
     {:ok, view, _html} = live(build_conn(), "/replay")
 
-    view |> element(~s(#recording-one button[aria-label^="Delete"])) |> render_click()
-    refute has_element?(view, "#recording-one")
+    view |> element(~s(#visit-one button[aria-label^="Delete"])) |> render_click()
+    refute has_element?(view, "#visit-one")
 
     view |> element("button", "Delete all recordings") |> render_click()
-    refute has_element?(view, "#recording-two")
+    refute has_element?(view, "#visit-two")
   end
 
   test "applies authorization" do
@@ -322,10 +345,10 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     save("secret-1")
     {:ok, view, html} = live(build_conn(), "/restricted/replay")
 
-    assert has_element?(view, ~s(#recording-public a[href="/restricted/replay/public"]))
+    assert has_element?(view, ~s(#visit-public a[href="/restricted/replay/public"]))
     refute html =~ "secret-1"
     refute html =~ "Delete all recordings"
-    assert render_click(view, "delete", %{"id" => "secret-1"})
+    assert render_click(view, "delete", %{"key" => "secret-1"})
     assert {:ok, _recording} = Storage.fetch(Fixtures.storage(), "secret-1")
   end
 
@@ -335,7 +358,7 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
 
     {:ok, view, _html} = live(build_conn(), "/replay?q=match")
     assert has_element?(view, ~s(a[aria-current="page"]), "1")
-    refute has_element?(view, "#recording-other")
+    refute has_element?(view, "#visit-other")
     assert has_element?(view, ~s(a[href="/replay?page=2&q=match"]))
   end
 
@@ -347,13 +370,13 @@ defmodule PhoenixReplay.Web.Live.IndexTest do
     # The search keeps the chips' criteria.
     view |> element("#recording-search") |> render_change(%{"q" => "beta"})
     assert_patch(view, "/replay?event=inc&q=beta")
-    assert has_element?(view, "#recording-beta")
-    refute has_element?(view, "#recording-alpha")
+    assert has_element?(view, "#visit-beta")
+    refute has_element?(view, "#visit-alpha")
 
     view |> element("#recording-search") |> render_change(%{"q" => "nothing"})
-    assert render(view) =~ "No recordings match these filters."
+    assert render(view) =~ "No visits match these filters."
     view |> element("a", "Clear filters") |> render_click()
-    assert has_element?(view, "#recording-alpha")
+    assert has_element?(view, "#visit-alpha")
   end
 
   test "paginates" do

@@ -9,7 +9,6 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
 
   use Phoenix.Component
 
-  import PhoenixIconify, only: [icon: 1]
   import PhoenixReplay.Web.Components.Layout, only: [data_list: 1]
   import PhoenixReplay.Web.Components.Core, only: [badge: 1, local_time: 1]
 
@@ -23,7 +22,7 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
   """
   attr :recording, Recording, required: true
   attr :viewport, :map, default: nil
-  attr :journey, :map, default: nil, doc: "the tab's sessions, with URLs"
+  attr :pages, :map, default: nil, doc: "the visit's pages; see `PhoenixReplay.Web.Player.Pages`"
   attr :migrations, :list, default: [], doc: "the names of the migrations replay applies"
 
   attr :filter_path, :any,
@@ -58,27 +57,29 @@ defmodule PhoenixReplay.Web.Components.Player.Visit do
         </p>
       </section>
 
-      <section :if={@journey} id="replay-journey" aria-labelledby="replay-journey-heading">
-        <h3 id="replay-journey-heading" class={heading()}>Browser tab</h3>
-        <.link navigate={@journey.tab_path} class="underline decoration-line hover:text-ink">
-          Session {@journey.position} of {@journey.total} in this tab
-        </.link>
-        <div class="mt-2 flex gap-3 text-muted">
-          <.link
-            :if={@journey.previous}
-            navigate={@journey.previous}
-            class="inline-flex items-center gap-1 hover:text-ink"
-          >
-            <.icon name="lucide:arrow-left" class="size-3.5" /> Previous
-          </.link>
-          <.link
-            :if={@journey.next}
-            navigate={@journey.next}
-            class="inline-flex items-center gap-1 hover:text-ink"
-          >
-            Next <.icon name="lucide:arrow-right" class="size-3.5" />
-          </.link>
-        </div>
+      <section
+        :if={@pages && length(@pages.pages) > 1}
+        id="replay-visit-pages"
+        aria-labelledby="replay-visit-pages-heading"
+      >
+        <h3 id="replay-visit-pages-heading" class={heading()}>Pages of this visit</h3>
+        <ol class="flex flex-col gap-1">
+          <li :for={page <- @pages.pages}>
+            <button
+              type="button"
+              phx-click="page"
+              phx-value-id={page.id}
+              aria-current={page.id == @recording.id && "page"}
+              class={[
+                "flex w-full items-baseline gap-2 text-left hover:text-ink",
+                if(page.id == @recording.id, do: "font-medium text-ink", else: "text-muted")
+              ]}
+            >
+              <span class="font-mono text-xs tabular-nums">+{Format.clock(page.offset)}</span>
+              <code class="truncate font-mono text-xs">{Format.path_of(page.url || "—")}</code>
+            </button>
+          </li>
+        </ol>
       </section>
 
       <section :if={@navigated_from} aria-labelledby="replay-navigated-from-heading">

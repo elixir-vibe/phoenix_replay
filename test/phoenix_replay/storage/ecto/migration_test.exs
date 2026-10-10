@@ -27,7 +27,14 @@ defmodule PhoenixReplay.Storage.Ecto.MigrationTest do
     def down, do: Migration.down(from: 2, version: 3)
   end
 
-  @migrations [{1, Released}, {2, Upgrade}, {3, Marks}]
+  # The table PhoenixReplay 0.7 added visits to.
+  defmodule Visits do
+    use Ecto.Migration
+    def up, do: Migration.up(from: 3, version: 4)
+    def down, do: Migration.down(from: 3, version: 4)
+  end
+
+  @migrations [{1, Released}, {2, Upgrade}, {3, Marks}, {4, Visits}]
 
   @moduletag :tmp_dir
 
@@ -81,6 +88,7 @@ defmodule PhoenixReplay.Storage.Ecto.MigrationTest do
                campaign: "spring",
                device_type: "phone",
                browser: nil,
+               visit: nil,
                marks: %{}
              }
            ] = PhoenixReplay.Storage.Ecto.list(repo: Repo)
@@ -107,7 +115,7 @@ defmodule PhoenixReplay.Storage.Ecto.MigrationTest do
 
   test "upgrades the released table and back" do
     run = &Ecto.Migrator.run(Repo, &1, &2, all: true, log: false)
-    new = MapSet.new(~w(error_count tab viewport device source saved_at medium campaign))
+    new = MapSet.new(~w(error_count tab viewport device source saved_at medium campaign visit))
 
     run.([{1, Released}], :up)
     assert MapSet.disjoint?(columns(), new)
@@ -115,6 +123,11 @@ defmodule PhoenixReplay.Storage.Ecto.MigrationTest do
     run.(@migrations, :up)
     assert MapSet.subset?(new, columns())
     assert %{rows: []} = Repo.query!("SELECT * FROM phoenix_replay_marks")
+
+    # Back to version 3: the visit column goes, the rest stays.
+    run.([{4, Visits}], :down)
+    assert MapSet.subset?(MapSet.delete(new, "visit"), columns())
+    refute MapSet.member?(columns(), "visit")
 
     run.(@migrations, :down)
 

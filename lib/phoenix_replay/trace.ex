@@ -21,6 +21,7 @@ defmodule PhoenixReplay.Trace do
   alias PhoenixReplay.Recording.{Client, Diff, Event, Filter, State, Summary, Timeline}
 
   @filters [
+    :visit,
     :text,
     :view,
     :event,
@@ -116,7 +117,8 @@ defmodule PhoenixReplay.Trace do
     * `:longer_than` — lasting at least that many seconds
     * `:min_events` — at least that many events
     * `:errors` — `true` for sessions with an error only
-    * `:tab` — the sessions of one browser tab
+    * `:tab` — the recordings of one browser tab
+    * `:visit` — the recordings of one visit; see `visit/2`
     * `:live` — `true` for running sessions only, `false` for saved ones
     * `:limit` — how many to return (default `20`)
   """
@@ -135,6 +137,22 @@ defmodule PhoenixReplay.Trace do
         else: config |> Catalog.query(filter, now: now, limit: limit) |> elem(0)
 
     Enum.take(running ++ saved, limit)
+  end
+
+  @doc """
+  The recordings of visit `key`, in the order they started, as `fetch/2`
+  reads each: the pages of one visit from landing to leaving. `key` is a
+  summary's `visit`, or a recording's id for one without, which is a
+  visit of its own; see `PhoenixReplay.Recording.Visit`.
+  """
+  @spec visit(String.t(), Config.t()) :: {:ok, [Recording.t()]} | {:error, :not_found}
+  def visit(key, config \\ Config.load()) do
+    recordings =
+      for summary <- Catalog.visit(config, key),
+          {:ok, recording} <- [fetch(summary.id, config)],
+          do: recording
+
+    if recordings == [], do: {:error, :not_found}, else: {:ok, recordings}
   end
 
   @doc "The recording with `id`, from the buffer while it runs or from storage."
@@ -233,6 +251,7 @@ defmodule PhoenixReplay.Trace do
 
   defp filter(filters) do
     %Filter{
+      visit: filters[:visit],
       query: filters[:text],
       view: view_name(filters[:view]),
       event: filters[:event],

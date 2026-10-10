@@ -36,6 +36,29 @@ defmodule Mix.Tasks.PhoenixReplay.TraceTasksTest do
     end
   end
 
+  test "prints the events of each recording of a visit" do
+    for {id, at} <- [{"visit-a", 1}, {"visit-b", 2}] do
+      recording = Fixtures.counter_recording(id: id, connected_at: at)
+
+      :ok =
+        Storage.save(Fixtures.storage(), %{
+          recording
+          | client: %PhoenixReplay.Recording.Client{visit: "visit-shown"}
+        })
+    end
+
+    on_exit(fn -> for id <- ~w(visit-a visit-b), do: Storage.delete(Fixtures.storage(), id) end)
+    output = capture_io(fn -> Mix.Tasks.PhoenixReplay.Show.run(["visit-shown"]) end)
+
+    assert output =~ ~s(recording: "visit-a")
+    assert output =~ ~s(recording: "visit-b")
+    assert :binary.match(output, "visit-a") < :binary.match(output, "visit-b")
+
+    assert_raise Mix.Error, ~r/No recording or visit/, fn ->
+      Mix.Tasks.PhoenixReplay.Show.run(["nothing"])
+    end
+  end
+
   test "prints a recording's events, or the view at one" do
     events = capture_io(fn -> Mix.Tasks.PhoenixReplay.Show.run(["listed"]) end)
     assert events =~ ~s(label: "[error] boom")
@@ -45,7 +68,7 @@ defmodule Mix.Tasks.PhoenixReplay.TraceTasksTest do
     assert state =~ "assigns: %{count: 1}"
     assert state =~ ~s(path: "count")
 
-    assert_raise Mix.Error, "No recording missing", fn ->
+    assert_raise Mix.Error, "No recording or visit missing", fn ->
       Mix.Tasks.PhoenixReplay.Show.run(["missing"])
     end
   end

@@ -14,8 +14,9 @@ defmodule PhoenixReplay.Config do
       Defaults to `PhoenixReplay.Sanitizer.Default`.
     * `:max_events` — events recorded per session before recording stops.
       Defaults to `10_000`.
-    * `:sample_rate` — share of sessions to record, from `0.0` to `1.0`.
-      Defaults to `1.0`, recording every session. `0.0` turns recording off.
+    * `:sample_rate` — share of visits to record, from `0.0` to `1.0`; a
+      visit's recordings are recorded or not together. Defaults to `1.0`,
+      recording every visit. `0.0` turns recording off.
     * `:keep` — keyword list choosing which recorded sessions are saved
       when they end, as described in "Tail sampling" below:
       * `:rate` — share of interactive sessions to save (default `1.0`)
@@ -98,7 +99,11 @@ defmodule PhoenixReplay.Config do
           string, `:full` keeps all of it, `false` none (default `true`)
         * `:attribution` — `:first` keeps the first landing of the visit;
           `:last` replaces it whenever a request carries tracked params
-          (default `:first`)
+          (default `:first`). Either way, a request whose tracked params
+          differ from the landing's starts a new visit.
+        * `:timeout` — milliseconds without a request after which the next
+          request starts a new visit (default 30 minutes, also without
+          `:landing`); see `PhoenixReplay.Plug`
     * `:release` — the name of the running deploy, such as a commit from
       your host's environment, recorded with each session, shown in the
       player and filterable in the list; `nil` (the default) uses the
@@ -173,6 +178,12 @@ defmodule PhoenixReplay.Config do
   `:slower_than` is always saved, a session without user interaction is discarded, and `:rate` of
   the rest are saved.
 
+  Both decide by visit (see `PhoenixReplay.Plug`): a visit is sampled as
+  a whole, and once any of its recordings is kept, all of them are saved,
+  pages without interaction included. A recording that would be discarded
+  waits, in memory, for another recording of its visit to be kept, or for
+  the visit to end; see `PhoenixReplay.Session.Visits`.
+
   To save every failing session but only a few others, record every session
   and keep a share of them:
 
@@ -200,7 +211,9 @@ defmodule PhoenixReplay.Config do
     inputs: true,
     debounce: 300
   }
-  @landing %{params: [], referrer: true, attribution: :first}
+  # A visit ends after half an hour without a request, as web analytics count one.
+  @visit_timeout 1_800_000
+  @landing %{params: [], referrer: true, attribution: :first, timeout: @visit_timeout}
   @media [:color_scheme, :reduced_motion, :contrast, :pointer, :hover]
   @export %{
     endpoint: nil,
@@ -273,7 +286,8 @@ defmodule PhoenixReplay.Config do
   @type landing :: %{
           params: [String.t()],
           referrer: boolean() | :full,
-          attribution: :first | :last
+          attribution: :first | :last,
+          timeout: pos_integer()
         }
 
   @typedoc "A media setting a viewport may carry; see `t:PhoenixReplay.Recording.viewport/0`."
@@ -384,6 +398,14 @@ defmodule PhoenixReplay.Config do
   def new(opts) when is_list(opts) do
     Enum.reduce(opts, %__MODULE__{}, &put/2)
   end
+
+  @doc """
+  Milliseconds without a request after which a visit ends: the client's
+  `landing: [timeout: ...]`, or 30 minutes.
+  """
+  @spec visit_timeout(t()) :: pos_integer()
+  def visit_timeout(%__MODULE__{client: %{landing: %{timeout: timeout}}}), do: timeout
+  def visit_timeout(%__MODULE__{}), do: @visit_timeout
 
   defp module_key?(key), do: match?("Elixir." <> _rest, Atom.to_string(key))
 
@@ -561,6 +583,7 @@ defmodule PhoenixReplay.Config do
   defp valid_landing?(:params, value), do: is_list(value)
   defp valid_landing?(:referrer, value), do: is_boolean(value) or value == :full
   defp valid_landing?(:attribution, value), do: value in [:first, :last]
+  defp valid_landing?(:timeout, value), do: is_integer(value) and value > 0
 
   defp invalid!(key, value) do
     raise ArgumentError,

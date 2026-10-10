@@ -142,7 +142,7 @@ defmodule ExampleWeb.Features.ReplayTest do
 
     # Navigate away to finalize the recording
     conn = conn |> visit(~p"/replay") |> assert_has("body .phx-connected")
-    conn = conn |> assert_has("h1", text: "Recordings")
+    conn = conn |> assert_has("h1", text: "Visits")
 
     # --- Verify what was recorded ---
     assert_receive {:persisted, id}, 5_000
@@ -176,13 +176,14 @@ defmodule ExampleWeb.Features.ReplayTest do
 
     assert loaded < Enum.find_index(recording.events, &(&1.type == :event))
 
-    # --- Verify the recording is listed ---
-    # The list keeps its place while sessions end, so it shows the session
-    # saved since it opened once it is opened again.
-    conn = conn |> visit(~p"/replay") |> assert_has("li", text: "ExampleWeb.TaskLive.Index")
+    # --- Verify the visit is listed ---
+    # The list keeps its place while visits end, so it shows the visit
+    # saved since it opened once it is opened again. A row is a visit,
+    # named by the page it landed on.
+    conn = conn |> visit(~p"/replay") |> assert_has("li[id^='visit-']", count: 1)
 
-    # Open it: the whole row links to the recording
-    conn = conn |> click_link("ExampleWeb.TaskLive.Index")
+    # Open it: the whole row links to the visit, at its first page
+    conn = conn |> click_link("li[id^='visit-'] a", "/")
     conn = conn |> assert_has("h1", text: "ExampleWeb.TaskLive.Index")
 
     # Player controls are present

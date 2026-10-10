@@ -337,10 +337,10 @@ defmodule PhoenixReplay.Web.Live.FrameTest do
     on_exit(fn -> PhoenixReplay.Session.Buffer.close("live-frame") end)
 
     {:ok, view, html} = live(build_conn(), "/replay/live-frame/frame?channel=c9")
-    assert html =~ "Redacting the session"
+    assert html =~ "Redacting the recording"
 
     seek("c9", 3)
-    assert render(view) =~ "Redacting the session"
+    assert render(view) =~ "Redacting the recording"
 
     Channel.load("c9", recording)
     assert render(view) =~ ~s(<span id="count">0</span>)
