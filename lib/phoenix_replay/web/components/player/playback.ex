@@ -38,19 +38,54 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
   attr :first, :integer, default: 0, doc: "the first event the view can be shown at"
   attr :slow_ms, :integer, default: 100, doc: "how long a collected event takes to count as slow"
 
-  slot :visit_lane,
-    doc: "a lane of the visit's pages, above the page's lanes, for a visit of several"
+  attr :visit, :map,
+    default: nil,
+    doc: """
+    for a visit of several pages, the timeline runs on the visit's clock:
+    `%{pages: Pages.t(), current: id, clock: %{at, until, playing?}}`; see
+    `PhoenixReplay.Web.Player.Pages`
+    """
 
   slot :visit_status, doc: "where playback stands in the visit, next to the clock"
 
   @spec playback(map()) :: Phoenix.LiveView.Rendered.t()
-  def playback(assigns) do
-    assigns =
-      assign(assigns,
-        lanes: Events.lanes(assigns.recording),
-        last: length(assigns.recording.events) - 1
-      )
+  def playback(%{visit: %{pages: pages, current: current, clock: clock}} = assigns) do
+    %{offset: offset} = Enum.find(pages.pages, &(&1.id == current))
 
+    assigns
+    |> assign(
+      lanes: pages.events,
+      last: length(assigns.recording.events) - 1,
+      clock_at: clock.at,
+      clock_until: clock.until,
+      clock_duration: pages.duration_ms,
+      page_offset: offset,
+      pages: pages,
+      current: current
+    )
+    |> render_playback()
+  end
+
+  def playback(assigns) do
+    lanes =
+      for {kind, events} <- Events.lanes(assigns.recording),
+          do: {kind, Enum.map(events, fn {event, _index} -> {event, nil} end)}
+
+    assigns
+    |> assign(
+      lanes: lanes,
+      last: length(assigns.recording.events) - 1,
+      clock_at: assigns.at,
+      clock_until: assigns.next_at,
+      clock_duration: assigns.duration_ms,
+      page_offset: 0,
+      pages: nil,
+      current: nil
+    )
+    |> render_playback()
+  end
+
+  defp render_playback(assigns) do
     ~H"""
     <section
       id={@id}
@@ -87,8 +122,8 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
           <.icon name="lucide:chevron-right" class="size-4" />
         </.icon_button>
         <span class="ml-1 font-mono tabular-nums">
-          {Format.precise_clock(@at)}
-          <span class="text-muted">/ {Format.precise_clock(@duration_ms)}</span>
+          {Format.precise_clock(@clock_at)}
+          <span class="text-muted">/ {Format.precise_clock(@clock_duration)}</span>
         </span>
         {render_slot(@visit_status)}
         <span class="flex-1"></span>
@@ -110,18 +145,11 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
         </.icon_button>
       </div>
 
-      <%!-- The visit's lane runs on the visit's clock, the lanes below it on
-      the page's; a rule keeps the two apart. --%>
-      <div
-        :if={@visit_lane != []}
-        class="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-x-3 border-b border-line pb-2.5"
-      >
-        <span class="text-[11px] text-muted" aria-hidden="true">Visit</span>
-        {render_slot(@visit_lane)}
-      </div>
-
       <div class="grid grid-cols-[4rem_minmax(0,1fr)] gap-x-3">
         <div class="flex flex-col gap-1 text-[11px] text-muted" aria-hidden="true">
+          <span :if={@pages} class="flex items-center" style={"height: #{pages_height(@pages)}"}>
+            Pages
+          </span>
           <span :for={{kind, _events} <- @lanes} class="flex h-3.5 items-center">
             {Events.kind_label(kind)}
           </span>
@@ -130,28 +158,45 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
           id="replay-scrubber"
           phx-hook="Scrubber"
           role="slider"
-          aria-label="Playback position"
+          aria-label={if @pages, do: "Visit position", else: "Playback position"}
           aria-valuemin={@first}
           aria-valuemax={@last}
           aria-valuenow={@index}
-          aria-valuetext={Format.clock(@at)}
+          aria-valuetext={Format.clock(@clock_at)}
           tabindex="0"
           data-offsets={JSON.encode!(Enum.map(@recording.events, & &1.at))}
-          data-at={@at}
-          data-next-at={@next_at}
-          data-duration={@duration_ms}
+          data-at={@clock_at}
+          data-next-at={@clock_until}
+          data-duration={@clock_duration}
+          data-mode={if @pages, do: "visit", else: "page"}
+          data-page-offset={@page_offset}
           data-speed={@speed}
           data-playing={to_string(@playing)}
           class="relative flex cursor-pointer touch-none flex-col gap-1 rounded select-none"
         >
+          <%!-- A visit's pages on its clock, the playing one in the accent colour. --%>
+          <div :if={@pages} class="relative" style={"height: #{pages_height(@pages)}"}>
+            <span
+              :for={page <- @pages.pages}
+              id={"replay-page-#{page.id}"}
+              aria-current={page.id == @current && "page"}
+              title={page_title(page)}
+              class={[
+                "absolute h-1.5 min-w-1 rounded-full",
+                if(page.id == @current, do: "bg-accent", else: "bg-faint/50")
+              ]}
+              style={page_segment(page, @clock_duration)}
+            ></span>
+          </div>
           <div :for={{_kind, events} <- @lanes} class="relative h-3.5 rounded bg-track">
             <span
-              :for={{event, _index} <- events}
+              :for={{event, page} <- events}
               class={[
                 "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full",
-                Events.marker_class(event, @slow_ms)
+                Events.marker_class(event, @slow_ms),
+                page && page != @current && "opacity-35"
               ]}
-              style={"left: #{position(event.at, @duration_ms)}%"}
+              style={"left: #{position(event.at, @clock_duration)}%"}
               title={Events.marker_title(event)}
             ></span>
           </div>
@@ -159,12 +204,30 @@ defmodule PhoenixReplay.Web.Components.Player.Playback do
             data-thumb
             aria-hidden="true"
             class="absolute -inset-y-0.5 w-0.5 -translate-x-1/2 rounded-full bg-ink"
-            style={"left: #{position(@at, @duration_ms)}%"}
+            style={"left: #{position(@clock_at, @clock_duration)}%"}
           ></span>
         </div>
       </div>
     </section>
     """
+  end
+
+  # A row of page bars per lane the visit's pages take.
+  defp pages_height(pages), do: "#{pages.lanes * 0.5 + 0.25}rem"
+
+  defp page_segment(page, duration) do
+    width = Float.round((page.end_at - page.offset) / max(duration, 1) * 100, 3)
+
+    "left: #{position(page.offset, duration)}%; width: #{width}%; top: #{page.lane * 0.5 + 0.125}rem"
+  end
+
+  defp page_title(page) do
+    path =
+      if page.url,
+        do: page.url |> Format.path_of() |> String.split("?", parts: 2) |> hd(),
+        else: "—"
+
+    "#{path} · at #{Format.clock(page.offset)}, #{Format.clock(page.end_at - page.offset)}"
   end
 
   defp position(_at, 0), do: 0

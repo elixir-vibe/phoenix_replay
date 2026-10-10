@@ -12,8 +12,9 @@ defmodule PhoenixReplay.Web.Player.Pages do
   """
 
   alias PhoenixReplay.{Catalog, Recording}
-  alias PhoenixReplay.Recording.{Event, Summary}
+  alias PhoenixReplay.Recording.{Event, Summary, Timeline}
   alias PhoenixReplay.Web.Context
+  alias PhoenixReplay.Web.Player.Events
 
   @typedoc """
   A page: its recording's id, URL and view, when it starts and ends on the
@@ -30,19 +31,22 @@ defmodule PhoenixReplay.Web.Player.Pages do
           live?: boolean()
         }
 
-  @typedoc "An error or a mark on the visit's clock, in milliseconds from its start."
-  @type marker :: %{at: non_neg_integer(), kind: :error | :mark}
+  @typedoc """
+  The events of one kind across the visit's pages, for the player's lanes:
+  each with its time moved onto the visit's clock, and its page's id.
+  """
+  @type lane :: {Events.kind(), [{Event.t(), Recording.id()}]}
 
   @typedoc """
   A visit's pages in the order they started, how long the visit lasted,
-  and the errors and marks of all its pages.
+  how many rows its pages take, and the events of all its pages by kind.
   """
   @type t :: %{
           key: String.t(),
           pages: [page()],
           duration_ms: non_neg_integer(),
           lanes: pos_integer(),
-          markers: [marker()]
+          events: [lane()]
         }
 
   @doc "The visit `recording` belongs to: its `client.visit`, or its own id."
@@ -64,36 +68,33 @@ defmodule PhoenixReplay.Web.Player.Pages do
         do: summaries,
         else: Enum.sort_by([Summary.new(recording) | summaries], &{&1.connected_at, &1.id})
 
-    key
-    |> new(summaries)
-    |> Map.put(:markers, markers(socket, summaries, recording))
+    visit = new(key, summaries)
+
+    if length(visit.pages) > 1,
+      do: %{visit | events: events(socket, visit, recording)},
+      else: visit
   end
 
-  # The errors and marks of every page, read from the pages that have any.
-  defp markers(socket, summaries, recording) do
-    [first | _rest] = summaries
+  # The events of every page, as the player lays out a recording, on the
+  # visit's clock, in the order of the kinds' lanes.
+  defp events(socket, visit, recording) do
+    by_page =
+      for page <- visit.pages,
+          {:ok, read} <- [read(socket, page, recording)],
+          {playback, _pointer} = Timeline.for_playback(read),
+          {kind, events} <- Events.lanes(playback),
+          {event, _index} <- events,
+          do: {kind, {%{event | at: event.at + page.offset}, page.id}}
 
-    for summary <- summaries,
-        summary.error_count > 0 or summary.marks != %{},
-        {:ok, page} <- [read(socket, summary, recording)],
-        event <- page.events,
-        kind = marker_kind(event),
-        kind != nil,
-        do: %{at: summary.connected_at - first.connected_at + event.at, kind: kind}
+    by_page
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Enum.sort_by(fn {kind, _events} -> Enum.find_index(Events.kind_order(), &(&1 == kind)) end)
   end
 
   defp read(_socket, %{id: id}, %Recording{id: id} = recording), do: {:ok, recording}
 
-  defp read(socket, summary, _recording),
-    do: Catalog.fetch(socket.assigns.context.config, summary.id)
-
-  defp marker_kind(event) do
-    cond do
-      Event.error?(event) -> :error
-      Event.mark?(event) -> :mark
-      true -> nil
-    end
-  end
+  defp read(socket, page, _recording),
+    do: Catalog.fetch(socket.assigns.context.config, page.id)
 
   @doc "Places `summaries`, all of visit `key`, on the visit's clock."
   @spec new(String.t(), [Summary.t()]) :: t()
@@ -125,7 +126,7 @@ defmodule PhoenixReplay.Web.Player.Pages do
       pages: pages,
       duration_ms: pages |> Enum.map(& &1.end_at) |> Enum.max(),
       lanes: map_size(ends),
-      markers: []
+      events: []
     }
   end
 

@@ -20,7 +20,6 @@ import { PlayerKeys } from './player/playback/keys'
 import { Pointer } from './player/frame/pointer_overlay'
 import { Scrubber } from './player/playback/scrubber'
 import { TimeRange } from './list/time_range'
-import { VisitTimeline } from './player/playback/visit_timeline'
 
 const meta = (name: string): string | undefined =>
   document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`)?.content
@@ -40,8 +39,7 @@ const liveSocket = new LiveSocket(meta('phoenix-replay-socket') ?? '/live', Sock
     PlayerKeys,
     Pointer,
     Scrubber,
-    TimeRange,
-    VisitTimeline
+    TimeRange
   }
 })
 

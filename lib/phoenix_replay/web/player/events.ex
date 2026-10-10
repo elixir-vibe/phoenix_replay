@@ -42,6 +42,10 @@ defmodule PhoenixReplay.Web.Player.Events do
     end
   end
 
+  @doc "Every kind, in the order of the timeline's lanes."
+  @spec kind_order() :: [kind()]
+  def kind_order, do: @kinds
+
   @doc "The kinds in a recording, LiveView first, then marks."
   @spec kinds(Recording.t()) :: [kind()]
   def kinds(%Recording{events: events}) do

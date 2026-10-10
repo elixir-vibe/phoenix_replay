@@ -83,15 +83,11 @@
           speeds={@speeds}
           first={@first_render}
           slow_ms={Events.slow_ms(@context.config.keep)}
+          visit={
+            @pages && length(@pages.pages) > 1 &&
+              %{pages: @pages, current: @recording.id, clock: visit_clock(assigns)}
+          }
         >
-          <:visit_lane :if={@pages && length(@pages.pages) > 1}>
-            <.visit_lane
-              pages={@pages}
-              current={@recording.id}
-              clock={visit_clock(assigns)}
-              speed={@speed}
-            />
-          </:visit_lane>
           <:visit_status :if={@pages && length(@pages.pages) > 1}>
             <.visit_status pages={@pages} current={@recording.id} gap={@gap} />
           </:visit_status>

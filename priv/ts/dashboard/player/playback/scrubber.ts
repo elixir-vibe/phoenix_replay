@@ -7,8 +7,13 @@ export const TIME_EVENT = 'phoenix-replay:time'
 /**
  * Maps pointer and keyboard input on the timeline to player events, and
  * animates the thumb between events while the server plays. Each time it
- * places the thumb it announces the time as a `TIME_EVENT`, so overlays
- * such as the pointer follow playback, seeking and dragging alike.
+ * places the thumb it announces the page's time as a `TIME_EVENT`, so
+ * overlays such as the pointer follow playback, seeking and dragging alike.
+ *
+ * For a visit of several pages (`data-mode="visit"`) the timeline runs on
+ * the visit's clock: its times are the visit's, seeks are `visit_seek`
+ * with that time, and the page's time is the visit's less the playing
+ * page's `data-page-offset`.
  */
 export class Scrubber extends ViewHook {
   private offsets: number[] = []
@@ -18,7 +23,7 @@ export class Scrubber extends ViewHook {
   private dragAt = 0
   // One drag seek is in flight at a time; the latest waits for it.
   private sending = false
-  private queued: { index: number; at: number } | null = null
+  private queued: { index?: number; at: number } | null = null
 
   mounted(): void {
     this.offsets = JSON.parse(this.el.dataset.offsets ?? '[]') as number[]
@@ -73,14 +78,16 @@ export class Scrubber extends ViewHook {
   private seek(event: PointerEvent, release = false): void {
     const rect = this.el.getBoundingClientRect()
     const ms = clamp((event.clientX - rect.left) / rect.width, 0, 1) * this.number('duration')
-    const seek = { index: indexAt(this.offsets, ms), at: Math.round(ms) }
+    const seek = this.visit()
+      ? { at: Math.round(ms) }
+      : { index: indexAt(this.offsets, ms), at: Math.round(ms) }
     this.stop()
     this.dragAt = ms
     this.place(ms)
 
     if (release) {
       this.queued = null
-      this.push('seek', seek)
+      this.push(this.visit() ? 'visit_seek' : 'seek', seek)
     } else if (this.sending) {
       this.queued = seek
     } else {
@@ -88,9 +95,9 @@ export class Scrubber extends ViewHook {
     }
   }
 
-  private send(seek: { index: number; at: number }): void {
+  private send(seek: { index?: number; at: number }): void {
     this.sending = true
-    this.pushEvent('seek', seek)
+    this.pushEvent(this.visit() ? 'visit_seek' : 'seek', seek)
       .catch(() => undefined)
       .finally(() => {
         this.sending = false
@@ -130,11 +137,15 @@ export class Scrubber extends ViewHook {
     const thumb = this.el.querySelector<HTMLElement>('[data-thumb]')
     const duration = this.number('duration')
     if (thumb) thumb.style.left = `${duration > 0 ? (ms / duration) * 100 : 0}%`
-    window.dispatchEvent(new CustomEvent(TIME_EVENT, { detail: ms }))
+    window.dispatchEvent(new CustomEvent(TIME_EVENT, { detail: ms - this.number('pageOffset') }))
   }
 
   private push(event: string, payload: object = {}): void {
     this.pushEvent(event, payload).catch(() => undefined)
+  }
+
+  private visit(): boolean {
+    return this.el.dataset.mode === 'visit'
   }
 
   private number(key: string): number {

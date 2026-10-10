@@ -846,15 +846,15 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       # 1 s into the second page, which started 4999 ms into the visit.
       render_click(view, "visit_seek", %{"at" => 5_999})
       assert has_element?(view, ~s(#replay-page-second[aria-current="page"]))
-      assert has_element?(view, ~s(#replay-visit-timeline[aria-valuenow="5999"]))
+      assert has_element?(view, ~s(#replay-scrubber[data-at="5999"]))
 
       # Between pages, the next one, from its first render, 5 ms in.
       render_click(view, "visit_seek", %{"at" => 8_000})
       assert has_element?(view, ~s(#replay-page-third[aria-current="page"]))
-      assert has_element?(view, ~s(#replay-visit-timeline[aria-valuenow="9004"]))
+      assert has_element?(view, ~s(#replay-scrubber[data-at="9004"]))
     end
 
-    test "marks the errors of every page on the visit's timeline" do
+    test "lays every page's events on the visit's timeline" do
       error = %Event{at: 1_500, type: :log, data: %{level: :error, message: "x", metadata: %{}}}
 
       for {id, at, extra} <- [{"first", 1, []}, {"second", 5_000, [error]}] do
@@ -868,7 +868,9 @@ defmodule PhoenixReplay.Web.Live.ShowTest do
       end
 
       {:ok, view, _html} = live(build_conn(), "/replay/first")
-      assert has_element?(view, ~s(#replay-visit-timeline [data-marker="error"]))
+      # One timeline on the visit's clock, with the other page's events, dimmed.
+      assert has_element?(view, ~s(#replay-scrubber[data-mode="visit"]))
+      assert has_element?(view, ~s(#replay-scrubber span.opacity-35[title*="x"]))
     end
   end
 
