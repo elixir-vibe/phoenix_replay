@@ -117,7 +117,7 @@ Assets are built by [Volt](https://hexdocs.pm/volt), configured under `config :v
 
    - Instead of sleeping to synchronize before the next call, **always** use `_ = :sys.get_state/1` to ensure the process has handled prior messages
 - The `Process.sleep/1` calls in `test/features/replay_test.exs` are the one exception: they pace a scripted user session so the recording has realistic timing for the demo. They never wait for a result
-- Browser tests (PhoenixTest Playwright) load assets through Volt's build manifest; the `test` alias runs `mix assets.build` first
+- Browser tests (Fluffy) load assets through Volt's build manifest; the `test` alias runs `mix assets.build` first
 <!-- phoenix:elixir-end -->
 
 <!-- phoenix:phoenix-start -->

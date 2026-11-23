@@ -1,5 +1,5 @@
 defmodule ExampleWeb.Features.ReplayTest do
-  use PhoenixTest.Playwright.Case, async: false
+  use ExampleWeb.FeatureCase, async: false
   use ExampleWeb, :verified_routes
 
   alias Example.{Repo, Tasks.Task}
@@ -79,19 +79,22 @@ defmodule ExampleWeb.Features.ReplayTest do
     Process.sleep(600)
 
     # Type title slowly with a typo: "Shipt v2.0" → backspace → "Ship v2.0"
-    conn = conn |> PhoenixTest.Playwright.type("#title", "Shipt", delay: 90)
+    conn = conn |> unwrap(&Playwright.Page.type!(&1, "#title", "Shipt", delay: 90))
     Process.sleep(300)
-    conn = conn |> PhoenixTest.Playwright.press("#title", "Backspace")
+    conn = conn |> unwrap(&Playwright.Page.press!(&1, "#title", "Backspace"))
     Process.sleep(150)
-    conn = conn |> PhoenixTest.Playwright.press("#title", "Backspace")
+    conn = conn |> unwrap(&Playwright.Page.press!(&1, "#title", "Backspace"))
     Process.sleep(100)
-    conn = conn |> PhoenixTest.Playwright.type("#title", "p v2.0", delay: 75)
+    conn = conn |> unwrap(&Playwright.Page.type!(&1, "#title", "p v2.0", delay: 75))
     Process.sleep(500)
 
     # Tab to description, type with a pause mid-thought
-    conn = conn |> PhoenixTest.Playwright.type("#description", "Final releas", delay: 70)
+    conn = conn |> unwrap(&Playwright.Page.type!(&1, "#description", "Final releas", delay: 70))
     Process.sleep(900)
-    conn = conn |> PhoenixTest.Playwright.type("#description", "e — ready to ship!", delay: 60)
+
+    conn =
+      conn |> unwrap(&Playwright.Page.type!(&1, "#description", "e — ready to ship!", delay: 60))
+
     Process.sleep(400)
 
     # Change priority
@@ -110,7 +113,7 @@ defmodule ExampleWeb.Features.ReplayTest do
     Process.sleep(400)
 
     # Clear field and type new title (like a human: End key, then backspace everything)
-    conn = conn |> PhoenixTest.Playwright.press("#title", "End")
+    conn = conn |> unwrap(&Playwright.Page.press!(&1, "#title", "End"))
     Process.sleep(100)
 
     old_title = "Update dependencies"
@@ -118,11 +121,11 @@ defmodule ExampleWeb.Features.ReplayTest do
     conn =
       Enum.reduce(1..String.length(old_title), conn, fn _, acc ->
         Process.sleep(40)
-        PhoenixTest.Playwright.press(acc, "#title", "Backspace")
+        unwrap(acc, &Playwright.Page.press!(&1, "#title", "Backspace"))
       end)
 
     Process.sleep(200)
-    conn = conn |> PhoenixTest.Playwright.type("#title", "Update all deps", delay: 65)
+    conn = conn |> unwrap(&Playwright.Page.type!(&1, "#title", "Update all deps", delay: 65))
     Process.sleep(300)
     conn = conn |> click_button("Save Changes")
     conn = conn |> assert_has("p", text: "Update all deps")
@@ -201,15 +204,15 @@ defmodule ExampleWeb.Features.ReplayTest do
     conn = conn |> click_button("Next event")
 
     # Tabs and segmented controls send their button's value
-    conn = conn |> PhoenixTest.Playwright.click("[role='tab']", "State")
+    conn = conn |> unwrap(&Playwright.Page.click!(&1, "[role='tab']:has-text('State')"))
     conn = conn |> assert_has("#replay-assigns")
-    conn = conn |> PhoenixTest.Playwright.click("[role='tab']", "Events")
+    conn = conn |> unwrap(&Playwright.Page.click!(&1, "[role='tab']:has-text('Events')"))
     conn = conn |> click_button("2×")
     conn = conn |> assert_has("button[aria-pressed='true']", text: "2×")
 
     # Play briefly, then pause
-    conn = conn |> PhoenixTest.Playwright.click("button[aria-label='Play']")
+    conn = conn |> unwrap(&Playwright.Page.click!(&1, "button[aria-label='Play']"))
     Process.sleep(1500)
-    conn |> PhoenixTest.Playwright.click("button[aria-label='Pause']")
+    conn |> unwrap(&Playwright.Page.click!(&1, "button[aria-label='Pause']"))
   end
 end

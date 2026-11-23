@@ -1,5 +1,5 @@
 defmodule ExampleWeb.Features.TaskLiveTest do
-  use PhoenixTest.Playwright.Case, async: false
+  use ExampleWeb.FeatureCase, async: false
   use ExampleWeb, :verified_routes
 
   alias Example.{Repo, Tasks.Task}
