@@ -19,7 +19,6 @@ config :phoenix_replay,
   export: [
     endpoint: PhoenixReplay.Test.Endpoint,
     dir: Path.join(System.tmp_dir!(), "phoenix_replay_test_exports"),
-    playwright: [executable: "node_modules/.bin/playwright"],
     fps: 10,
     max_dpr: 1,
     hold: 500

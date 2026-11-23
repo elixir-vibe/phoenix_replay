@@ -154,12 +154,11 @@ config :phoenix_replay,
     crf: 23,
     preset: "veryfast",
     max_concurrency: 1,
-    ttl: :timer.hours(1),
-    playwright: [executable: "node_modules/.bin/playwright"]
+    ttl: :timer.hours(1)
   ]
 ```
 
-Off by default. Needs `{:playwright_ex, "~> 0.14"}` and `{:muontrap, "~> 1.6"}`, with Playwright's Chromium and `ffmpeg`. See [Exporting videos](dashboard.md#exporting-videos).
+Off by default. Needs `{:playwright, "~> 1.65.0-rc.4", hex: :playwright_ex}` and `{:muontrap, "~> 1.6"}`, with Playwright's Chromium and `ffmpeg`. See [Exporting videos](dashboard.md#exporting-videos).
 
 ### Retention
 

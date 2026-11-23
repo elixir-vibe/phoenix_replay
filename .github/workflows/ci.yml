@@ -22,7 +22,7 @@ jobs:
       deps-command: |
         mix deps.get
         npm ci
-        npx playwright install --with-deps chromium
+        mix playwright.install chromium --with-deps
         if mix help quackdb.install > /dev/null 2>&1; then mix quackdb.install; fi
         sudo systemctl start postgresql.service
         sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"

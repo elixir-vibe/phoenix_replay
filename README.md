@@ -161,7 +161,7 @@ Full documentation, guides and cheatsheets are available on [HexDocs](https://he
 ```bash
 mix deps.get
 npm ci
-npx playwright install chromium
+mix playwright.install chromium
 mix assets.build
 mix ci
 ```

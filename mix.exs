@@ -63,7 +63,7 @@ defmodule PhoenixReplay.MixProject do
         {:obscura, "~> 0.2", optional: true},
         {:lazy_html, ">= 0.1.0", only: :test},
         # Captures replays for video export; see PhoenixReplay.Export.
-        {:playwright_ex, "~> 0.14", optional: true},
+        {:playwright, "~> 1.65.0-rc.4", hex: :playwright_ex, optional: true},
         # Runs ffmpeg for video export, and stops it with the process that started it.
         {:muontrap, "~> 1.6 or ~> 2.0", optional: true},
         # Keeps video exports in the app's Oban queue; see PhoenixReplay.Export.Queue.Oban.

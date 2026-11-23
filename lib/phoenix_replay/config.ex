@@ -139,8 +139,8 @@ defmodule PhoenixReplay.Config do
       * `:crf` — the H.264 quality, lower is better (default `23`)
       * `:preset` — the x264 speed preset (default `"veryfast"`)
       * `:ffmpeg` — the `ffmpeg` executable (default `"ffmpeg"`)
-      * `:playwright` — options for `PlaywrightEx.Supervisor`, such as
-        `:executable` or `:ws_endpoint` (default `[]`)
+      * `:playwright` — options for `Playwright.Supervisor`, such as
+        `:executable` or `:cache_dir` (default `[]`)
       * `:max_shots` — the most screenshots an export may take, as files
         until the video is encoded; longer exports fail with a message to
         choose a shorter range (default `3_600`, two minutes of pointer
