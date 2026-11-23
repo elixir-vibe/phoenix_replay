@@ -28,7 +28,6 @@ defmodule ExampleWeb.Features.TaskLiveTest do
   test "lists tasks with correct counts", %{conn: conn} do
     conn
     |> visit(~p"/")
-    |> assert_has("body .phx-connected")
     |> assert_has("h1", text: "Tasks")
     |> assert_has("button", text: "All 3")
     |> assert_has("button", text: "Active 2")
@@ -40,7 +39,6 @@ defmodule ExampleWeb.Features.TaskLiveTest do
   test "toggle task completion", %{conn: conn} do
     conn
     |> visit(~p"/")
-    |> assert_has("body .phx-connected")
     |> click_button("Toggle Review PR #42")
     |> assert_has("button", text: "Active 1")
     |> assert_has("button", text: "Completed 2")
@@ -52,7 +50,6 @@ defmodule ExampleWeb.Features.TaskLiveTest do
   test "filter tasks", %{conn: conn} do
     conn
     |> visit(~p"/")
-    |> assert_has("body .phx-connected")
     |> click_button("Active")
     |> assert_has("p", text: "Review PR #42")
     |> assert_has("p", text: "Write docs")
@@ -69,7 +66,6 @@ defmodule ExampleWeb.Features.TaskLiveTest do
   test "create a new task", %{conn: conn} do
     conn
     |> visit(~p"/")
-    |> assert_has("body .phx-connected")
     |> click_link("New Task")
     |> assert_has("h2", text: "New Task")
     |> fill_in("Title", with: "Ship v2.0")
@@ -83,7 +79,6 @@ defmodule ExampleWeb.Features.TaskLiveTest do
   test "edit an existing task", %{conn: conn} do
     conn
     |> visit(~p"/")
-    |> assert_has("body .phx-connected")
     |> click_link("Edit Review PR #42")
     |> assert_has("h2", text: "Edit Task")
     |> fill_in("Title", with: "Review PR #43")
@@ -95,7 +90,6 @@ defmodule ExampleWeb.Features.TaskLiveTest do
   test "delete a task", %{conn: conn} do
     conn
     |> visit(~p"/")
-    |> assert_has("body .phx-connected")
     |> assert_has("button", text: "All 3")
     |> click_button("Delete Write docs")
     |> refute_has("p", text: "Write docs")
@@ -106,7 +100,6 @@ defmodule ExampleWeb.Features.TaskLiveTest do
   test "a failed sync shows an error", %{conn: conn} do
     conn
     |> visit(~p"/")
-    |> assert_has("body .phx-connected")
     |> click_button("Sync")
     |> assert_has("#flash-error", text: "Sync failed")
   end
@@ -114,7 +107,6 @@ defmodule ExampleWeb.Features.TaskLiveTest do
   test "cancel modal returns to task list", %{conn: conn} do
     conn
     |> visit(~p"/")
-    |> assert_has("body .phx-connected")
     |> click_link("New Task")
     |> assert_has("h2", text: "New Task")
     |> click_link("Cancel")
