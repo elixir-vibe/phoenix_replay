@@ -69,7 +69,11 @@ defmodule PhoenixReplay.MixProject do
         # Keeps video exports in the app's Oban queue; see PhoenixReplay.Export.Queue.Oban.
         {:oban, "~> 2.20", optional: true},
         {:bandit, "~> 1.5", only: :test},
-        {:volt, "~> 0.23", only: [:dev, :test], runtime: false},
+        {:volt,
+         github: "ftes/volt",
+         ref: "ec9b47b3b2cd836ede9f3b7c2f4346141ba4171a",
+         only: [:dev, :test],
+         runtime: false},
         {:ex_doc, "~> 0.35", only: :dev, runtime: false},
         {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
         {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
