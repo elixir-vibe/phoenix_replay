@@ -122,7 +122,7 @@ It needs four things on the machine that exports: [`playwright_ex`](https://hexd
 
 ```elixir
 # mix.exs
-{:playwright_ex, "~> 0.14"},
+{:playwright, "~> 1.65.0-rc.4", hex: :playwright_ex},
 {:muontrap, "~> 1.6"}
 
 # config/config.exs
@@ -130,7 +130,7 @@ config :phoenix_replay, export: [endpoint: MyAppWeb.Endpoint]
 ```
 
 ```console
-npm install playwright && npx playwright install chromium
+mix playwright.install chromium
 ```
 
 Until all four are there, the menu has no **Export video**. The browser loads the replay from a private endpoint PhoenixReplay starts on 127.0.0.1 with the first export, behind a token, so your router needs no route for it and your login does not get in the way. Every other request the replayed page makes, such as its stylesheet, script, fonts or images, is passed to your endpoint in the same VM, as a request from 127.0.0.1; see [Privacy and Security](privacy-and-security.md#video-export). If the frame uses your own root layout, name it in `export: [frame_layout: ...]` too. Exports run one at a time under the application's supervision tree; see `PhoenixReplay.Export` for every option.

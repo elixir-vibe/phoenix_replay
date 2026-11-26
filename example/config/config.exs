@@ -92,10 +92,7 @@ config :phoenix_replay,
   pointer: true,
   # Recordings exported as videos, from the player or with
   # `mix phoenix_replay.export`.
-  export: [
-    endpoint: ExampleWeb.Endpoint,
-    playwright: [executable: "node_modules/.bin/playwright"]
-  ]
+  export: [endpoint: ExampleWeb.Endpoint]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

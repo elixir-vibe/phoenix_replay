@@ -1,6 +1,13 @@
 defmodule ExampleWeb.Features.ReplayTest do
-  use PhoenixTest.Playwright.Case, async: false
+  # Paces every browser call, so the recording plays like a person using the app.
+  use ExampleWeb.FeatureCase, async: false, launch_options: [slow_mo: 300]
   use ExampleWeb, :verified_routes
+  use Fluffy.Assert
+
+  import Fluffy
+  import Fluffy.Locator
+  import Fluffy.Locator.Roles
+  import Fluffy.Playwright, only: [press_sequentially: 4]
 
   alias Example.{Repo, Tasks.Task}
 
@@ -32,7 +39,7 @@ defmodule ExampleWeb.Features.ReplayTest do
   Also serves as a demo recording — run with `mix test test/features/replay_test.exs`
   and open http://localhost:4005/replay to see the result.
   """
-  test "realistic user session is recorded and replayable", %{conn: conn, config: config} do
+  test "realistic user session is recorded and replayable", %{conn: session, config: config} do
     # Seed some tasks so the list isn't empty
     Repo.insert!(%Task{
       title: "Review PR #42",
@@ -48,101 +55,59 @@ defmodule ExampleWeb.Features.ReplayTest do
       priority: "medium"
     })
 
+    session
     # --- Act 1: Browse and explore ---
-    conn =
-      conn
-      |> visit(~p"/")
-      # Interacting before the LiveView connects would drop the event.
-      |> assert_has("body .phx-connected")
-      |> assert_has("h1", text: "Tasks")
-
+    |> visit(~p"/")
+    |> assert_has(by_role(:heading, name: "Tasks"))
     # User looks around, clicks filters
-    conn = conn |> click_button("Active") |> assert_has("button", text: "Active 2")
-    Process.sleep(800)
-    conn = conn |> click_button("Completed") |> assert_has("button", text: "Completed 1")
-    Process.sleep(600)
-    conn = conn |> click_button("All") |> assert_has("button", text: "All 3")
-    Process.sleep(400)
-
-    # Toggle a task
-    conn = conn |> click_button("Toggle Review PR #42")
-    Process.sleep(500)
-    conn = conn |> assert_has("button", text: "Completed 2")
-
-    # Undo it
-    conn = conn |> click_button("Toggle Review PR #42")
-    Process.sleep(300)
-    conn = conn |> assert_has("button", text: "Completed 1")
-
+    |> click(button("Active"))
+    |> assert_has(button("Active 2"))
+    |> pause(800)
+    |> click(button("Completed"))
+    |> assert_has(button("Completed 1"))
+    |> pause(600)
+    |> click(button("All"))
+    |> assert_has(button("All 3"))
+    # Toggle a task, then undo it
+    |> click(button("Toggle Review PR #42"))
+    |> assert_has(button("Completed 2"))
+    |> click(button("Toggle Review PR #42"))
+    |> assert_has(button("Completed 1"))
     # --- Act 2: Create a task with realistic typing ---
-    conn = conn |> click_link("New Task") |> assert_has("h2", text: "New Task")
-    Process.sleep(600)
-
+    |> click(link("New Task"))
+    |> assert_has(by_role(:heading, name: "New Task"))
+    |> pause(600)
     # Type title slowly with a typo: "Shipt v2.0" → backspace → "Ship v2.0"
-    conn = conn |> PhoenixTest.Playwright.type("#title", "Shipt", delay: 90)
-    Process.sleep(300)
-    conn = conn |> PhoenixTest.Playwright.press("#title", "Backspace")
-    Process.sleep(150)
-    conn = conn |> PhoenixTest.Playwright.press("#title", "Backspace")
-    Process.sleep(100)
-    conn = conn |> PhoenixTest.Playwright.type("#title", "p v2.0", delay: 75)
-    Process.sleep(500)
-
+    |> press_sequentially(by_label("Title"), "Shipt", delay: 90)
+    |> press(by_label("Title"), "Backspace")
+    |> press(by_label("Title"), "Backspace")
+    |> press_sequentially(by_label("Title"), "p v2.0", delay: 75)
     # Tab to description, type with a pause mid-thought
-    conn = conn |> PhoenixTest.Playwright.type("#description", "Final releas", delay: 70)
-    Process.sleep(900)
-    conn = conn |> PhoenixTest.Playwright.type("#description", "e — ready to ship!", delay: 60)
-    Process.sleep(400)
-
-    # Change priority
-    conn = conn |> select("Priority", option: "High")
-    Process.sleep(300)
-
-    # Submit
-    conn = conn |> click_button("Create Task")
-    conn = conn |> assert_has("p", text: "Ship v2.0")
-    conn = conn |> assert_has("button", text: "All 4")
-    Process.sleep(500)
-
-    # --- Act 3: Edit a task ---
-    conn = conn |> click_link("Edit Update dependencies")
-    conn = conn |> assert_has("h2", text: "Edit Task")
-    Process.sleep(400)
-
-    # Clear field and type new title (like a human: End key, then backspace everything)
-    conn = conn |> PhoenixTest.Playwright.press("#title", "End")
-    Process.sleep(100)
-
-    old_title = "Update dependencies"
-
-    conn =
-      Enum.reduce(1..String.length(old_title), conn, fn _, acc ->
-        Process.sleep(40)
-        PhoenixTest.Playwright.press(acc, "#title", "Backspace")
-      end)
-
-    Process.sleep(200)
-    conn = conn |> PhoenixTest.Playwright.type("#title", "Update all deps", delay: 65)
-    Process.sleep(300)
-    conn = conn |> click_button("Save Changes")
-    conn = conn |> assert_has("p", text: "Update all deps")
-    Process.sleep(400)
-
+    |> press_sequentially(by_label("Description"), "Final releas", delay: 70)
+    |> pause(900)
+    |> press_sequentially(by_label("Description"), "e — ready to ship!", delay: 60)
+    |> select_option(by_label("Priority"), %{label: "High"})
+    |> click(button("Create Task"))
+    |> assert_has(by_text("Ship v2.0"))
+    |> assert_has(button("All 4"))
+    # --- Act 3: Edit a task: select the old title and type over it ---
+    |> click(link("Edit Update dependencies"))
+    |> assert_has(by_role(:heading, name: "Edit Task"))
+    |> press(by_label("Title"), "ControlOrMeta+a")
+    |> press_sequentially(by_label("Title"), "Update all deps", delay: 65)
+    |> click(button("Save Changes"))
+    |> assert_has(by_text("Update all deps"))
     # --- Act 4: Delete a task ---
-    conn = conn |> click_button("Delete Write documentation")
-    conn = conn |> refute_has("p", text: "Write documentation")
-    conn = conn |> assert_has("button", text: "All 3")
-    Process.sleep(300)
-
+    |> click(button("Delete Write documentation"))
+    |> refute_has(by_text("Write documentation"))
+    |> assert_has(button("All 3"))
     # --- Act 5: Final filter browse ---
-    conn = conn |> click_button("Completed 1")
-    Process.sleep(600)
-    conn = conn |> click_button("All 3")
-    Process.sleep(300)
-
+    |> click(button("Completed 1"))
+    |> pause(600)
+    |> click(button("All 3"))
     # Navigate away to finalize the recording
-    conn = conn |> visit(~p"/replay") |> assert_has("body .phx-connected")
-    conn = conn |> assert_has("h1", text: "Recordings")
+    |> visit(~p"/replay")
+    |> assert_has(by_role(:heading, name: "Recordings"))
 
     # --- Verify what was recorded ---
     assert_receive {:persisted, id}, 5_000
@@ -179,37 +144,45 @@ defmodule ExampleWeb.Features.ReplayTest do
     # --- Verify the recording is listed ---
     # The list keeps its place while sessions end, so it shows the session
     # saved since it opened once it is opened again.
-    conn = conn |> visit(~p"/replay") |> assert_has("li", text: "ExampleWeb.TaskLive.Index")
+    session
+    |> visit(~p"/replay")
+    |> assert_has(by_css("li") |> filter(has_text: "ExampleWeb.TaskLive.Index"))
 
     # Open it: the whole row links to the recording
-    conn = conn |> click_link("ExampleWeb.TaskLive.Index")
-    conn = conn |> assert_has("h1", text: "ExampleWeb.TaskLive.Index")
+    |> click(link("ExampleWeb.TaskLive.Index"))
+    |> assert_has(by_role(:heading, name: "ExampleWeb.TaskLive.Index"))
 
     # Player controls are present
-    conn = conn |> assert_has("button[aria-label='Play']")
-    conn = conn |> assert_has("#replay-scrubber[role='slider']")
-    conn = conn |> assert_has("iframe#replay-frame")
+    |> assert_has(button("Play", exact: true))
+    |> assert_has(by_css("#replay-scrubber[role='slider']"))
+    |> assert_has(by_css("iframe#replay-frame"))
 
     # Events panel shows our actions and the queries behind them
-    conn = conn |> assert_has("button", text: "mount")
-    conn = conn |> assert_has("button", text: "assigns")
-    conn = conn |> assert_has("button", text: "GROUP BY")
+    |> assert_has(button("mount") |> first())
+    |> assert_has(button("assigns") |> first())
+    |> assert_has(button("GROUP BY") |> first())
 
     # Step forward through a few events
-    conn = conn |> click_button("Next event")
-    conn = conn |> click_button("Next event")
-    conn = conn |> click_button("Next event")
+    |> click(button("Next event"))
+    |> click(button("Next event"))
+    |> click(button("Next event"))
 
     # Tabs and segmented controls send their button's value
-    conn = conn |> PhoenixTest.Playwright.click("[role='tab']", "State")
-    conn = conn |> assert_has("#replay-assigns")
-    conn = conn |> PhoenixTest.Playwright.click("[role='tab']", "Events")
-    conn = conn |> click_button("2×")
-    conn = conn |> assert_has("button[aria-pressed='true']", text: "2×")
+    |> click(by_role(:tab, name: "State"))
+    |> assert_has(by_css("#replay-assigns"))
+    |> click(by_role(:tab, name: "Events"))
+    |> click(button("2×"))
+    |> assert_has(button("2×", pressed: true))
 
     # Play briefly, then pause
-    conn = conn |> PhoenixTest.Playwright.click("button[aria-label='Play']")
-    Process.sleep(1500)
-    conn |> PhoenixTest.Playwright.click("button[aria-label='Pause']")
+    |> click(button("Play", exact: true))
+    |> pause(1500)
+    |> click(button("Pause", exact: true))
+  end
+
+  # A longer beat for the demo recording, on top of the module's slow_mo.
+  defp pause(session, ms) do
+    Process.sleep(ms)
+    session
   end
 end

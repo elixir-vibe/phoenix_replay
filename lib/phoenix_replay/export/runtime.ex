@@ -36,20 +36,16 @@ defmodule PhoenixReplay.Export.Runtime do
   @doc "Starts the endpoint and Playwright unless they run, and tells where they are."
   @spec ensure(Config.export()) :: {:ok, t()} | {:error, term()}
   def ensure(export) do
-    playwright = Keyword.merge([name: @playwright, timeout: export.timeout], export.playwright)
+    playwright = Keyword.merge([name: @playwright], export.playwright)
 
     with :ok <-
            start(%{id: @endpoint, start: {__MODULE__, :start_endpoint, []}, type: :supervisor}),
          :ok <-
-           start(Supervisor.child_spec({PlaywrightEx.Supervisor, playwright}, id: @playwright)),
+           start(Supervisor.child_spec({Playwright.Supervisor, playwright}, id: @playwright)),
          # The adapter is whichever web server the app has, so it is
          # looked up when it runs.
          {:ok, {_ip, port}} <- apply(adapter(), :server_info, [@endpoint, :http]) do
-      {:ok,
-       %{
-         url: "http://127.0.0.1:#{port}",
-         connection: PlaywrightEx.Supervisor.connection_name(@playwright)
-       }}
+      {:ok, %{url: "http://127.0.0.1:#{port}", connection: @playwright}}
     end
   end
 

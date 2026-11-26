@@ -1,4 +1,4 @@
-if Code.ensure_loaded?(PlaywrightEx) do
+if Code.ensure_loaded?(Playwright) do
   defmodule PhoenixReplay.Export.Screenshots do
     @moduledoc """
     Screenshots each shot of a `PhoenixReplay.Export.Schedule` in Chromium.
@@ -12,7 +12,7 @@ if Code.ensure_loaded?(PlaywrightEx) do
     """
 
     alias PhoenixReplay.Export.{Encoder, Options, Runtime, Schedule}
-    alias PlaywrightEx.{Browser, BrowserContext, Frame, Page}
+    alias Playwright.{Browser, BrowserContext, BrowserType, Page}
 
     # Resolves once the stage's hook has mounted and its frame is ready.
     @ready """
@@ -41,44 +41,39 @@ if Code.ensure_loaded?(PlaywrightEx) do
             (float() -> any())
           ) :: {:ok, Encoder.shots()} | {:error, term()}
     def run(runtime, recording_id, schedule, dir, export, options, progress) do
-      opts = [connection: runtime.connection, timeout: export.timeout]
+      chromium = runtime.connection |> Playwright.instance() |> Playwright.chromium()
 
-      with {:ok, browser} <- PlaywrightEx.launch_browser(:chromium, opts) do
+      with {:ok, browser} <- BrowserType.launch(chromium, timeout: export.timeout) do
         try do
-          with {:ok, page} <- open(browser, schedule, opts),
+          with {:ok, page} <- open(browser, schedule, export.timeout),
                {:ok, _response} <-
-                 Frame.goto(
-                   page.main_frame.guid,
-                   [url: Runtime.stage_url(runtime, recording_id, options)] ++ opts
-                 ),
-               {:ok, true} <-
-                 Frame.evaluate(
-                   page.main_frame.guid,
-                   [expression: @ready, is_function: true] ++ opts
-                 ) do
-            shoot(schedule, page, dir, opts, progress)
+                 Page.goto(page, Runtime.stage_url(runtime, recording_id, options)),
+               {:ok, _ready} <- Page.wait_for_function(page, @ready) do
+            shoot(schedule, page, dir, progress)
           end
         after
-          Browser.close(browser.guid, opts)
+          Browser.close(browser)
         end
       end
       |> browser_error()
     end
 
-    defp open(browser, schedule, opts) do
-      context_opts = [viewport: schedule.canvas, device_scale_factor: schedule.dpr / 1] ++ opts
+    defp open(browser, schedule, timeout) do
+      context_opts = [viewport: schedule.canvas, device_scale_factor: schedule.dpr / 1]
 
-      with {:ok, context} <- Browser.new_context(browser.guid, context_opts),
-           do: BrowserContext.new_page(context.guid, opts)
+      with {:ok, context} <- Browser.new_context(browser, context_opts) do
+        BrowserContext.set_default_timeout(context, timeout)
+        BrowserContext.new_page(context)
+      end
     end
 
-    defp shoot(schedule, page, dir, opts, progress) do
+    defp shoot(schedule, page, dir, progress) do
       count = length(schedule.shots)
 
       schedule.shots
       |> Enum.with_index()
       |> Enum.reduce_while({:ok, []}, fn {shot, number}, {:ok, shots} ->
-        case if(cancelled?(), do: {:error, :cancelled}, else: screenshot(page, shot, opts)) do
+        case if(cancelled?(), do: {:error, :cancelled}, else: screenshot(page, shot)) do
           {:ok, png} ->
             path = Path.join(dir, "#{number}.png")
             File.write!(path, png)
@@ -104,16 +99,11 @@ if Code.ensure_loaded?(PlaywrightEx) do
       end
     end
 
-    defp screenshot(page, shot, opts) do
+    defp screenshot(page, shot) do
       arg = Map.take(shot, [:index, :at]) |> Map.merge(shot.viewport)
 
-      with {:ok, _shown} <-
-             Frame.evaluate(
-               page.main_frame.guid,
-               [expression: @show, is_function: true, arg: arg] ++ opts
-             ),
-           {:ok, base64} <- Page.screenshot(page.guid, opts),
-           do: {:ok, Base.decode64!(base64)}
+      with {:ok, _shown} <- Page.evaluate(page, @show, arg),
+           do: Page.screenshot(page)
     end
 
     defp browser_error({:error, {:browser, _message}} = error), do: error

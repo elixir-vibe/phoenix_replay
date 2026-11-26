@@ -18,9 +18,10 @@ config :phoenix_replay,
     {PhoenixReplay.Storage.File,
      path: Path.join(System.tmp_dir!(), "phoenix_replay_example_test")}
 
-config :phoenix_test,
-  otp_app: :example,
-  playwright: [timeout: 5_000]
+config :fluffy, endpoint: ExampleWeb.Endpoint, ecto_repos: [Example.Repo]
+config :fluffy, Fluffy.Sandbox, header: "user-agent"
+
+config :playwright, :test, action_timeout: 5_000, navigation_timeout: 5_000
 
 config :example, Example.Repo, pool: Ecto.Adapters.SQL.Sandbox
 

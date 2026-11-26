@@ -66,7 +66,7 @@ config :phoenix_replay, release: System.get_env("GIT_SHA")
 - Production storage: `storage: {PhoenixReplay.Storage.Ecto, repo: MyApp.Repo}`, with a migration whose `up` calls `PhoenixReplay.Storage.Ecto.Migration.up(version: 3)` and `down` calls `down(version: 3)`. File storage is per node.
 - Render the replay frame in the app's root layout, `phoenix_replay "/replay", frame_layout: {MyAppWeb.Layouts, :root}`, when its assets are content-hashed by a bundler such as Volt, or when `<html>` or `<body>` attributes follow assigns, such as a theme: the replay renders the layout again at each moment.
 - Where visits came from: `client: [headers: ["accept-language"], landing: [params: [:utm]]]`, which `PhoenixReplay.Plug` keeps. `client: [media: false]` drops the color scheme and other media settings the browser reports, which the replay otherwise applies.
-- Video export is opt-in: `export: [endpoint: MyAppWeb.Endpoint]`, with `{:playwright_ex, "~> 0.14"}`, `{:muontrap, "~> 1.6"}`, Playwright's Chromium and `ffmpeg`.
+- Video export is opt-in: `export: [endpoint: MyAppWeb.Endpoint]`, with `{:playwright, "~> 1.65.0-rc.4", hex: :playwright_ex}`, `{:muontrap, "~> 1.6"}`, Playwright's Chromium and `ffmpeg`.
 
 `PhoenixReplay.Config` documents every option.
 

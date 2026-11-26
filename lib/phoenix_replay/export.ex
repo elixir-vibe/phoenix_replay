@@ -29,9 +29,9 @@ defmodule PhoenixReplay.Export do
 
   ## Setup
 
-  Add `{:playwright_ex, "~> 0.14"}` and `{:muontrap, "~> 1.6"}`, install
-  Playwright's Chromium (`npx playwright install chromium`) and `ffmpeg`,
-  and name your endpoint. MuonTrap runs on Linux and macOS.
+  Add `{:playwright, "~> 1.65.0-rc.4", hex: :playwright_ex}` and
+  `{:muontrap, "~> 1.6"}`, install Playwright's Chromium
+  (`mix playwright.install chromium`) and `ffmpeg`, and name your endpoint. MuonTrap runs on Linux and macOS.
 
       config :phoenix_replay, export: [endpoint: MyAppWeb.Endpoint]
 
@@ -53,7 +53,7 @@ defmodule PhoenixReplay.Export do
 
   def available(%Config{export: export}) do
     cond do
-      not Code.ensure_loaded?(PlaywrightEx) -> {:error, :no_playwright}
+      not Code.ensure_loaded?(Playwright) -> {:error, :no_playwright}
       not Code.ensure_loaded?(MuonTrap) -> {:error, :no_muontrap}
       System.find_executable(export.ffmpeg) == nil -> {:error, :no_ffmpeg}
       true -> :ok
@@ -71,7 +71,9 @@ defmodule PhoenixReplay.Export do
   def describe(:no_endpoint),
     do: "set your endpoint in the :export config: export: [endpoint: ...]"
 
-  def describe(:no_playwright), do: "add {:playwright_ex, \"~> 0.14\"} to your dependencies"
+  def describe(:no_playwright),
+    do: "add {:playwright, \"~> 1.65.0-rc.4\", hex: :playwright_ex} to your dependencies"
+
   def describe(:no_muontrap), do: "add {:muontrap, \"~> 1.6\"} to your dependencies"
   def describe(:no_ffmpeg), do: "install ffmpeg, or set its path in the :export config"
 

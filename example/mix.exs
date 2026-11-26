@@ -46,8 +46,7 @@ defmodule Example.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2"},
       {:lazy_html, ">= 0.1.0", only: :test},
-      {:phoenix_test, "~> 0.12", only: :test, runtime: false},
-      {:phoenix_test_playwright, "~> 0.18", only: :test, runtime: false},
+      {:fluffy, "~> 0.9.0-rc.7", only: :test},
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.2.0",
@@ -63,7 +62,7 @@ defmodule Example.MixProject do
       {:ecto_sqlite3, "~> 0.18"},
       {:phoenix_ecto, "~> 4.6"},
       {:phoenix_replay, path: ".."},
-      {:playwright_ex, "~> 0.14"},
+      {:playwright, "~> 1.65.0-rc.6", hex: :playwright_ex},
       {:muontrap, "~> 1.6"}
     ]
   end
