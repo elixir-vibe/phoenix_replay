@@ -4,10 +4,9 @@ defmodule ExampleWeb.Features.ReplayTest do
   use ExampleWeb, :verified_routes
   use Fluffy.Assert
 
-  # The case imports the PhoenixTest facade; this test uses the native API.
-  import Fluffy.PhoenixTest, only: []
   import Fluffy
   import Fluffy.Locator
+  import Fluffy.Locator.Roles
   import Fluffy.Playwright, only: [press_sequentially: 4]
 
   alias Example.{Repo, Tasks.Task}
@@ -40,7 +39,7 @@ defmodule ExampleWeb.Features.ReplayTest do
   Also serves as a demo recording — run with `mix test test/features/replay_test.exs`
   and open http://localhost:4005/replay to see the result.
   """
-  test "realistic user session is recorded and replayable", %{conn: conn, config: config} do
+  test "realistic user session is recorded and replayable", %{conn: session, config: config} do
     # Seed some tasks so the list isn't empty
     Repo.insert!(%Task{
       title: "Review PR #42",
@@ -56,29 +55,27 @@ defmodule ExampleWeb.Features.ReplayTest do
       priority: "medium"
     })
 
-    session = conn.session
-
     session
     # --- Act 1: Browse and explore ---
     |> visit(~p"/")
-    |> assert(visible(by_role(:heading, name: "Tasks")))
+    |> assert_has(by_role(:heading, name: "Tasks"))
     # User looks around, clicks filters
-    |> click(by_role(:button, name: "Active"))
-    |> assert(visible(by_role(:button, name: "Active 2")))
+    |> click(button("Active"))
+    |> assert_has(button("Active 2"))
     |> pause(800)
-    |> click(by_role(:button, name: "Completed"))
-    |> assert(visible(by_role(:button, name: "Completed 1")))
+    |> click(button("Completed"))
+    |> assert_has(button("Completed 1"))
     |> pause(600)
-    |> click(by_role(:button, name: "All"))
-    |> assert(visible(by_role(:button, name: "All 3")))
+    |> click(button("All"))
+    |> assert_has(button("All 3"))
     # Toggle a task, then undo it
-    |> click(by_role(:button, name: "Toggle Review PR #42"))
-    |> assert(visible(by_role(:button, name: "Completed 2")))
-    |> click(by_role(:button, name: "Toggle Review PR #42"))
-    |> assert(visible(by_role(:button, name: "Completed 1")))
+    |> click(button("Toggle Review PR #42"))
+    |> assert_has(button("Completed 2"))
+    |> click(button("Toggle Review PR #42"))
+    |> assert_has(button("Completed 1"))
     # --- Act 2: Create a task with realistic typing ---
-    |> click(by_role(:link, name: "New Task"))
-    |> assert(visible(by_role(:heading, name: "New Task")))
+    |> click(link("New Task"))
+    |> assert_has(by_role(:heading, name: "New Task"))
     |> pause(600)
     # Type title slowly with a typo: "Shipt v2.0" → backspace → "Ship v2.0"
     |> press_sequentially(by_label("Title"), "Shipt", delay: 90)
@@ -90,27 +87,27 @@ defmodule ExampleWeb.Features.ReplayTest do
     |> pause(900)
     |> press_sequentially(by_label("Description"), "e — ready to ship!", delay: 60)
     |> select_option(by_label("Priority"), %{label: "High"})
-    |> click(by_role(:button, name: "Create Task"))
-    |> assert(visible(by_text("Ship v2.0")))
-    |> assert(visible(by_role(:button, name: "All 4")))
+    |> click(button("Create Task"))
+    |> assert_has(by_text("Ship v2.0"))
+    |> assert_has(button("All 4"))
     # --- Act 3: Edit a task: select the old title and type over it ---
-    |> click(by_role(:link, name: "Edit Update dependencies"))
-    |> assert(visible(by_role(:heading, name: "Edit Task")))
+    |> click(link("Edit Update dependencies"))
+    |> assert_has(by_role(:heading, name: "Edit Task"))
     |> press(by_label("Title"), "ControlOrMeta+a")
     |> press_sequentially(by_label("Title"), "Update all deps", delay: 65)
-    |> click(by_role(:button, name: "Save Changes"))
-    |> assert(visible(by_text("Update all deps")))
+    |> click(button("Save Changes"))
+    |> assert_has(by_text("Update all deps"))
     # --- Act 4: Delete a task ---
-    |> click(by_role(:button, name: "Delete Write documentation"))
-    |> refute(visible(by_text("Write documentation")))
-    |> assert(visible(by_role(:button, name: "All 3")))
+    |> click(button("Delete Write documentation"))
+    |> refute_has(by_text("Write documentation"))
+    |> assert_has(button("All 3"))
     # --- Act 5: Final filter browse ---
-    |> click(by_role(:button, name: "Completed 1"))
+    |> click(button("Completed 1"))
     |> pause(600)
-    |> click(by_role(:button, name: "All 3"))
+    |> click(button("All 3"))
     # Navigate away to finalize the recording
     |> visit(~p"/replay")
-    |> assert(visible(by_role(:heading, name: "Recordings")))
+    |> assert_has(by_role(:heading, name: "Recordings"))
 
     # --- Verify what was recorded ---
     assert_receive {:persisted, id}, 5_000
@@ -149,38 +146,38 @@ defmodule ExampleWeb.Features.ReplayTest do
     # saved since it opened once it is opened again.
     session
     |> visit(~p"/replay")
-    |> assert(visible(by_css("li") |> filter(has_text: "ExampleWeb.TaskLive.Index")))
+    |> assert_has(by_css("li") |> filter(has_text: "ExampleWeb.TaskLive.Index"))
 
     # Open it: the whole row links to the recording
-    |> click(by_role(:link, name: "ExampleWeb.TaskLive.Index"))
-    |> assert(visible(by_role(:heading, name: "ExampleWeb.TaskLive.Index")))
+    |> click(link("ExampleWeb.TaskLive.Index"))
+    |> assert_has(by_role(:heading, name: "ExampleWeb.TaskLive.Index"))
 
     # Player controls are present
-    |> assert(visible(by_role(:button, name: "Play", exact: true)))
-    |> assert(visible(by_css("#replay-scrubber[role='slider']")))
-    |> assert(visible(by_css("iframe#replay-frame")))
+    |> assert_has(button("Play", exact: true))
+    |> assert_has(by_css("#replay-scrubber[role='slider']"))
+    |> assert_has(by_css("iframe#replay-frame"))
 
     # Events panel shows our actions and the queries behind them
-    |> assert(visible(by_role(:button, name: "mount") |> first()))
-    |> assert(visible(by_role(:button, name: "assigns") |> first()))
-    |> assert(visible(by_role(:button, name: "GROUP BY") |> first()))
+    |> assert_has(button("mount") |> first())
+    |> assert_has(button("assigns") |> first())
+    |> assert_has(button("GROUP BY") |> first())
 
     # Step forward through a few events
-    |> click(by_role(:button, name: "Next event"))
-    |> click(by_role(:button, name: "Next event"))
-    |> click(by_role(:button, name: "Next event"))
+    |> click(button("Next event"))
+    |> click(button("Next event"))
+    |> click(button("Next event"))
 
     # Tabs and segmented controls send their button's value
     |> click(by_role(:tab, name: "State"))
-    |> assert(visible(by_css("#replay-assigns")))
+    |> assert_has(by_css("#replay-assigns"))
     |> click(by_role(:tab, name: "Events"))
-    |> click(by_role(:button, name: "2×"))
-    |> assert(visible(by_role(:button, name: "2×", pressed: true)))
+    |> click(button("2×"))
+    |> assert_has(button("2×", pressed: true))
 
     # Play briefly, then pause
-    |> click(by_role(:button, name: "Play", exact: true))
+    |> click(button("Play", exact: true))
     |> pause(1500)
-    |> click(by_role(:button, name: "Pause", exact: true))
+    |> click(button("Pause", exact: true))
   end
 
   # A longer beat for the demo recording, on top of the module's slow_mo.

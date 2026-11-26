@@ -2,6 +2,8 @@ defmodule ExampleWeb.Features.TaskLiveTest do
   use ExampleWeb.FeatureCase, async: false
   use ExampleWeb, :verified_routes
 
+  import Fluffy.PhoenixTest
+
   alias Example.{Repo, Tasks.Task}
 
   setup do

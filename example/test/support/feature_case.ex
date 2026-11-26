@@ -1,6 +1,6 @@
 defmodule ExampleWeb.FeatureCase do
   @moduledoc """
-  The case for browser tests: `Fluffy.PhoenixTest` in Chromium.
+  The case for browser tests: a Fluffy session in Chromium.
   """
 
   use ExUnit.CaseTemplate
@@ -9,10 +9,8 @@ defmodule ExampleWeb.FeatureCase do
     quote do
       use Playwright.Test, unquote(opts)
 
-      import Fluffy.PhoenixTest
-
       setup do
-        %{conn: start_session(:playwright)}
+        %{conn: Fluffy.start_session(:playwright)}
       end
     end
   end
